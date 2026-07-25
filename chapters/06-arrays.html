@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arrays — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="06-arrays.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 7</span>
+      <h1>Arrays</h1>
+      <p class="lede">
+        An array is an ordered collection of values, each occupying a numeric
+        position called an index. That sounds like a primitive, hardware-level
+        construct, but in JavaScript it isn't one: an array is really just a
+        specialized <code>Object</code> whose property names happen to be
+        integer-like strings, plus a self-maintaining <code>length</code>
+        property bolted on top. Every "weird" thing about JavaScript arrays —
+        sparse arrays with holes, silent out-of-bounds reads, why
+        <code>typeof []</code> is <code>"object"</code>, why deleting an
+        element doesn't shrink the array — falls directly out of that one
+        fact. This page works through array creation, indexing, the length
+        invariant, iteration, the full <code>Array.prototype</code> method
+        surface (categorized by whether each method mutates), array-like
+        objects, and how strings imitate (read-only) arrays. Arrays are
+        zero-indexed, untyped (any element can hold any type, and different
+        elements can hold different types), and dynamic — they grow and
+        shrink automatically, with indexes running from 0 up to a theoretical
+        maximum of 2<sup>32</sup>−2. Fixed-length, fixed-type binary buffers
+        are a different, related feature called typed arrays, covered on
+        <a href="10-collections-typed-arrays.html">Collections &amp; Typed
+        Arrays</a> rather than here.
+      </p>
+
+      <h2 id="creating-arrays">7.1 Creating arrays</h2>
+      <p>
+        There are four ways to build an array: array literals (with the
+        spread operator as an extension of literal syntax), the
+        <code>Array()</code> constructor, and the ES6 factory methods
+        <code>Array.of()</code> and <code>Array.from()</code>. Reach for a
+        literal first; the others exist for specific situations where a
+        literal can't do the job.
+      </p>
+
+      <h3 id="array-literals">Array literals and the spread operator</h3>
+      <p>
+        An array literal is a comma-separated list of expressions inside
+        square brackets. Unlike a constant table, the values need not be
+        literal constants — they can be arbitrary expressions, evaluated at
+        the point the literal runs — and array literals can nest, containing
+        object literals or other array literals to build up structured data.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let empty = [];                    // An array with no elements
+let primes = [2, 3, 5, 7, 11];      // Five numeric elements
+let misc = [1.1, true, "a",];       // Mixed types; trailing comma is fine and ignored
+
+let base = 1024;
+let table = [base, base + 1, base + 2, base + 3]; // Expressions, not just literals
+
+let matrix = [[1, {x: 1, y: 2}], [2, {x: 3, y: 4}]]; // Nested arrays and objects</code></pre>
+      </div>
+      <p>
+        The ES6 spread operator, <code>...</code>, unpacks the elements of
+        any <em>iterable</em> object into a surrounding array literal. It
+        isn't a general-purpose operator — it's syntax that's only legal
+        inside array literals and function calls (see
+        <a href="07-functions.html#arguments-and-parameters">rest parameters</a>) —
+        but it's an extremely common idiom for shallow-copying and merging
+        arrays:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3];
+let b = [0, ...a, 4];      // b == [0, 1, 2, 3, 4] — a's elements spliced in
+
+let original = [1, 2, 3];
+let copy = [...original];  // Shallow copy: a new outer array
+copy[0] = 0;
+original[0]                // => 1 — the copy is independent
+
+// Strings are iterable, so spread turns a string into an array of characters:
+let digits = [..."0123456789ABCDEF"];
+digits  // => ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"]
+
+// A common dedup trick: Set is iterable too, so round-tripping through one
+// removes duplicates while preserving first-seen order:
+let letters = [..."hello world"];
+[...new Set(letters)]  // => ["h","e","l","o"," ","w","r","d"]</code></pre>
+      </div>
+      <p>
+        Because copying with spread is <em>shallow</em>, nested objects and
+        arrays are shared between the original and the copy — mutating
+        <code>copy[0].x</code> when element 0 is an object would also change
+        <code>original[0].x</code>, since both arrays hold a reference to the
+        very same object.
+      </p>
+
+      <h3 id="array-constructor">The <code>Array()</code> constructor</h3>
+      <p>
+        <code>Array()</code> can be invoked with <code>new</code> or without
+        it — both behave identically — in three distinct shapes, and knowing
+        which shape you're triggering matters.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = new Array();               // No args: empty array, same as []
+let b = new Array(10);              // ONE numeric arg: a LENGTH, not a value —
+                                     // b has length 10 but zero actual elements
+let c = new Array(5, 4, 3, 2, 1, "testing, testing"); // 2+ args (or one non-numeric
+                                     // arg) become the elements themselves</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>new Array(n)</code> is a trap</div>
+        <p>
+          A <em>single numeric</em> argument means "create length
+          <code>n</code>," not "create an array containing the value
+          <code>n</code>." <code>new Array(7)</code> is an empty, sparse
+          array of length 7 — index properties <code>"0"</code> through
+          <code>"6"</code> aren't even defined on it — not <code>[7]</code>.
+          Pass two or more numeric arguments and the ambiguity disappears
+          (they're treated as elements), which is exactly the inconsistency
+          <code>Array.of()</code> was added to fix. Prefer an array literal,
+          or <code>Array.of()</code> when the count is dynamic, and reserve
+          <code>new Array(n)</code> for the rare case where you deliberately
+          want to preallocate a length.
+        </p>
+      </div>
+
+      <h3 id="array-of-from">
+        <code>Array.of()</code> and <code>Array.from()</code>
+        <span class="badge new">ES6</span>
+      </h3>
+      <p>
+        <code>Array.of()</code> is the static factory that fixes the
+        constructor's ambiguity: whatever arguments you give it, regardless
+        of count or type, become the array's elements.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Array.of()        // => [] — empty, with no special-casing
+Array.of(10)       // => [10] — a single-element array, unlike new Array(10)
+Array.of(1, 2, 3)  // => [1, 2, 3]</code></pre>
+      </div>
+      <p>
+        <code>Array.from()</code> is the other ES6 factory. It builds a true
+        array from either of two things a literal can't directly consume: an
+        <a href="13-iterators-generators.html">iterable</a> object (in which
+        case it behaves like <code>[...iterable]</code>), or an
+        <a href="#array-like-objects">array-like object</a> — something with
+        a numeric <code>length</code> and integer-keyed properties but no
+        <code>Array.prototype</code> in its chain, such as the object some
+        DOM APIs return. It also accepts an optional mapping function as a
+        second argument, applied to each element as the array is built —
+        strictly more efficient than building the array and then calling
+        <code>.map()</code> on it afterward, since there's no intermediate
+        array.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let copy = Array.from(original);                 // Copy any iterable
+
+let arrayLike = {0: "a", 1: "b", length: 2};      // No Array.prototype here
+let real = Array.from(arrayLike);                 // => ["a", "b"] — now a true array
+
+let squares = Array.from({length: 5}, (_, i) => i * i); // => [0, 1, 4, 9, 16]</code></pre>
+      </div>
+
+      <h2 id="reading-writing-elements">7.2 Reading and writing array elements</h2>
+      <p>
+        Elements are read and written with the square-bracket <code>[]</code>
+        operator, exactly the way object properties are read and written with
+        bracket notation — because under the hood, that's exactly what's
+        happening. Any expression that evaluates to a non-negative integer
+        (or a string that looks like one) inside the brackets names an
+        element:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = ["world"];   // One-element array
+let value = a[0];    // Read element 0 — "world"
+a[1] = 3.14;         // Write element 1
+let i = 2;
+a[i] = 3;            // Write element 2
+a[i + 1] = "hello";  // Write element 3
+a[a[i]] = a[0];      // Read elements 0 and 2, write element 3
+a.length             // => 4 — length tracked automatically as we wrote past the end</code></pre>
+      </div>
+      <p>
+        JavaScript converts whatever you put in the brackets to a string
+        before using it as a property name — the numeric index <code>1</code>
+        becomes the property name <code>"1"</code>. Nothing about that
+        conversion is array-specific; you can do it on a plain object too:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = {};
+o[1] = "one";
+o["1"]           // => "one" — numeric and string keys collide on the same slot</code></pre>
+      </div>
+      <p>
+        This makes it worth separating two ideas that look identical but
+        aren't: an <strong>array index</strong> is specifically a property
+        name that is an integer between 0 and 2<sup>32</sup>−2. Every index
+        is a property name, but not every property name is an index. Only
+        writes through a genuine index trigger the special
+        <code>length</code>-maintaining behavior described below — a
+        negative number, a non-integer, or a string with leading zeros or
+        other non-canonical formatting is stored as an ordinary property and
+        does <em>not</em> affect <code>length</code> at all:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [];
+a[-1.23] = true;   // Creates an ordinary property named "-1.23" — NOT an index
+a["1000"] = 0;     // "1000" IS a canonical non-negative integer string — this
+                    //   is the 1001st element, and length becomes 1001
+a[1.000] = 1;      // 1.000 === 1, so this is array index 1, same as a[1] = 1</code></pre>
+      </div>
+      <p>
+        Because arrays have no notion of "out of bounds," reading a
+        nonexistent index never throws — it returns <code>undefined</code>,
+        exactly as a missing object property would:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [true, false];
+a[2]    // => undefined — no element at this index, but no error
+a[-1]   // => undefined — no property named "-1" either</code></pre>
+      </div>
+
+      <h2 id="sparse-arrays">
+        7.3 Sparse arrays <span class="badge hard">Hard</span>
+      </h2>
+      <p>
+        A <strong>sparse array</strong> is one whose elements don't have
+        contiguous indexes starting at 0 — there are gaps, and
+        <code>length</code> is greater than the actual number of elements
+        present. This is one of the two or three ideas in this chapter that's
+        genuinely worth slowing down for, because it explains behavior that
+        otherwise looks like a bug.
+      </p>
+      <p>
+        Sparse arrays arise in three ways: via <code>new Array(n)</code>
+        (length with nothing in it), by assigning to an index far beyond the
+        current length, or — as covered in <a href="#adding-deleting">7.5</a>
+        — by using <code>delete</code> on an element in the middle of a dense
+        array.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = new Array(5);  // length 5, but NO elements at all — completely empty
+a = [];                // length 0, no elements
+a[1000] = 0;           // Assigns one element, but length jumps to 1001
+a                       // => [ <1000 empty items>, 0 ]  — a sparse array</code></pre>
+      </div>
+      <p>
+        The crucial distinction is between an index that has <em>no
+        element</em> (a "hole") and an index that holds the actual value
+        <code>undefined</code>. Both read back as <code>undefined</code>
+        when you index into them, but they are not the same thing, and the
+        <code>in</code> operator (which tests "does this property exist,"
+        the same test covered in
+        <a href="03-expressions-operators.html#the-in-operator">the <code>in</code> operator</a>)
+        tells them apart:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a1 = [,];          // Array literal with ONE omitted slot — length 1, no element
+let a2 = [undefined];  // Array literal with ONE real element, whose value IS undefined
+
+0 in a1   // => false — a1 has no element with index 0 at all (a hole)
+0 in a2   // => true  — a2 genuinely stores undefined at index 0
+
+a1[0]     // => undefined — reads the same either way!
+a2[0]     // => undefined</code></pre>
+      </div>
+      <p>
+        Repeated commas with nothing between them inside an array literal —
+        <code>[1, , 3]</code> — create holes at the omitted positions rather
+        than storing <code>undefined</code> there; that's an intentional
+        piece of literal syntax, not a typo. And a literal's trailing comma is
+        always ignored for counting purposes, which trips people up:
+        <code>[,,]</code> has <code>length === 2</code>, not 3 — the trailing
+        comma doesn't add its own element.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Do holes matter in practice?</div>
+        <p>
+          Mostly no — most arrays you'll actually work with are dense, and
+          code that treats a sparse array as if it were a dense array full of
+          <code>undefined</code> values usually behaves reasonably. But the
+          iteration methods disagree on whether they skip holes (see
+          <a href="#iterating-arrays">7.6</a> and
+          <a href="#iterator-methods">7.8.1</a>), and sufficiently sparse
+          arrays are often implemented internally more like a hash map than a
+          contiguous buffer — element access can degrade to roughly the cost
+          of a regular object property lookup, losing the fast path dense
+          arrays normally get.
+        </p>
+      </div>
+
+      <h2 id="array-length">
+        7.4 Array length — the length invariant <span class="badge hard">Hard</span>
+      </h2>
+      <p>
+        Every array carries a <code>length</code> property, and it is
+        precisely this property — self-updating, and enforced by two special
+        behaviors — that separates an array from an ordinary object with
+        integer-like keys. For a dense array, <code>length</code> is simply
+        the element count. For a sparse array, all you can say in general is
+        that JavaScript guarantees one invariant:
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">The one invariant arrays enforce</div>
+        <p>
+          <code>length</code> is always strictly greater than the index of
+          every element actually present. Equivalently: an array never has an
+          element whose index is <code>&gt;= length</code>. Every "special"
+          thing an array does — as opposed to a plain object — exists purely
+          to keep that one sentence true.
+        </p>
+      </div>
+      <p>
+        To maintain the invariant, arrays implement two behaviors. First —
+        already seen above — assigning to an index <code>i &gt;= length</code>
+        silently sets <code>length</code> to <code>i + 1</code>. Second, and
+        far more surprising the first time you hit it: setting
+        <code>length</code> directly to a smaller non-negative integer
+        <code>n</code> <strong>deletes</strong> every element whose index is
+        <code>&gt;= n</code>. Growing <code>length</code> the other way — to
+        a value larger than the current length — adds no elements; it simply
+        opens up a sparse region at the end.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3, 4, 5];
+a.length = 3;   // TRUNCATES: elements at index 3 and 4 are gone. a is [1,2,3]
+a.length = 0;   // Deletes everything. a is []
+a.length = 5;   // Grows length back to 5, but adds NO elements — sparse,
+                //   just like new Array(5)
+
+a[5] = 6;       // Assigning past the end auto-extends length
+a.length        // => 6
+a               // => [1, 2, 3, <2 empty items>, 6] — a itself is now sparse too
+
+delete a[0];    // A hole appears where the value used to be...
+a.length        // => 6 (unchanged!) — delete never touches length, unlike
+                //   shrinking length directly, which it very much does</code></pre>
+      </div>
+      <p>
+        That last line is the detail that catches people: <code>delete</code>
+        and "set <code>length</code> smaller" both remove elements, but only
+        the second one shrinks <code>length</code>. They look like they
+        should be equivalent tools for "removing the end of an array" and
+        they very much are not.
+      </p>
+
+      <h2 id="adding-deleting">7.5 Adding and deleting array elements</h2>
+      <p>
+        The most primitive way to add an element is simply to assign to a new
+        index — <code>a[a.length] = v</code> appends, relying on the length
+        invariant to do the bookkeeping. In practice you'll almost always
+        reach for the named stack/queue methods instead, since they're
+        clearer about intent and handle multiple values at once:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [];
+a.push("zero");        // a == ["zero"] — push() appends and returns new length
+a.push("one", "two");  // a == ["zero", "one", "two"] — multiple args in one call
+
+a.pop();                // Removes and returns "two". a == ["zero", "one"]
+a.unshift("minus one"); // Inserts at the FRONT, shifting everything else up
+a.shift();              // Removes and returns the first element</code></pre>
+      </div>
+      <p>
+        <code>push()</code>/<code>pop()</code> operate at the end and are
+        cheap — no other elements need to move. <code>unshift()</code>/
+        <code>shift()</code> operate at the front and are comparatively
+        expensive, because every other element's index has to shift by one
+        to make or fill the gap. Full semantics, including the
+        multiple-argument surprise with <code>unshift()</code>, are covered
+        in <a href="#stacks-queues">7.8.4</a>.
+      </p>
+      <p>
+        You can also remove an element with the <code>delete</code> operator,
+        the same operator used to remove object properties
+        (<a href="05-objects.html#deleting-properties">the delete operator</a>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3];
+delete a[2];   // Removes the element...
+2 in a          // => false — no property named "2" anymore
+a.length        // => 3 — STILL 3! delete never touches length</code></pre>
+      </div>
+      <p>
+        Deleting an element is subtly different from assigning
+        <code>undefined</code> to it: deleting removes the property (and its
+        index) entirely, turning that slot into a genuine hole and making the
+        array sparse, whereas assigning <code>undefined</code> keeps the
+        index present with a real (if empty) value in it — the same
+        hole-vs-<code>undefined</code> distinction from <a href="#sparse-arrays">7.3</a>.
+        Crucially, <code>delete</code> never re-indexes the elements after
+        the gap the way <code>splice()</code> does — it just leaves a hole
+        where the element used to be.
+      </p>
+      <p>
+        For removing from the end, you can also just shrink
+        <code>length</code> directly (see <a href="#array-length">7.4</a>).
+        And for the fully general case — delete some elements, insert others,
+        anywhere in the array, in one call — that's exactly what
+        <code>splice()</code> is for; see <a href="#subarrays">7.8.5</a>.
+      </p>
+
+      <h2 id="iterating-arrays">7.6 Iterating arrays</h2>
+      <p>
+        JavaScript gives you several ways to walk an array's elements, and
+        they are not interchangeable — they differ in whether they see
+        holes, whether you get the index, and whether you can bail out early.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let letters = [..."Hello world"];
+
+// for/of: the modern default. Values in order; ignores that the array
+// might be sparse and simply hands you undefined for a missing element.
+let out = "";
+for (let letter of letters) out += letter;
+out  // => "Hello world"
+
+// Need the index too? Use entries() with destructuring:
+let everyOther = "";
+for (let [index, letter] of letters.entries()) {
+    if (index % 2 === 0) everyOther += letter;
+}
+everyOther  // => "Hlowrd"
+
+// forEach(): a functional-style alternative to for/of. Unlike for/of, it
+// is sparse-aware — it skips holes rather than calling your function with
+// undefined for them — and it hands your callback (value, index, array).
+let upper = "";
+letters.forEach(letter => { upper += letter.toUpperCase(); });
+upper  // => "HELLO WORLD"</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">
+          Don't use <code>for...in</code> on arrays
+        </div>
+        <p>
+          <code>for...in</code> enumerates property names — for an array
+          that means it hands you string indexes ("0", "1", "2", …), not
+          values, and it will also walk any enumerable properties you or a
+          library have added directly to the array object, or inherited via
+          the prototype chain, which are not array elements at all. It's
+          slower than the alternatives on real engines and it's simply the
+          wrong abstraction for "give me the elements of this list." See
+          <a href="04-statements.html#for-of-vs-for-in">for/of vs. for/in</a>
+          for the general version of this rule; for arrays specifically,
+          reach for <code>for...of</code>, <code>forEach()</code>, or a
+          classic indexed <code>for</code> loop instead.
+        </p>
+      </div>
+      <p>
+        A classic index-based <code>for</code> loop is still perfectly
+        idiomatic, especially in performance-sensitive or nested code, or
+        when you need to bail out early with <code>break</code> (something
+        none of <code>for...of</code>'s functional cousins support for
+        arbitrary conditions inside a callback):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let vowels = "";
+for (let i = 0; i < letters.length; i++) {
+    let letter = letters[i];
+    if (/[aeiou]/.test(letter)) vowels += letter;
+}
+vowels  // => "eoo"
+
+// Caching .length or iterating backward are sometimes seen for
+// micro-optimization reasons, though modern engines rarely need the help:
+for (let i = 0, len = letters.length; i < len; i++) { /* ... */ }
+for (let i = letters.length - 1; i >= 0; i--) { /* ... */ }
+
+// If a plain for loop might walk a sparse array, guard against holes
+// explicitly — a manual for loop does NOT skip them the way forEach() does:
+for (let i = 0; i < a.length; i++) {
+    if (a[i] === undefined) continue; // Skips both holes and real undefineds
+    // ...
+}</code></pre>
+      </div>
+
+      <h2 id="multidimensional-arrays">7.7 Multidimensional arrays</h2>
+      <p>
+        JavaScript has no built-in notion of a true multidimensional array —
+        no <code>int[10][10]</code>-style contiguous block. Instead, you
+        approximate one with an array of arrays: index twice, once per
+        dimension, using <code>[]</code> back to back.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Build a 10x10 multiplication table as an array of arrays
+let table = new Array(10);              // 10 rows
+for (let i = 0; i < table.length; i++) {
+    table[i] = new Array(10);           // Each row gets its own 10-column array
+}
+for (let row = 0; row < table.length; row++) {
+    for (let col = 0; col < table[row].length; col++) {
+        table[row][col] = row * col;
+    }
+}
+table[5][7]  // => 35</code></pre>
+      </div>
+      <p>
+        Because each row is its own independent array object, rows are not
+        forced to be the same length — you can build ragged/jagged arrays
+        just as easily as rectangular ones. Watch out for the classic
+        aliasing bug when "preallocating" rows: <code>new Array(10).fill([])
+        </code> fills every row with references to the <em>same</em> empty
+        array, so mutating one row mutates all of them; the loop above avoids
+        that by calling <code>new Array(10)</code> fresh, once per row.
+      </p>
+
+      <h2 id="array-methods">7.8 Array methods</h2>
+      <p>
+        Array literal syntax and indexing cover the "an array is
+        special-cased object" side of things; the real day-to-day power comes
+        from the methods every array inherits from <code>Array.prototype</code>.
+        The single fact worth internalizing before reading further:
+        <strong>some of these methods mutate the array they're called on, and
+        some return a new array while leaving the original untouched</strong> —
+        and a few methods do both at once (mutate <em>and</em> return a
+        reference to the same, now-modified array). Mixing this up — assuming
+        a method is mutating when it isn't, or vice versa — is one of the
+        most common sources of array-related bugs in real codebases: silently
+        discarding the return value of a non-mutating method, or being
+        surprised that a caller's array changed underneath them.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">
+          The full mutating vs. non-mutating map
+          <span class="badge hard">Know this cold</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Method</th><th>What it does</th><th>Mutates original?</th></tr>
+            <tr><td><code>push()</code> / <code>pop()</code></td><td>Add / remove at the end</td><td>Yes</td></tr>
+            <tr><td><code>unshift()</code> / <code>shift()</code></td><td>Add / remove at the start (reindexes everything — slower)</td><td>Yes</td></tr>
+            <tr><td><code>splice()</code></td><td>General insert / delete / replace anywhere; returns removed elements</td><td>Yes</td></tr>
+            <tr><td><code>sort(cmp)</code></td><td>Reorders elements in place</td><td>Yes</td></tr>
+            <tr><td><code>reverse()</code></td><td>Reverses order in place</td><td>Yes</td></tr>
+            <tr><td><code>fill(v, start, end)</code></td><td>Overwrites a range with one value</td><td>Yes</td></tr>
+            <tr><td><code>copyWithin(target, start, end)</code></td><td>Copies a range over another range, in place</td><td>Yes</td></tr>
+            <tr><td><code>delete a[i]</code> (operator, not a method)</td><td>Removes one element, leaves a hole</td><td>Yes</td></tr>
+            <tr><td><code>slice()</code></td><td>Extracts a subrange</td><td>No — new array</td></tr>
+            <tr><td><code>concat()</code></td><td>Joins arrays/values (flattens one level of array arguments only)</td><td>No — new array</td></tr>
+            <tr><td><code>map()</code> / <code>filter()</code> / <code>flatMap()</code></td><td>Transform / select / map-then-flatten</td><td>No — new array</td></tr>
+            <tr><td><code>flat(depth)</code></td><td>Flattens nested arrays to the given depth</td><td>No — new array</td></tr>
+            <tr><td><code>forEach()</code></td><td>Side-effecting iteration</td><td>No (returns <code>undefined</code>)</td></tr>
+            <tr><td><code>join()</code></td><td>Concatenates elements into a string</td><td>No — returns a string</td></tr>
+            <tr><td><code>indexOf()</code> / <code>lastIndexOf()</code> / <code>includes()</code></td><td>Search by value</td><td>No</td></tr>
+            <tr><td><code>find()</code> / <code>findIndex()</code> / <code>findLast()</code> / <code>findLastIndex()</code></td><td>Search by predicate</td><td>No</td></tr>
+            <tr><td><code>every()</code> / <code>some()</code></td><td>Boolean predicate tests, with early exit</td><td>No</td></tr>
+            <tr><td><code>reduce()</code> / <code>reduceRight()</code></td><td>Fold to a single value</td><td>No</td></tr>
+            <tr><td><code>at(i)</code></td><td>Indexed read, supports negative indexes</td><td>No</td></tr>
+            <tr><td><code>toSorted()</code>, <code>toReversed()</code>, <code>toSpliced()</code>, <code>with()</code> <span class="badge new">ES2023</span></td><td>Non-mutating counterparts of <code>sort</code>/<code>reverse</code>/<code>splice</code>/index-assignment</td><td>No — new array</td></tr>
+          </table>
+        </div>
+        <p>
+          A useful rule of thumb, though not a perfectly reliable one: methods
+          named after the older, imperative parts of the API
+          (<code>push</code>, <code>splice</code>, <code>sort</code>) tend to
+          mutate, while the newer functional-style methods
+          (<code>map</code>, <code>filter</code>, and their ES2023
+          <code>to</code>-prefixed cousins) tend to return copies. When in
+          doubt, check the table above rather than guess — guessing wrong in
+          either direction is a real bug, not just a style nit.
+        </p>
+      </div>
+
+      <h3 id="iterator-methods">7.8.1 Iterator methods</h3>
+      <p>
+        This is the largest family: methods that call a function you supply
+        once per element (skipping holes in a sparse array — none of them
+        invoke your callback for an index with no element present), typically
+        passing <code>(value, index, array)</code>. Most also accept an
+        optional second argument that becomes <code>this</code> inside your
+        callback, though with arrow functions you'll rarely need that since
+        arrow functions already close over the enclosing <code>this</code>.
+        None of the methods in this section mutate the array they're invoked
+        on (your callback could, of course, mutate it itself, but that's on
+        you, not the method).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let data = [1, 2, 3, 4, 5], sum = 0;
+data.forEach(value => { sum += value; });                // sum == 15
+data.forEach((v, i, a) => { a[i] = v + 1; });             // data == [2,3,4,5,6]
+// forEach has no way to stop early — no break-equivalent inside the callback
+
+let a = [1, 2, 3];
+a.map(x => x * x)              // => [1, 4, 9] — one output per input, new array
+
+let b = [5, 4, 3, 2, 1];
+b.filter(x => x < 3)            // => [2, 1]
+b.filter((x, i) => i % 2 === 0) // => [5, 3, 1] — index is available too
+// filter()'s return is ALWAYS dense, even if the source was sparse — a
+// classic trick for closing holes is: let dense = sparse.filter(() => true);
+
+let c = [1, 2, 3, 4, 5];
+c.findIndex(x => x === 3)  // => 2
+c.findIndex(x => x < 0)    // => -1 — not found
+c.find(x => x % 5 === 0)   // => 5
+c.find(x => x % 7 === 0)   // => undefined — not found
+// findLast() / findLastIndex() (ES2023) do the same search from the END
+
+c.every(x => x < 10)       // => true — vacuously true on an empty array too
+c.some(x => x % 2 === 0)   // => true
+// every()/some() both short-circuit: some() stops at the first true,
+// every() stops at the first false
+
+let sum2 = c.reduce((acc, x) => acc + x, 0);        // => 15
+let max  = c.reduce((x, y) => x > y ? x : y);        // => 5, no initial value
+// reduceRight() folds from the high index down to the low index — useful
+// for operations with right-to-left associativity, e.g. exponentiation:
+[2, 3, 4].reduceRight((acc, val) => Math.pow(val, acc)) // => 2**(3**4)</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">
+          <code>reduce()</code> without an initial value — and its one gotcha
+        </div>
+        <p>
+          Omitting the second argument makes the first element the starting
+          accumulator, and the callback runs starting from the second
+          element — fine for a nonempty array, but <strong>calling
+          <code>reduce()</code> on an empty array with no initial value
+          throws a <code>TypeError</code></strong>, since there's no value to
+          seed with and nothing to call your function on. Passing an explicit
+          initial value sidesteps the empty-array crash entirely and is
+          usually clearer regardless. Note also that <code>reduce()</code>
+          has no "this-binding" second argument the way <code>map()</code> and
+          friends do — the second parameter slot is taken by the initial
+          value instead; use <code>Function.prototype.bind()</code> (see
+          <a href="07-functions.html#bind-method">bind()</a>) if you need
+          the reducer invoked as a method of some object.
+        </p>
+      </div>
+
+      <h3 id="flat-flatmap">
+        7.8.2 Flattening with <code>flat()</code> and <code>flatMap()</code>
+        <span class="badge new">ES2019</span>
+      </h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">[1, [2, 3]].flat()        // => [1, 2, 3] — one level, the default
+[1, [2, [3]]].flat()      // => [1, 2, [3]] — inner array not flattened
+
+let deep = [1, [2, [3, [4]]]];
+deep.flat(1)    // => [1, 2, [3, [4]]]
+deep.flat(2)    // => [1, 2, 3, [4]]
+deep.flat(Infinity)  // => [1, 2, 3, 4] — flatten however deep it goes
+
+// flatMap(f) == map(f).flat(), but computed in one efficient pass:
+let phrases = ["hello world", "the definitive guide"];
+phrases.flatMap(p => p.split(" "))
+// => ["hello","world","the","definitive","guide"]
+
+// flatMap is a natural way to map an element to ZERO outputs — map it to []:
+[-2, -1, 1, 2].flatMap(x => x < 0 ? [] : Math.sqrt(x)) // => [1, 1.41...]</code></pre>
+      </div>
+
+      <h3 id="concat">7.8.3 Adding arrays with <code>concat()</code></h3>
+      <p>
+        <code>concat()</code> builds and returns a <em>new</em> array
+        combining the elements of the array it's called on with each of its
+        arguments — flattening one level if an argument is itself an array,
+        but never flattening nested arrays inside that, and never modifying
+        its receiver.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3];
+a.concat(4, 5)          // => [1, 2, 3, 4, 5]
+a.concat([4, 5], [6, 7]) // => [1, 2, 3, 4, 5, 6, 7] — top-level arrays flattened
+a.concat(4, [5, [6, 7]]) // => [1, 2, 3, 4, 5, [6, 7]] — nested array NOT flattened
+a                        // => [1, 2, 3] — unchanged</code></pre>
+      </div>
+      <p>
+        Every call allocates a fresh copy of the receiver, which is fine
+        occasionally but wasteful in a loop — code shaped like
+        <code>a = a.concat(x)</code> repeated many times is a good sign you
+        should be mutating in place with <code>push()</code> or
+        <code>splice()</code> instead.
+      </p>
+
+      <h3 id="stacks-queues">
+        7.8.4 Stacks and queues: <code>push()</code>, <code>pop()</code>,
+        <code>shift()</code>, <code>unshift()</code>
+      </h3>
+      <p>
+        <code>push()</code> appends one or more elements to the end and
+        returns the array's new length; it does <em>not</em> flatten an array
+        argument the way <code>concat()</code> does — pass
+        <code>...values</code> explicitly if you want to push another
+        array's elements individually. <code>pop()</code> removes and returns
+        the last element. Together they give you a last-in-first-out stack:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let stack = [];
+stack.push(1, 2);     // stack == [1, 2]
+stack.pop();          // returns 2; stack == [1]
+stack.push([4, 5]);   // stack == [1, [4, 5]] — pushed as ONE element, not flattened
+stack.pop();          // returns [4, 5]; stack == [1]</code></pre>
+      </div>
+      <p>
+        <code>unshift()</code>/<code>shift()</code> mirror
+        <code>push()</code>/<code>pop()</code> but operate at the front,
+        shifting every other element's index up or down by one — inherently
+        more expensive than the end-based operations. Combine
+        <code>push()</code> (add at the end) with <code>shift()</code>
+        (remove from the front) to get a first-in-first-out queue:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let q = [];
+q.push(1, 2);   // q == [1, 2]
+q.shift();      // returns 1; q == [2]
+q.push(3);      // q == [2, 3]</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">
+          <code>unshift()</code> with multiple arguments inserts them all at once
+        </div>
+        <p>
+          It's tempting to assume <code>a.unshift(1, 2)</code> behaves like
+          calling <code>unshift(1)</code> then <code>unshift(2)</code>, but it
+          doesn't — the arguments keep their given order in the result,
+          rather than each being pushed in front of the previous one:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [];
+a.unshift(1);      // a == [1]
+a.unshift(2);      // a == [2, 1] — calling twice reverses the order
+
+let b = [];
+b.unshift(1, 2);   // b == [1, 2] — one call keeps argument order!</code></pre>
+        </div>
+      </div>
+
+      <h3 id="subarrays">
+        7.8.5 Subarrays: <code>slice()</code>, <code>splice()</code>,
+        <code>fill()</code>, <code>copyWithin()</code>
+      </h3>
+      <p>
+        These four operate on contiguous ranges of an array, and the first
+        two are the pair most often confused for one another, despite
+        opposite mutation behavior.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">
+          <code>slice()</code> vs. <code>splice()</code> — similar names, opposite behavior
+        </div>
+        <p>
+          <code>slice(start, end)</code> <strong>returns a new array</strong>
+          containing elements from <code>start</code> up to but not including
+          <code>end</code> (negative arguments count from the end, so
+          <code>-1</code> is the last element); it never touches the
+          original. <code>splice(start, deleteCount, ...items)</code>
+          <strong>mutates in place</strong>: it removes <code>deleteCount</code>
+          elements starting at <code>start</code>, optionally inserts
+          <code>items</code> in their place, shifts everything after to close
+          or open the gap, and returns an array of whatever it removed. Note
+          too that the second argument means something completely different
+          for each: an end <em>position</em> for <code>slice()</code>, a
+          <em>count</em> for <code>splice()</code>.
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3, 4, 5];
+a.slice(0, 3);    // => [1,2,3] — a unchanged
+a.slice(3);       // => [4,5] — one arg: to the end
+a.slice(1, -1);   // => [2,3,4] — negative end, relative to length
+a.slice(-3, -2);  // => [3]
+
+let b = [1, 2, 3, 4, 5, 6, 7, 8];
+b.splice(4);       // => [5,6,7,8] removed; b is now [1,2,3,4] — MUTATED
+b.splice(1, 2);    // => [2,3] removed; b is now [1,4]
+b.splice(1, 1);    // => [4] removed; b is now [1]
+
+let c = [1, 2, 5];
+c.splice(2, 0, 3, 4);   // Insert 3,4 at index 2, delete nothing
+c                        // => [1, 2, 3, 4, 5]
+
+let d = [1, 2, 3, 4, 5];
+d.splice(2, 2, [1, 2], 3); // Note: an array argument is inserted AS an
+d                           //   element, not flattened, unlike concat()
+// d => [1, 2, [1, 2], 3, 5]</code></pre>
+        </div>
+      </div>
+      <p>
+        <code>fill(value, start, end)</code> overwrites a range (default: the
+        whole array) with one repeated value, mutating in place and returning
+        the same array. <code>copyWithin(target, start, end)</code> copies a
+        slice to another position within the <em>same</em> array, in place,
+        without changing <code>length</code> — modeled on C's
+        <code>memmove()</code>, and it copies correctly even when the source
+        and destination ranges overlap. Both accept negative indexes with the
+        same end-relative meaning as <code>slice()</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let e = new Array(5);
+e.fill(0)          // => [0,0,0,0,0]
+e.fill(9, 1)       // => [0,9,9,9,9] — start at index 1, go to the end
+e.fill(8, 2, -1)   // => [0,9,8,8,9] — fill indexes 2..3 (not -1 itself)
+
+let f = [1, 2, 3, 4, 5];
+f.copyWithin(1)        // => [1,1,2,3,4] — shift everything up by copying from index 0
+f.copyWithin(2, 3, 5)  // => [1,1,3,4,4] — copy last two elements to index 2
+f.copyWithin(0, -2)    // => [4,4,3,4,4] — negative offsets work here too</code></pre>
+      </div>
+
+      <h3 id="searching-sorting">7.8.6 Searching and sorting</h3>
+      <p>
+        <code>indexOf()</code> and <code>lastIndexOf()</code> search by
+        strict-equality (<code>===</code>) comparison from the front or back
+        respectively, both returning <code>-1</code> on failure and both
+        accepting an optional starting-index second argument (negative
+        values count from the end, exactly as for <code>slice()</code>).
+        Because they use <code>===</code>, and <code>NaN === NaN</code> is
+        <code>false</code>, neither can ever locate a <code>NaN</code> in an
+        array — that's specifically what <code>includes()</code> is for.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [0, 1, 2, 1, 0];
+a.indexOf(1)       // => 1
+a.lastIndexOf(1)   // => 3
+a.indexOf(3)       // => -1
+
+let b = [1, true, 3, NaN];
+b.includes(true)   // => true
+b.includes(NaN)    // => true — includes() treats NaN as equal to itself
+b.indexOf(NaN)     // => -1 — indexOf CANNOT find NaN, ever</code></pre>
+      </div>
+      <p>
+        <code>includes()</code> <span class="badge new">ES2016</span> answers
+        only "is this value present," not "at what index" — a lightweight
+        set-membership check, though a real <code>Set</code> (see
+        <a href="10-collections-typed-arrays.html">Collections &amp; Typed
+        Arrays</a>) is the better tool once you're checking membership
+        often or against many elements, since array search is linear.
+      </p>
+
+      <h4 id="array-sort">
+        <code>sort()</code>'s default comparison is lexicographic — the
+        classic numeric-sort bug <span class="badge hard">Hard</span>
+      </h4>
+      <p>
+        <code>sort()</code> reorders elements <strong>in place</strong> and
+        returns the same array. Called with no arguments, it does not sort
+        numerically or by any type-aware rule — it converts elements to
+        strings if necessary and compares them <em>alphabetically</em>.
+        <code>undefined</code> elements are always sorted to the end,
+        regardless of comparator.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let words = ["banana", "cherry", "apple"];
+words.sort();   // => ["apple","banana","cherry"] — fine, they're already strings
+
+let nums = [33, 4, 1111, 222];
+nums.sort();    // => [1111, 222, 33, 4] — WRONG if you wanted numeric order!
+                //   because "1111" < "222" < "33" < "4" as STRINGS
+
+nums.sort((a, b) => a - b);  // => [4, 33, 222, 1111] — correct numeric order
+nums.sort((a, b) => b - a);  // => [1111, 222, 33, 4] — descending</code></pre>
+      </div>
+      <p>
+        A comparator function takes two elements and returns a number less
+        than zero if the first should sort before the second, greater than
+        zero if it should sort after, and zero if their relative order
+        doesn't matter. <code>a - b</code> is the idiomatic comparator for
+        numbers; for anything else — including a case-insensitive string
+        sort — write the comparator out explicitly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let mixed = ["ant", "Bug", "cat", "Dog"];
+mixed.sort();  // => ["Bug","Dog","ant","cat"] — default sort is CASE-SENSITIVE
+               //   (uppercase letters sort before lowercase in string comparison)
+
+mixed.sort((s, t) => {
+    let a = s.toLowerCase(), b = t.toLowerCase();
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+});  // => ["ant","Bug","cat","Dog"] — case-insensitive</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Always pass a comparator unless you actually want string order</div>
+        <p>
+          "It's sorted, but the numbers look wrong" is one of the most common
+          JavaScript bugs precisely because <code>[10, 2, 1].sort()</code>
+          runs without error and simply produces the wrong-looking-but-not-
+          crashing answer <code>[1, 10, 2]</code>. There's no lint warning for
+          this by default — treat "did I mean to sort numbers?" as a question
+          to ask every time you write a bare <code>.sort()</code>.
+        </p>
+      </div>
+      <p>
+        <code>reverse()</code> reverses element order in place and returns
+        the same array — again, no new array is allocated:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3];
+a.reverse();   // a == [3, 2, 1] — mutated</code></pre>
+      </div>
+
+      <h3 id="array-to-string">7.8.7 Array-to-string conversions</h3>
+      <p>
+        <code>join(separator)</code> stringifies every element and
+        concatenates them with the given separator (a comma, if you omit it)
+        between each pair. It is the inverse of
+        <code>String.prototype.split()</code>. Plain <code>toString()</code>
+        on an array behaves exactly like <code>join()</code> with no
+        argument, and <code>toLocaleString()</code> is a locale-aware variant
+        that calls each element's own <code>toLocaleString()</code> and joins
+        with an implementation-defined separator. None of these three add
+        surrounding brackets or any other array-ish decoration to the output.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3];
+a.join()        // => "1,2,3"
+a.join(" ")     // => "1 2 3"
+a.join("")      // => "123"
+
+let b = new Array(10);   // Sparse, length 10, no elements
+b.join("-")     // => "---------" — nine hyphens, one per gap between "elements"
+
+[1, [2, "c"]].toString()  // => "1,2,c" — no brackets in the output at all</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Don't use join()/toString() to serialize an array for storage</div>
+        <p>
+          These methods exist for building human-readable log or error
+          messages, not for round-tripping data — they're lossy (types,
+          nesting structure, and distinctions like holes vs.
+          <code>undefined</code> all disappear into a flat string). Use
+          <code>JSON.stringify()</code> (see
+          <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; utilities</a>)
+          whenever you actually need to reconstruct the array later.
+        </p>
+      </div>
+
+      <h3 id="static-methods">7.8.8 Static <code>Array</code> functions and ES2023 non-mutating methods</h3>
+      <p>
+        Beyond the instance methods above, <code>Array</code> itself defines
+        static helpers. <code>Array.of()</code> and <code>Array.from()</code>
+        were already covered in <a href="#array-of-from">7.1</a>.
+        <code>Array.isArray()</code> is the reliable way to test whether an
+        unknown value is a true array — <code>typeof</code> is useless here,
+        since it reports <code>"object"</code> for arrays same as any other
+        object:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Array.isArray([])           // => true
+Array.isArray({})            // => false
+Array.isArray("not array")   // => false
+typeof []                    // => "object" — NOT useful for this check</code></pre>
+      </div>
+      <p>
+        <code>Array.prototype.at(index)</code> is a small but genuinely handy
+        ES2022 addition: an indexed read that also accepts negative indexes
+        counting from the end, so you no longer need
+        <code>a[a.length - 1]</code> for "the last element":
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = [1, 2, 3, 4, 5];
+a.at(-1)    // => 5 — last element
+a.at(-2)    // => 4
+a[-1]       // => undefined — plain bracket indexing does NOT support negatives!</code></pre>
+      </div>
+      <p>
+        ES2023 rounds out the mutating methods with non-mutating
+        counterparts, useful whenever you want a sorted/reversed/spliced
+        result without disturbing the caller's original array — precisely
+        the class of bug the mutation table above warns about:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let original = [3, 1, 2];
+
+original.toSorted()          // => [1, 2, 3] — original UNCHANGED
+original.toReversed()        // => [2, 1, 3] — original UNCHANGED
+original.toSpliced(1, 1, 9)  // => [3, 9, 2] — original UNCHANGED
+original.with(0, 99)          // => [99, 1, 2] — replace one index, non-mutating
+original                     // => [3, 1, 2] — still exactly as it started</code></pre>
+      </div>
+
+      <h2 id="array-like-objects">7.9 Array-like objects</h2>
+      <p>
+        What makes a real array special is a specific bundle of features:
+        automatic <code>length</code> maintenance, truncation when
+        <code>length</code> shrinks, inheritance from
+        <code>Array.prototype</code>, and a <code>true</code> result from
+        <code>Array.isArray()</code>. None of those, though, are strictly
+        required for an object to be usable <em>like</em> an array. Any
+        object with a numeric <code>length</code> property and
+        integer-keyed properties — an <strong>array-like object</strong> —
+        can often be iterated and processed with ordinary array algorithms,
+        especially read-only ones. Some client-side DOM APIs (historically,
+        things like <code>document.querySelectorAll()</code>'s return value)
+        hand you exactly this shape rather than a true array.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = {};              // Ordinary object...
+let i = 0;
+while (i < 10) { a[i] = i * i; i++; }
+a.length = i;            // ...manually made "array-like"
+
+let total = 0;
+for (let j = 0; j < a.length; j++) total += a[j]; // Works fine — plain indexing
+
+function isArrayLike(o) {
+    return o &&
+        typeof o === "object" &&
+        Number.isFinite(o.length) &&
+        o.length >= 0 &&
+        Number.isInteger(o.length) &&
+        o.length < 4294967295; // 2**32 - 1
+}</code></pre>
+      </div>
+      <p>
+        Because array-like objects don't have <code>Array.prototype</code>
+        anywhere in their prototype chain, you can't call
+        <code>a.map(...)</code> directly on one — but most
+        <code>Array.prototype</code> methods are deliberately written
+        <em>generically</em>, meaning they only assume the receiver has a
+        <code>length</code> and integer keys, not that it's a true array. That
+        makes it possible to <em>borrow</em> them via
+        <code>Function.prototype.call()</code> (see
+        <a href="07-functions.html#call-apply">call() and apply()</a>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let arrayLike = {"0": "a", "1": "b", "2": "c", length: 3};
+Array.prototype.join.call(arrayLike, "+")                 // => "a+b+c"
+Array.prototype.map.call(arrayLike, x => x.toUpperCase()) // => ["A","B","C"]
+Array.prototype.slice.call(arrayLike, 0)                  // => ["a","b","c"] — a real array copy
+
+Array.from(arrayLike)   // => ["a","b","c"] — the modern, much easier equivalent</code></pre>
+      </div>
+      <p>
+        <code>Array.from()</code> supersedes the old
+        "<code>slice.call(arrayLike)</code>" trick in essentially every case
+        you'll encounter today, but the borrowing technique is worth
+        recognizing since it still shows up in legacy code and library
+        internals.
+      </p>
+
+      <h2 id="strings-as-arrays">7.10 Strings as arrays</h2>
+      <p>
+        A string behaves like a read-only array of UTF-16 code units:
+        square-bracket indexing works (as an alternative to
+        <code>charAt()</code>), <code>length</code> works, and even
+        for-of iteration works, because strings are iterable — see
+        <a href="02-types-values-variables.html#text">the string type</a>
+        for the encoding details this glosses over (surrogate pairs and the
+        like).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let s = "test";
+s.charAt(0)   // => "t"
+s[1]          // => "e" — equivalent, more concise indexing
+
+typeof s             // => "string" — indexing doesn't change what it is
+Array.isArray(s)     // => false — a string is never a real array</code></pre>
+      </div>
+      <p>
+        Because generic array methods only require <code>length</code> plus
+        integer keys — the same array-like contract from
+        <a href="#array-like-objects">7.9</a> — you can even borrow one and
+        run it against a string:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Array.prototype.join.call("JavaScript", " ")  // => "J a v a S c r i p t"</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Strings are immutable — mutating array methods fail silently</div>
+        <p>
+          Since a string's characters can never be reassigned, borrowing a
+          <em>mutating</em> array method like <code>push()</code>,
+          <code>sort()</code>, <code>reverse()</code>, or <code>splice()</code>
+          against a string doesn't throw — it simply has no effect. There is
+          no error to catch and no exception to guard against; the failure is
+          entirely silent, which makes it worth remembering that strings only
+          get the read side of the array-like contract, never the write side.
+        </p>
+      </div>
+
+      <h2 id="summary">7.11 Summary</h2>
+      <p>
+        Arrays are ordered, dynamically sized, heterogeneously typed
+        collections layered on top of JavaScript's plain object model — every
+        index is a property name, and <code>length</code> is maintained by
+        two rules: assigning past the end grows it, and shrinking it directly
+        deletes whatever no longer fits. That single invariant is what
+        produces sparse arrays and the hole-vs-<code>undefined</code>
+        distinction covered in <a href="#sparse-arrays">7.3</a>. Beyond
+        literals, <code>Array.of()</code>, and <code>Array.from()</code> for
+        construction, the practical center of gravity is the
+        <code>Array.prototype</code> method surface — and specifically,
+        knowing at a glance which of those methods mutate their receiver
+        (<code>push</code>, <code>splice</code>, <code>sort</code>,
+        <code>reverse</code>, <code>fill</code>, <code>copyWithin</code>) and
+        which return an untouched-original copy (<code>slice</code>,
+        <code>concat</code>, <code>map</code>, <code>filter</code>,
+        <code>flat</code>/<code>flatMap</code>, and the ES2023
+        <code>toSorted</code>/<code>toReversed</code>/<code>toSpliced</code>/
+        <code>with</code> family). Prefer <code>for...of</code> and the
+        iterator methods over <code>for...in</code> for traversal; remember
+        that <code>sort()</code> defaults to lexicographic string comparison
+        and always needs a comparator for numeric order; and recognize
+        array-like objects and strings as things that support read-only,
+        generic array algorithms without actually being
+        <code>Array.isArray()</code>-true arrays. For fixed-length,
+        fixed-numeric-type binary data, see typed arrays on
+        <a href="10-collections-typed-arrays.html">Collections &amp; Typed
+        Arrays</a>; for the destructuring syntax that pairs so well with
+        array values, see
+        <a href="02-types-values-variables.html#destructuring">destructuring
+        assignment</a>.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

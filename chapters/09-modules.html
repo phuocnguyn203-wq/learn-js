@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Modules — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="09-modules.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 10</span>
+      <h1>Modules</h1>
+      <p class="lede">
+        A module is a file that gets its own private namespace: nothing it
+        declares leaks into the global scope, and nothing from outside gets
+        in, unless it's explicitly exported or imported. That sounds like a
+        simple idea, but JavaScript took an unusually long and messy road to
+        get there. For most of its life the language had no module keyword at
+        all, so programmers faked modularity with closures; then Node
+        invented its own <code>require()</code>-based system that became a de
+        facto standard; and only with ES6 did the language finally define its
+        own <code>import</code>/<code>export</code> syntax — one that still
+        isn't fully interchangeable with Node's original system. This chapter
+        walks through all three eras, because production code written in any
+        of them is still something you'll have to read.
+      </p>
+
+      <h2 id="the-modularity-problem">What "modularity" is actually solving</h2>
+      <p>
+        Modular programming lets you assemble a large program out of pieces
+        written independently, by different authors, without those pieces
+        stepping on each other. Concretely that means two things: hiding
+        implementation details so a module's internal helper functions and
+        variables can't be poked at or accidentally overwritten from outside,
+        and keeping the global namespace tidy so that two unrelated files
+        that both happen to declare a variable named <code>result</code> or a
+        function named <code>parse()</code> don't clobber one another. Every
+        module system this chapter covers — hand-rolled closures, Node's
+        CommonJS, and ES6 modules — is ultimately just a different mechanism
+        for achieving those same two goals.
+      </p>
+
+      <h2 id="closures-objects-modules">10.1 Modules with classes, objects, and closures</h2>
+      <p>
+        Before looking at any dedicated module syntax, it's worth noticing
+        that JavaScript already gives you two informal tools for modularity:
+        objects and closures. A <a href="08-classes.html">class</a> is
+        already a kind of module for its own methods — the <code>has()</code>
+        method defined on one class can't collide with a <code>has()</code>
+        method defined on a completely unrelated class, because each is a
+        property of its own separate prototype object, not a global function
+        named <code>has</code>. The built-in <code>Math</code> object works
+        the same way: instead of polluting the global scope with dozens of
+        loose functions and constants like <code>sin</code>, <code>cos</code>,
+        and <code>PI</code>, the language groups them as properties of a
+        single <code>Math</code> object. You can borrow that same trick for
+        your own code — instead of a pile of global classes, define one
+        namespace object whose properties are the classes:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Instead of global SingletonSet, BitSet, AbstractSet classes...
+const Sets = {
+  Singleton: class SingletonSet { /* ... */ },
+  Bit: class BitSet { /* ... */ },
+  Abstract: class AbstractSet { /* ... */ }
+};
+
+// Consumers reach through the namespace object
+let s = new Sets.Bit(64);</code></pre>
+      </div>
+      <p>
+        This is real modularity in the sense that it keeps the global
+        namespace clean, but it doesn't go far enough: it gives you no way to
+        hide implementation details <em>inside</em> the module. If
+        <code>BitSet</code> has private helper methods or internal lookup
+        tables that users of the class have no business touching, putting
+        them on <code>Sets.Bit</code> doesn't hide them — they're still
+        public properties, just nested one level deeper.
+      </p>
+      <p>
+        The tool that actually hides things is the closure, covered in depth
+        in <a href="07-functions.html#closures">the chapter on closures</a>:
+        local variables and nested functions declared inside a function body
+        are private to that function and invisible from outside it. Wrap an
+        entire module's implementation in an
+        <strong>immediately invoked function expression</strong> (IIFE), keep
+        the private helpers and internal state as ordinary local variables,
+        and return only the public API as the function's return value. The
+        module's "exports" become whatever object (or class, or function)
+        that IIFE hands back; everything else — every helper function,
+        every internal constant — stays sealed inside the closure and is
+        completely unreachable from outside code, even by accident.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const BitSet = (function () {
+  // --- Private implementation details, invisible outside this IIFE ---
+  function isValid(set, n) { /* ... */ }
+  function has(set, byte, bit) { /* ... */ }
+  const BITS = new Uint8Array([1, 2, 4, 8, 16, 32, 64, 128]);
+  const MASKS = new Uint8Array([~1, ~2, ~4, ~8, ~16, ~32, ~64, ~128]);
+
+  // --- The public API: just the class itself ---
+  // It can freely use isValid(), has(), BITS, and MASKS from its
+  // enclosing scope, but nothing outside this IIFE ever can.
+  return class BitSet extends AbstractWritableSet {
+    // ... implementation omitted ...
+  };
+}());</code></pre>
+      </div>
+      <p>
+        The same pattern scales to a module that exports several related
+        values rather than one class. A small "stats" module that exposes
+        <code>mean()</code> and <code>stddev()</code> while keeping its
+        working functions private looks like this:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const stats = (function () {
+  // Private utility functions — not part of the public API
+  const sum = (x, y) => x + y;
+  const square = x => x * x;
+
+  // Public functions, to be exported
+  function mean(data) {
+    return data.reduce(sum) / data.length;
+  }
+  function stddev(data) {
+    let m = mean(data);
+    return Math.sqrt(
+      data.map(x => x - m).map(square).reduce(sum) / (data.length - 1)
+    );
+  }
+
+  // Export the public functions as properties of a plain object
+  return { mean, stddev };
+}());
+
+stats.mean([1, 3, 5, 7, 9]);   // => 5
+stats.stddev([1, 3, 5, 7, 9]); // => Math.sqrt(10)</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">This is exactly what a class's private fields formalize</div>
+        <p>
+          If this feels familiar, it's because ES2022 private class fields
+          (<code>#field</code>, covered in the classes chapter) are a direct,
+          built-in answer to the same problem this IIFE pattern was solving
+          by hand: hiding implementation state that only the module's own
+          code should touch.
+        </p>
+      </div>
+
+      <h3 id="automating-closure-modules">10.1.1 Automating closure-based modularity</h3>
+      <p>
+        Turning a plain file of JavaScript into an IIFE-wrapped module like
+        the ones above is a mechanical transformation: wrap the file's
+        contents in a function, decide by convention which names get
+        attached to an <code>exports</code> object, and return that object.
+        Because it's mechanical, it's exactly the kind of thing a build tool
+        can do for you — and this is, historically, where Node's
+        <code>require()</code> function and later bundlers like webpack and
+        Parcel came from. You can sketch the whole idea in a few lines: take
+        a set of source files, wrap each one's contents in an IIFE that
+        creates a local <code>exports</code> object, stash each IIFE's return
+        value in a shared registry keyed by filename, and concatenate
+        everything into one bundle:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const modules = {};
+function require(moduleName) { return modules[moduleName]; }
+
+modules["sets.js"] = (function () {
+  const exports = {};
+  // ... the contents of sets.js go here ...
+  exports.BitSet = class BitSet { /* ... */ };
+  return exports;
+}());
+
+modules["stats.js"] = (function () {
+  const exports = {};
+  // ... the contents of stats.js go here ...
+  const sum = (x, y) => x + y;
+  const square = x => x * x;
+  exports.mean = function (data) { /* ... */ };
+  exports.stddev = function (data) { /* ... */ };
+  return exports;
+}());
+
+// Elsewhere in the bundle, other code can now do:
+const stats = require("stats.js");
+const BitSet = require("sets.js").BitSet;
+let s = new BitSet(100);
+s.insert(10); s.insert(20); s.insert(30);
+let average = stats.mean([...s]); // 20</code></pre>
+      </div>
+      <p>
+        This toy registry is a fair approximation of what a real bundler
+        produces, and it's also a plain-JavaScript reimplementation of the
+        exact function signature Node exposes natively:
+        <code>require(moduleName)</code> returning whatever the target
+        module chose to export. Understanding this sketch makes Node's real
+        module system — up next — much less mysterious, since it's doing
+        essentially the same thing, just backed by the filesystem instead of
+        a precomputed bundle.
+      </p>
+
+      <h2 id="modules-in-node">10.2 Modules in Node</h2>
+      <p>
+        Node programs are ordinarily split across as many files as makes
+        sense, because unlike a browser fetching script over the network,
+        Node reads files from a fast local filesystem — there's no strong
+        pressure to bundle everything into one giant file the way there
+        historically was on the web. Node treats every file as an
+        independent module with its own private namespace: top-level
+        constants, variables, functions, and classes declared in a file stay
+        private to that file unless the file explicitly exports them, and a
+        value exported by one module is visible elsewhere only if some other
+        module explicitly imports it. This system is commonly called
+        <strong>CommonJS</strong>, after the community specification it grew
+        out of. A module imports its dependencies by calling the global
+        <code>require()</code> function, and it exposes its own public API by
+        mutating the global <code>exports</code> object or by replacing
+        <code>module.exports</code> outright.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Full Node coverage lives elsewhere</div>
+        <p>
+          This section explains the CommonJS module mechanics themselves.
+          For everything else about writing real Node programs —
+          <code>package.json</code>, npm, the built-in modules, the event
+          loop, streams, and so on — see
+          <a href="21-nodejs.html">the Node.js chapter</a>.
+        </p>
+      </div>
+
+      <h3 id="node-exports">10.2.1 Node exports</h3>
+      <p>
+        Every Node module has a global-looking <code>exports</code> object
+        available automatically (it is in fact just a local variable that
+        Node arranges to exist inside the function it secretly wraps your
+        module code in). If a module exports several values, the simplest
+        approach is to assign each one as a property of <code>exports</code>
+        as you go:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// stats.js
+const sum = (x, y) => x + y;
+const square = x => x * x;
+
+exports.mean = data => data.reduce(sum) / data.length;
+exports.stddev = function (d) {
+  let m = exports.mean(d);
+  return Math.sqrt(d.map(x => x - m).map(square).reduce(sum) / (d.length - 1));
+};</code></pre>
+      </div>
+      <p>
+        Notice that <code>stddev</code> calls <code>exports.mean</code>
+        rather than a bare <code>mean</code> — that's necessary because
+        <code>mean</code> was never declared as a local variable, only
+        attached to <code>exports</code>.
+      </p>
+      <p>
+        Often, though, a module has exactly one thing to export — a single
+        class or function that <em>is</em> the module — rather than a bag of
+        named utilities. For that case you replace the entire
+        <code>module.exports</code> object instead of adding properties to
+        it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// bitset.js
+module.exports = class BitSet extends AbstractWritableSet {
+  // implementation omitted
+};</code></pre>
+      </div>
+      <p>
+        <code>exports</code> starts out as a plain alias for
+        <code>module.exports</code> — the same underlying object, reachable
+        two ways. That's why assigning properties onto <code>exports</code>
+        works: you're mutating the object that <code>module.exports</code>
+        also points at. But if you reassign <code>exports</code> itself to a
+        brand-new object (<code>exports = { ... }</code>), you've only
+        repointed the local variable; <code>module.exports</code> — the
+        thing Node actually hands to whoever calls <code>require()</code> —
+        still points at the original, now-abandoned object, and none of your
+        exports show up. Always reassign <code>module.exports</code>, never
+        bare <code>exports</code>, when you want to replace the whole thing.
+      </p>
+      <p>
+        A third common style, useful when a module exports several related
+        functions, is to define everything as ordinary local variables and
+        then export only the public subset in one statement at the end,
+        which also gives private helpers real names instead of forcing them
+        to dangle unattached:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Define everything, public and private, as plain locals
+const sum = (x, y) => x + y;
+const square = x => x * x;
+const mean = data => data.reduce(sum) / data.length;
+const stddev = d => {
+  let m = mean(d);
+  return Math.sqrt(d.map(x => x - m).map(square).reduce(sum) / (d.length - 1));
+};
+
+// Export only the public ones, in one place
+module.exports = { mean, stddev };</code></pre>
+      </div>
+
+      <h3 id="node-imports">10.2.2 Node imports</h3>
+      <p>
+        A module pulls in another module's exports by calling
+        <code>require(moduleName)</code>; the return value is whatever that
+        target module assigned to <code>module.exports</code>. How Node
+        interprets <code>moduleName</code> depends entirely on its shape:
+      </p>
+      <ul>
+        <li>
+          A bare name with no leading slash or dot, like
+          <code>"fs"</code> or <code>"express"</code>, is treated as either
+          one of Node's own built-in modules or a package installed under
+          <code>node_modules</code>. Node walks up the directory tree
+          looking for a matching <code>node_modules</code> folder.
+        </li>
+        <li>
+          A path starting with <code>./</code> or <code>../</code> is
+          resolved relative to the file doing the requiring — this is how
+          you pull in your own project's files.
+        </li>
+        <li>
+          An absolute path starting with <code>/</code> is legal too, though
+          rarely used in practice.
+        </li>
+      </ul>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Built-in Node modules — no path characters
+const fs = require("fs");
+const http = require("http");
+
+// A third-party package installed via npm — also no path characters
+const express = require("express");
+
+// Your own code — always begins with ./ or ../
+const stats = require("./stats.js");
+const BitSet = require("./utils/bitset.js");</code></pre>
+      </div>
+      <p>
+        You're allowed to drop the <code>.js</code> extension and just write
+        <code>require("./stats")</code> — Node will try appending
+        <code>.js</code>, then <code>.json</code>, then <code>.node</code>,
+        and will also check whether the path is actually a directory
+        containing an <code>index.js</code> (or whatever its
+        <code>package.json</code> <code>"main"</code> field names). Explicit
+        extensions are still common in practice because they make the
+        resolution unambiguous at a glance.
+      </p>
+      <p>
+        When a module exports a single function or class, importing it is a
+        one-liner: <code>const BitSet = require("./bitset.js")</code>. When
+        a module exports an object bag of multiple properties, you have a
+        choice between importing the whole namespace object or destructuring
+        out just the pieces you need:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Import the whole object — everything hangs off one namespace
+const stats = require('./stats.js');
+let average = stats.mean(data);
+
+// Or destructure exactly what you plan to use into local names
+const { stddev } = require('./stats.js');
+let sd = stddev(data); // succinct, but loses the "stats." context</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">CommonJS on the web</div>
+        <p>
+          Because <code>require()</code>/<code>exports</code> aren't part of
+          the JavaScript language itself, they only work natively in Node.
+          For years, though, bundlers like webpack let web developers write
+          code in exactly this style and compiled it down to something
+          browsers could run — which is why a lot of older web-facing code
+          you'll encounter still looks like CommonJS even though it never
+          touched a Node server. New code doing this is now more likely to
+          be written with the standard ES6 <code>import</code>/<code>export</code>
+          syntax covered below.
+        </p>
+      </div>
+
+      <h2 id="commonjs-vs-esm">CommonJS vs. ES modules, side by side <span class="badge hard">Deep dive</span></h2>
+      <p>
+        CommonJS and ES modules (ESM) solve the same problem — private
+        per-file namespaces with explicit exports — but they differ in ways
+        that go well beyond spelling. These differences aren't trivia: they
+        explain real bugs you'll hit when mixing the two systems, and they
+        explain why Node still, years after adding ESM support, treats
+        <code>.cjs</code> and <code>.mjs</code> (or the <code>package.json</code>
+        <code>"type"</code> field) as meaningfully different file types.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th></th><th>CommonJS (Node's original)</th><th>ES Modules (the language standard)</th></tr>
+          <tr>
+            <td>Resolving the module graph</td>
+            <td><code>require()</code> is an ordinary synchronous function call. It runs, blocking, at the exact point it's written — including inside an <code>if</code>, a loop, or a function body.</td>
+            <td><code>import</code>/<code>export</code> are declarations, not expressions. The whole graph of static imports is resolved <em>before</em> any module body runs, purely by reading the syntax — no code executes to discover it.</td>
+          </tr>
+          <tr>
+            <td>Where they may appear</td>
+            <td>Anywhere — conditionally, dynamically, computed from a variable.</td>
+            <td>Only at the top level of a module, never nested in a block, loop, function, or condition. (The dynamic <code>import()</code> operator, covered later, is the deliberate escape hatch.)</td>
+          </tr>
+          <tr>
+            <td>What crosses the module boundary</td>
+            <td>A <strong>copy of a reference</strong> taken at <code>require()</code> time — really, a snapshot of whatever <code>module.exports</code> pointed to at that moment.</td>
+            <td><strong>Live, read-only bindings.</strong> An imported name stays permanently linked to the exporting module's variable; if the exporter later reassigns an exported <code>let</code>, every importer observes the new value immediately.</td>
+          </tr>
+          <tr>
+            <td>Reassigning the imported name</td>
+            <td>Legal — it's just a local variable holding whatever <code>require()</code> returned.</td>
+            <td>A <code>SyntaxError</code>/<code>TypeError</code> — imported bindings behave like <code>const</code> from the importer's side, even if the exporter declared them with <code>let</code>.</td>
+          </tr>
+          <tr>
+            <td>Top-level <code>this</code></td>
+            <td><code>module.exports</code> (an empty object, before you assign to it).</td>
+            <td><code>undefined</code>, even in top-level code — stricter than plain strict mode, where a function called as a function gets <code>undefined</code> but a script's top level still gets the global object.</td>
+          </tr>
+          <tr>
+            <td><code>require</code>, <code>__dirname</code>, <code>__filename</code></td>
+            <td>All three exist automatically — Node injects them as parameters/locals when it wraps your file.</td>
+            <td>None of them exist. The equivalent of <code>__dirname</code>/<code>__filename</code> has to be reconstructed from <code>import.meta.url</code>.</td>
+          </tr>
+          <tr>
+            <td>File loading</td>
+            <td>Synchronous <code>readFileSync</code>-style disk reads, one module at a time, depth-first as <code>require()</code> calls are reached.</td>
+            <td>Conceptually asynchronous — a browser (or Node) can fetch/read every module in the static graph in parallel before executing any of them.</td>
+          </tr>
+          <tr>
+            <td>Strict mode</td>
+            <td>Opt-in — you write <code>"use strict"</code> yourself, or don't.</td>
+            <td>Always on, automatically, no pragma needed.</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3 id="esm-live-bindings-example">Worked example: live bindings vs. copied values</h3>
+      <p>
+        This is the difference that causes the most confusing bugs in
+        practice. In an ES module, an exported mutable variable keeps
+        updating for every importer, because what crosses the boundary is a
+        <em>binding</em>, not a value:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// counter.mjs
+export let count = 0;
+export function increment() { count++; }</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.mjs
+import { count, increment } from "./counter.mjs";
+
+console.log(count); // 0
+increment();
+console.log(count); // 1 — the SAME live binding, automatically up to date
+
+count = 5; // TypeError: Assignment to constant variable.</code></pre>
+      </div>
+      <p>
+        The CommonJS equivalent doesn't have live bindings at all — only
+        objects, whose properties you can still read fresh, but a
+        destructured local variable is frozen at the moment of
+        <code>require()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// counter.js
+let count = 0;
+function increment() { count++; }
+module.exports = { get count() { return count; }, increment };</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.js
+const counter = require("./counter.js");
+const { increment } = counter;
+
+console.log(counter.count); // 0
+increment();
+console.log(counter.count); // 1 — works, but only because we exported a
+                             // getter; a plain `exports.count = count`
+                             // would have frozen 0 forever at require time.</code></pre>
+      </div>
+      <p>
+        Without the explicit getter trick, <code>module.exports.count</code>
+        would just be a plain number copied out at export time, and every
+        importer's copy would be permanently stuck at whatever it was the
+        instant <code>require()</code> ran — no amount of later mutation
+        inside <code>counter.js</code> would ever be visible again.
+      </p>
+
+      <h3 id="esm-this-dirname-example">Worked example: <code>this</code>, <code>require</code>, and <code>__dirname</code></h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// info.cjs — CommonJS
+console.log(typeof require);  // "function"
+console.log(__dirname);       // e.g. "/home/user/project"
+console.log(__filename);      // e.g. "/home/user/project/info.cjs"
+console.log(this === module.exports); // true</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// info.mjs — ES module
+console.log(typeof require); // ReferenceError: require is not defined
+console.log(__dirname);      // ReferenceError: __dirname is not defined
+console.log(this);           // undefined
+
+// The ESM replacement for __dirname/__filename:
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Interop gotchas going between the two systems</div>
+        <p>
+          Node lets an ES module <code>import</code> a CommonJS file: the
+          entire <code>module.exports</code> object becomes the default
+          export, and Node's static analyzer makes a best-effort guess at
+          named exports by scanning for obvious
+          <code>exports.x = ...</code> assignments — a heuristic that can
+          miss dynamically computed exports. The reverse direction is the
+          real trap: a CommonJS file <strong>cannot</strong>
+          <code>require()</code> an ES module at all — <code>require()</code>
+          is synchronous and ESM loading fundamentally is not, so Node throws
+          <code>ERR_REQUIRE_ESM</code>. The only way for CommonJS code to
+          consume an ES module is the asynchronous
+          <code>import()</code> operator, which means the calling code has
+          to become <code>async</code> whether it wants to or not.
+        </p>
+      </div>
+
+      <h2 id="circular-dependencies">Circular dependencies <span class="badge hard">Deep dive</span></h2>
+      <p>
+        Two modules that require or import each other, directly or through a
+        longer chain, create a cycle. Cycles are legal in both systems, but
+        the two systems handle the moment of "the module isn't fully
+        finished loading yet" very differently, and the difference has real
+        consequences for which values you actually see.
+      </p>
+
+      <h3 id="circular-commonjs">Circular <code>require()</code> in CommonJS</h3>
+      <p>
+        Node's algorithm is simple and a little unforgiving: the first time a
+        module is required, Node starts running it top to bottom and
+        immediately caches a reference to its (still-incomplete)
+        <code>module.exports</code> object. If, partway through, that module
+        requires something that circles back and requires the
+        <em>original</em> module again, Node does not re-run it — it hands
+        back whatever <code>module.exports</code> looks like <em>right
+        now</em>, mid-execution, which may well be missing properties that
+        appear later in the file.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// a.js
+console.log("a starting");
+exports.done = false;
+const b = require("./b.js");
+console.log("in a, b.done =", b.done);
+exports.done = true;
+console.log("a done");</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// b.js
+console.log("b starting");
+exports.done = false;
+const a = require("./a.js"); // a is mid-execution — this returns the
+                              // PARTIAL exports object from a.js as it
+                              // exists right now: { done: false }
+console.log("in b, a.done =", a.done); // "in b, a.done = false"
+exports.done = true;
+console.log("b done");</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.js
+const a = require("./a.js");
+// Output, in order:
+// a starting
+// b starting
+// in b, a.done = false      &lt;-- the circular require sees a STALE, partial a.js
+// b done
+// in a, b.done = true
+// a done</code></pre>
+      </div>
+      <p>
+        The rule to internalize: whichever module is required <em>second</em>
+        inside the cycle sees a partial, in-progress version of the module
+        that required it. If <code>a.js</code> instead exported a function
+        that <em>calls</em> <code>b.done</code> lazily, at call time rather
+        than at require time, it would see the correct final value — the
+        problem is only ever about reading a circularly required value too
+        early, not about the cycle itself being broken.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A second worked example: fixing the stale read by deferring access.
+// a.js
+exports.getBDone = () => require("./b.js").done; // read lazily, not eagerly
+const b = require("./b.js");
+
+// b.js
+exports.done = true;
+const a = require("./a.js");
+console.log(a.getBDone()); // true — called AFTER b.js finished, so it's safe</code></pre>
+      </div>
+
+      <h3 id="circular-esm">Circular <code>import</code> in ES modules</h3>
+      <p>
+        ESM handles the same scenario more gracefully, precisely because
+        imports are live bindings resolved statically rather than copied
+        values captured at call time. Both modules in the cycle are linked
+        together before either one's body runs, so a binding you import can
+        become valid later even if it wasn't ready the instant the cycle was
+        entered — as long as you don't actually <em>read</em> it before it's
+        initialized. The classic textbook case is mutually recursive
+        function declarations, which work cleanly because function
+        declarations are hoisted:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// even.mjs
+import { isOdd } from "./odd.mjs";
+export function isEven(n) { return n === 0 ? true : isOdd(n - 1); }</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// odd.mjs
+import { isEven } from "./even.mjs";
+export function isOdd(n) { return n === 0 ? false : isEven(n - 1); }</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.mjs
+import { isEven } from "./even.mjs";
+console.log(isEven(10)); // true — the circular import "just works" because
+                          // isOdd/isEven are hoisted function declarations,
+                          // fully defined by the time either is called</code></pre>
+      </div>
+      <p>
+        The failure mode in ESM isn't a stale value the way it is in
+        CommonJS — it's a <strong>temporal dead zone</strong> error if you
+        try to read a circularly imported <code>let</code>/<code>const</code>
+        binding before its module has gotten around to initializing it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// x.mjs
+import { y } from "./y.mjs";
+console.log(y); // ReferenceError: Cannot access 'y' before initialization
+export const x = 1;</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// y.mjs
+import { x } from "./x.mjs"; // x.mjs is mid-evaluation when this runs
+export const y = 2;</code></pre>
+      </div>
+      <p>
+        Compare the two failure modes directly: CommonJS silently hands you
+        an incomplete object and lets you read <code>undefined</code>
+        properties off it without complaint, which can fail quietly and far
+        from the actual cause; ESM refuses outright with a loud
+        <code>ReferenceError</code> pointing at the exact binding that wasn't
+        ready. Neither system makes circular dependencies free — they're
+        still a design smell worth refactoring away when you can — but ESM
+        at least fails fast instead of fail-silent.
+      </p>
+
+      <h2 id="modules-in-es6">10.3 Modules in ES6 <span class="badge new">ES2015</span></h2>
+      <p>
+        ES6 finally gave JavaScript its own built-in module system, using
+        <code>import</code> and <code>export</code> keywords rather than a
+        library-provided <code>require()</code> function. Conceptually it's
+        the same idea as Node's system — each file is its own module, and
+        top-level declarations are private unless exported — but the syntax
+        differs, and so does how a module gets loaded into a web page.
+        Modules also differ from ordinary "classic" scripts in ways that go
+        beyond having <code>import</code>/<code>export</code> available:
+      </p>
+      <ul>
+        <li>
+          Code inside a module is automatically in strict mode — you never
+          write <code>"use strict"</code> in a module, because it's implied.
+          That means no <code>with</code> statement, no silent creation of
+          undeclared globals, and other strict-mode restrictions apply
+          unconditionally.
+        </li>
+        <li>
+          Top-level <code>this</code> is <code>undefined</code> inside a
+          module. Contrast this with a classic script, where top-level
+          <code>this</code> is the global object.
+        </li>
+        <li>
+          Each module has its own top-level scope. Declaring
+          <code>let x</code> at the top of one module has zero effect on any
+          other module or on the global object — unlike classic scripts,
+          which all share one global namespace.
+        </li>
+      </ul>
+
+      <h3 id="es6-exports">10.3.1 ES6 exports</h3>
+      <p>
+        The most direct way to export something is to put the
+        <code>export</code> keyword directly in front of a top-level
+        declaration:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export const PI = Math.PI;
+export function degreesToRadians(d) { return d * PI / 180; }
+export class Circle {
+  constructor(r) { this.r = r; }
+  area() { return PI * this.r * this.r; }
+}</code></pre>
+      </div>
+      <p>
+        As an alternative to scattering <code>export</code> throughout a
+        file, declare everything normally and list what's public in a single
+        statement, typically at the end — many style guides prefer this
+        because it gives you one place to scan for a module's entire public
+        surface:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const PI = Math.PI;
+function degreesToRadians(d) { return d * PI / 180; }
+class Circle { /* ... */ }
+
+export { PI, degreesToRadians, Circle };</code></pre>
+      </div>
+      <p>
+        Despite the curly braces, that last line is <em>not</em> an object
+        literal — it's dedicated export syntax that takes a comma-separated
+        list of identifiers already in scope. That distinction matters
+        because it means you can't put an arbitrary expression inside those
+        braces (more on that in the renaming section below).
+      </p>
+      <p>
+        When a module has exactly one primary thing to offer, use
+        <code>export default</code> instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export default class BitSet {
+  // implementation omitted
+}</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Default vs. named exports</div>
+        <p>
+          A module can have at most one default export, but any number of
+          named exports, and it's legal (if uncommon) to have both at once.
+          Plain <code>export</code> only works on a declaration that has a
+          name attached, whereas <code>export default</code> can export any
+          expression at all — an anonymous function expression, an anonymous
+          class expression, even an object literal — since the importer, not
+          the exporting module, is the one who assigns it a name. That's
+          also why, unlike the list form above, curly braces really are an
+          object literal when they follow <code>export default</code>.
+        </p>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Export only at the top level</div>
+        <p>
+          <code>export</code> — like <code>import</code> — is only legal at
+          the top level of a module. You cannot export from inside a
+          function, a loop, a conditional, or a class body. This is
+          deliberate: it guarantees a module's exports are the same on every
+          run and can be determined by static analysis before any of the
+          module's code actually executes, which is exactly what lets
+          tools eliminate unused exports ("tree shaking") without running
+          your code first.
+        </p>
+      </div>
+
+      <h3 id="es6-imports">10.3.2 ES6 imports</h3>
+      <p>
+        Importing a default export binds it to whatever local name you
+        choose — the exporting module never names it, so there's nothing to
+        collide with:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import BitSet from './bitset.js'; // name it anything you like locally</code></pre>
+      </div>
+      <p>
+        Imported names behave as if declared with <code>const</code>: you
+        cannot reassign them. Like exports, imports are legal only at a
+        module's top level — never inside a function, loop, or conditional —
+        though by convention (not requirement) they're placed at the very
+        top of the file. They are, in fact, hoisted, the same way function
+        declarations are, so their position in the file doesn't matter to
+        the rest of the module's code.
+      </p>
+      <p>
+        To import specific named exports, use the destructuring-flavored
+        list syntax:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import { mean, stddev } from "./stats.js";</code></pre>
+      </div>
+      <p>
+        To grab every named export at once as properties of a single
+        namespace object — handy when a module exports many things and you
+        don't want a long import list — use the wildcard form:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import * as stats from "./stats.js";
+stats.mean(data);
+stats.stddev(data);</code></pre>
+      </div>
+      <p>
+        The properties of that namespace object are themselves effectively
+        constant — you can't overwrite or delete them from the importing
+        side. If a module happens to define both a default export and named
+        exports (uncommon, but legal), you can pull in both on one line:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import Histogram, { mean, stddev } from "./histogram-stats.js";</code></pre>
+      </div>
+      <p>
+        Finally, a module can be imported purely for its side effects,
+        without binding any of its exports (or even if it has none at all):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import "./analytics.js"; // runs once, on first import; later imports no-op</code></pre>
+      </div>
+      <p>
+        This is the right shape for a module whose entire job is to run some
+        setup code — registering event listeners, say — rather than to hand
+        back values for other code to call.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Module specifiers must be constant strings</div>
+        <p>
+          The string naming the module — <code>"./stats.js"</code> — must be
+          a literal single- or double-quoted string. It cannot be a variable,
+          a computed expression, or even a template literal (template
+          literals can interpolate variables, so the engine can't guarantee
+          they're constant). Per the ES6 spec, that string must also be an
+          absolute path starting with <code>/</code>, a relative path
+          starting with <code>./</code> or <code>../</code>, or a full URL
+          with a protocol and host — bare specifiers like
+          <code>"lodash"</code> with no leading path are technically
+          disallowed by the language spec itself (they're ambiguous — is
+          that a sibling file or an installed package?), though bundlers and
+          Node's own ESM loader relax this and resolve bare specifiers
+          against installed packages anyway.
+        </p>
+      </div>
+
+      <h3 id="renaming">10.3.3 Renaming on import and export</h3>
+      <p>
+        If two modules happen to export something under the same name, or an
+        imported name would collide with something already in scope, use
+        <code>as</code> to rename on the way in:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import { render as renderImage } from "./imageutils.js";
+import { render as renderUI } from "./ui.js";</code></pre>
+      </div>
+      <p>
+        Default exports never need this — since they carry no name to begin
+        with, the importer always supplies one. That said, renaming provides
+        a second way to combine a default import with named imports on one
+        line, using the literal keyword <code>default</code> as a
+        placeholder for "the unnamed default export":
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import { default as Histogram, mean, stddev } from "./histogram-stats.js";</code></pre>
+      </div>
+      <p>
+        Renaming works symmetrically on export, again only in the curly-brace
+        list form:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export {
+  layout as calculateLayout,
+  render as renderLayout
+};</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">The braces aren't an object literal — expressions aren't allowed</div>
+        <p>
+          Because the list form of <code>export</code> only accepts bare
+          identifiers, not expressions, you cannot export a property access
+          or any other expression this way, even with renaming:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export { Math.sin as sin, Math.cos as cos }; // SyntaxError</code></pre>
+        </div>
+      </div>
+
+      <h3 id="re-exports">10.3.4 Re-exports</h3>
+      <p>
+        A common design is to split implementation across small, focused
+        files — a <code>mean.js</code> and a <code>stddev.js</code> instead
+        of one big <code>stats.js</code> — so consumers who need only one
+        function don't pull in code they don't use, while still offering a
+        single convenient <code>stats.js</code> "barrel" file for consumers
+        who want everything. Doing that with plain import-then-export works,
+        but ES6 provides a dedicated one-line re-export form that combines
+        the two steps and doesn't even need to name the value locally:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// The manual way:
+import { mean } from "./stats/mean.js";
+import { stddev } from "./stats/stddev.js";
+export { mean, stddev };
+
+// The dedicated re-export form — equivalent, more direct:
+export { mean } from "./stats/mean.js";
+export { stddev } from "./stats/stddev.js";</code></pre>
+      </div>
+      <p>
+        To re-export absolutely everything a module names, without listing
+        each one, use the wildcard form:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export * from "./stats/mean.js";
+export * from "./stats/stddev.js";</code></pre>
+      </div>
+      <p>
+        Re-exports support renaming with <code>as</code> exactly like
+        regular imports and exports do — useful for giving a function a
+        second, friendlier public alias:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export { mean, mean as average } from "./stats/mean.js";</code></pre>
+      </div>
+      <p>
+        Re-exporting gets slightly more involved when the source module used
+        <code>export default</code> rather than a named export, since a
+        default export has no name to reference — you supply one using the
+        same <code>default as</code> placeholder trick seen earlier:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export { default as mean } from "./stats/mean.js";
+export { default as stddev } from "./stats/stddev.js";</code></pre>
+      </div>
+      <p>
+        The reverse direction works too — promoting someone else's named
+        export to be <em>your</em> module's default export:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export { mean as default } from "./stats.js";</code></pre>
+      </div>
+      <p>
+        And, rarely useful but legal, forwarding another module's default
+        export as your own module's default export:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">export { default } from "./stats/mean.js";</code></pre>
+      </div>
+
+      <h3 id="modules-on-the-web">10.3.5 Loading modules in a browser</h3>
+      <p>
+        Native browser support for ES6 modules is triggered by a dedicated
+        script type — a plain <code>&lt;script&gt;</code> tag with no
+        <code>type</code> attribute is always treated as a classic,
+        non-modular script:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script type="module" src="main.js"&gt;&lt;/script&gt;
+&lt;script nomodule src="legacy-bundle.js"&gt;&lt;/script&gt;</code></pre>
+      </div>
+      <p>
+        A module has a completely static set of imports, which means the
+        browser can discover the entire dependency graph — every module this
+        one imports, and everything <em>those</em> import, recursively —
+        purely by parsing, before running a single line. Given the entry
+        point named by <code>&lt;script type="module"&gt;</code>, the module
+        specifiers it imports are resolved as URLs relative to that entry
+        module's own location, and each imported file is fetched, parsed,
+        and recursively scanned for its own imports the same way. None of
+        those dependency modules need — or are permitted to have — their own
+        <code>&lt;script&gt;</code> tags; they're pulled in purely through the
+        import graph.
+      </p>
+      <p>
+        Module scripts behave like classic scripts tagged with
+        <code>defer</code>: the browser starts fetching the code as soon as
+        the parser reaches the tag (recursively fetching the whole graph),
+        but delays <em>running</em> any of it until HTML parsing has
+        finished. Once parsing completes, module scripts and any deferred
+        classic scripts execute in the order they appear in the markup. The
+        <code>async</code> attribute overrides this for a module script just
+        as it does for a classic one: an async module runs the moment its
+        code (and its whole dependency graph) is ready, even mid-parse, and
+        even if that reorders it relative to other scripts on the page.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Same-origin restrictions and the file:// gotcha</div>
+        <p>
+          Module scripts are subject to the same cross-origin rules as
+          <code>fetch()</code>: a module can only be loaded from the same
+          origin as the page, unless the server sends proper CORS headers
+          allowing it. In practice this means opening an HTML file straight
+          off disk with a <code>file://</code> URL frequently fails to load
+          its modules — there's no meaningful "origin" for the browser to
+          check permissions against. Serve the page over
+          <code>http://localhost</code> (any small static file server will
+          do) instead of double-clicking the HTML file.
+        </p>
+      </div>
+      <p>
+        Browsers new enough to understand <code>type="module"</code> also
+        recognize the <code>nomodule</code> attribute and skip any script
+        carrying it; older browsers do the opposite — they don't recognize
+        either attribute, so they run the <code>nomodule</code> script and
+        ignore the (to them meaningless) <code>type="module"</code> one. That
+        pairing gives you a clean compatibility fallback: ship modern code
+        natively as a module, and ship a transpiled, bundled fallback build
+        for old browsers via <code>nomodule</code>, without any feature
+        detection logic of your own.
+      </p>
+      <p>
+        Some codebases use a <code>.mjs</code> extension to mark modular
+        files at a glance. Browsers don't actually care about file
+        extensions — only the served MIME type matters, so a web server may
+        need configuring to serve <code>.mjs</code> with the same
+        JavaScript MIME type as <code>.js</code>. Node, on the other hand,
+        <em>does</em> use the extension (or the <code>"type"</code> field in
+        the nearest <code>package.json</code>) as the deciding signal for
+        which module system — CommonJS or ESM — to parse a given file as; see
+        <a href="21-nodejs.html">the Node chapter</a> for that configuration.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Import maps: teaching the browser bare specifiers</div>
+        <p>
+          Native <code>import</code> normally rejects bare specifiers like
+          <code>"lodash"</code> for the ambiguity reasons already mentioned.
+          Modern browsers support an <strong>import map</strong> — a
+          <code>&lt;script type="importmap"&gt;</code> block declared before
+          any module script — that lets a page define its own bare-specifier
+          aliases, resolved entirely client-side with no build step:
+        </p>
+        <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script type="importmap"&gt;
+{
+  "imports": {
+    "lodash": "/vendor/lodash.js",
+    "chart/": "/vendor/chart-lib/"
+  }
+}
+&lt;/script&gt;
+&lt;script type="module"&gt;
+  import _ from "lodash";       // resolved via the import map
+  import { Bar } from "chart/bar.js";
+&lt;/script&gt;</code></pre>
+        </div>
+        <p>
+          Treat this as a bundler-free convenience for small projects and
+          demos rather than a wholesale replacement for a real build
+          pipeline; a full survey of module tooling lives in
+          <a href="22-tools-extensions.html">the tools chapter</a>.
+        </p>
+      </div>
+
+      <h3 id="dynamic-import">10.3.6 Dynamic <code>import()</code> <span class="badge new">ES2020</span></h3>
+      <p>
+        Static <code>import</code> is deliberately rigid — top-level only,
+        constant string specifiers only — precisely so tools can analyze the
+        whole dependency graph without running any code. That rigidity is
+        exactly wrong for loading code on demand: a web app usually wants to
+        ship only the JavaScript needed for the first screen, then fetch the
+        rest lazily as the user navigates, and a page that conditionally
+        needs one of several possible modules can't express that with a
+        static <code>import</code> at all. <code>import()</code> is the
+        escape hatch — an expression, legal anywhere ordinary expressions
+        are, that loads a module on demand and resolves to a Promise for
+        that module's namespace object (the same shape you'd get from
+        <code>import * as ns</code>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">import("./stats.js").then(stats => {
+  let average = stats.mean(data);
+});
+
+// Or, inside an async function:
+async function analyzeData(data) {
+  let stats = await import("./stats.js");
+  return { average: stats.mean(data), stddev: stats.stddev(data) };
+}
+
+// And because it's a real expression, the specifier can be computed —
+// something a static `import` flatly cannot do:
+async function loadLocale(locale) {
+  const strings = await import(`./locales/${locale}.js`);
+  return strings.default;
+}</code></pre>
+      </div>
+      <p>
+        This is the mechanism underlying "code splitting" in every modern
+        bundler: rather than one monolithic bundle, strategically placed
+        <code>import()</code> calls let the bundler carve the app into
+        smaller chunks loaded only when actually needed. See
+        <a href="14-async-javascript.html">the async JavaScript chapter</a>
+        for a full treatment of the Promises that <code>import()</code>
+        returns.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Operator, not function</div>
+        <p>
+          <code>import()</code> looks exactly like a function call, but it
+          isn't one — it's a special operator, and the parentheses are part
+          of its required syntax. That's necessary because
+          <code>import()</code> has to resolve relative specifiers against
+          the URL of the module it's called <em>from</em>, something an
+          ordinary function has no way to know. The practical upshot is
+          syntax you'd never expect to fail suddenly does:
+          <code>console.log(import)</code> and
+          <code>let load = import;</code> are both syntax errors, because
+          <code>import</code> can't be referenced as a plain value the way a
+          real function could.
+        </p>
+      </div>
+
+      <h3 id="import-meta">10.3.7 <code>import.meta.url</code> <span class="badge new">ES2020</span></h3>
+      <p>
+        Inside a module — never inside a classic script or a
+        <code>require()</code>-loaded CommonJS file — the special syntax
+        <code>import.meta</code> refers to an object holding metadata about
+        the currently running module. Its most useful property,
+        <code>url</code>, is the absolute URL the module itself was loaded
+        from (a <code>file://</code> URL under Node). The typical use is
+        resolving paths to sibling resources — images, JSON data,
+        localization files — that live alongside the module on disk or on a
+        server, regardless of what page or script ultimately imported it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function localStringsURL(locale) {
+  return new URL(`l10n/${locale}.json`, import.meta.url);
+}</code></pre>
+      </div>
+      <p>
+        Using <code>import.meta.url</code> as the base for the
+        <code>URL()</code> constructor means the relative path always
+        resolves correctly no matter where the consuming page lives, which a
+        path hardcoded relative to the page's own URL could not guarantee.
+      </p>
+
+      <h2 id="summary">10.4 Summary</h2>
+      <p>
+        Modularity exists to let code from different sources — different
+        files, different authors, different points in a project's history —
+        be assembled into one program without one piece silently
+        overwriting another's variables or functions. This chapter traced
+        three distinct systems JavaScript has used to get there:
+      </p>
+      <ul>
+        <li>
+          In the language's early years, the only tool for real modularity
+          was disciplined use of closures and IIFEs — private state and
+          helper functions sealed inside a function body, with only a
+          deliberately chosen public API returned outward.
+        </li>
+        <li>
+          Node layered its own module system, CommonJS, on top of plain
+          JavaScript: modules import each other synchronously with
+          <code>require()</code> and declare their public API by mutating
+          the <code>exports</code> object or replacing
+          <code>module.exports</code> outright. It resolves module graphs
+          dynamically, at runtime, one <code>require()</code> call at a
+          time.
+        </li>
+        <li>
+          ES6 finally gave JavaScript a module system as a genuine part of
+          the language: <code>import</code> and <code>export</code>
+          declarations, resolved statically before any module code runs,
+          exposing live read-only bindings rather than copied values — plus,
+          as of ES2020, the <code>import()</code> operator for loading a
+          module dynamically at runtime when static resolution is too rigid.
+        </li>
+      </ul>
+      <p>
+        The two systems are similar enough to invite assumptions and
+        different enough to punish them — synchronous versus static
+        resolution, copied values versus live bindings, and outright
+        incompatible behavior around circular dependencies are the traps
+        worth remembering. New code should default to ES6 modules; CommonJS
+        remains essential reading knowledge because of how much existing
+        Node code — and how much of Node's own documentation and ecosystem —
+        is still written in it.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

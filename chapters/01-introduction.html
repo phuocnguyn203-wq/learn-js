@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Introduction & Setup — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="01-introduction.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapters 1–2</span>
+      <h1>Introduction &amp; Setup</h1>
+      <p class="lede">
+        What JavaScript actually is, how it got its confusing name, where it runs,
+        how to try it out right now, a whirlwind tour of the whole language before
+        we dig into any one part of it in depth, and the lowest-level lexical rules —
+        comments, literals, identifiers, Unicode, and above all automatic semicolon
+        insertion — that quietly shape every JavaScript file you will ever write.
+      </p>
+
+      <h2 id="what-is-javascript">1.1 What JavaScript is</h2>
+      <p>
+        JavaScript is a high-level, dynamically typed, interpreted programming
+        language well suited to both object-oriented and functional programming
+        styles. Its variables are untyped: a variable named <code>x</code> can hold
+        a number at one moment and a string the next, and nothing in the language
+        stops you from doing that. Its syntax is loosely modeled on C/Java (curly
+        braces, semicolons, <code>if</code>/<code>for</code>/<code>while</code>), but
+        the resemblance to Java stops at the syntax — the two languages are
+        otherwise unrelated. Under the hood JavaScript borrows first-class functions
+        from Scheme and prototype-based inheritance from a little-known language
+        called Self. None of that trivia is required to use the language, but it
+        explains why JavaScript sometimes feels like it's made of parts from
+        different traditions stitched together — because it is.
+      </p>
+      <p>
+        JavaScript began life as a scripting language for adding small bits of
+        interactivity to web pages, and for years it was treated as a toy compared
+        to "real" languages. It has since outgrown that reputation entirely: modern
+        JavaScript is a robust, general-purpose language used for huge, long-lived
+        codebases, on the frontend, on the server, and even on embedded hardware.
+
+      </p>
+
+      <h3 id="naming-versions-and-modes">JavaScript, ECMAScript, and version numbers</h3>
+      <div class="admonition note">
+        <div class="admonition-title">JavaScript vs. ECMAScript</div>
+        <p>
+          "JavaScript" was created at Netscape in the mid-1990s, and the name is
+          technically a trademark (originally Sun Microsystems', now Oracle's)
+          licensed to describe Netscape's — and later Mozilla's — implementation of
+          the language. When Netscape submitted the language for standardization to
+          <abbr title="European Computer Manufacturer's Association">ECMA</abbr>,
+          trademark issues meant the official standard had to be given the
+          decidedly less catchy name <strong>ECMAScript</strong>. In everyday speech
+          everyone still says "JavaScript," but version numbers — <strong>ES5</strong>,
+          <strong>ES6</strong> (2015), <strong>ES2016</strong>, <strong>ES2017</strong> … —
+          refer to editions of the ECMAScript standard. Since ES6, a new edition has
+          shipped every year, named after that year.
+        </p>
+      </div>
+      <p>
+        ES5 was, for most of the 2010s, the language every browser could be counted
+        on to support, and it's still treated as the practical compatibility
+        baseline. ES6 (2015) is the edition that changed everything: it added
+        <code>class</code> and module syntax and turned JavaScript from a scripting
+        language into something suitable for large-scale software engineering. Every
+        edition since has arrived yearly and incrementally, rather than in another
+        single big jump.
+      </p>
+
+      <h3 id="strict-mode">Strict mode <span class="badge hard">Design quirk</span></h3>
+      <p>
+        Early JavaScript shipped with a handful of design mistakes, and because
+        removing a feature can break existing websites, none of those mistakes can
+        ever be fully deleted from the language. Instead, ES5 introduced an opt-in
+        <strong>strict mode</strong> that corrects many of them: it turns several
+        silent mistakes into thrown errors, disallows accidentally creating global
+        variables, and makes <code>this</code> behave more predictably inside plain
+        function calls (as <code>undefined</code> rather than silently becoming the
+        global object).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"use strict"; // Must be the first statement in a script, function, or module
+
+x = 10; // ReferenceError: x is not defined
+        // (Without strict mode, this line would silently create a global variable.)</code></pre>
+      </div>
+      <p>
+        You rarely need to type <code>"use strict"</code> yourself anymore: the
+        body of any ES6 <code>class</code> and the top level of any ES module are
+        <strong>automatically strict</strong>, with no directive required. Since
+        modern code is almost always written with classes and modules, strict mode
+        has effectively become the default in practice, even though the legacy,
+        non-strict mode remains the language's technical default outside those
+        contexts.
+      </p>
+
+      <h3 id="host-environments">Host environments</h3>
+      <p>
+        The core language defines a minimal API for working with numbers, strings,
+        arrays, maps, and so on — but it defines no way to do input or output at
+        all. Every capability you'd actually recognize as "doing something useful" —
+        reading a keystroke, making a network request, writing to a file, drawing to
+        a screen — is supplied by the <strong>host environment</strong> that embeds
+        the JavaScript engine, not by the language itself:
+      </p>
+      <ul>
+        <li>
+          <strong>Web browsers</strong> — the original host, and still the most
+          common one. Browsers give JavaScript the DOM, events, timers, and
+          networking APIs like <code>fetch</code>. Covered starting at
+          <a href="16-web-basics-events.html">JavaScript in the Browser</a>.
+        </li>
+        <li>
+          <strong>Node.js</strong> — available since 2010, it gives JavaScript
+          access to the filesystem, the network stack, and the rest of the
+          operating system, making JavaScript a serious platform for web servers and
+          command-line utilities alike. Covered in <a href="21-nodejs.html">Node.js</a>.
+        </li>
+      </ul>
+
+      <h2 id="exploring-and-running-javascript">1.1–1.2 Exploring JavaScript and Hello World</h2>
+      <p>
+        The single most important habit when learning a new language is to actually
+        run the examples, then deliberately break them to see what happens. Here are
+        three ways to run JavaScript, roughly from "fastest to try a one-liner" to
+        "best for anything longer than a few lines."
+      </p>
+
+      <h3 id="run-console">1. Your browser's developer console</h3>
+      <p>
+        Open developer tools (<code>F12</code>, or <code>Ctrl+Shift+I</code> /
+        <code>Cmd+Option+I</code> on macOS) and select the <strong>Console</strong>
+        tab. Type an expression, press Enter, and the result prints immediately —
+        this is the fastest way to check "wait, what does this actually do?" while
+        reading. Developer tools panes can usually be detached into their own
+        window, which is convenient if you want the console visible alongside your
+        editor.
+      </p>
+
+      <h3 id="run-node">2. Node's REPL</h3>
+      <p>
+        Install Node from <a href="https://nodejs.org">nodejs.org</a>, then run
+        <code>node</code> with no arguments to get an interactive
+        read-eval-print loop:
+      </p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ node
+Welcome to Node.js v20.11.0.
+Type ".help" for more information.
+&gt; .help
+.break    Sometimes you get stuck, this gets you out
+.clear    Alias for .break
+.editor   Enter editor mode
+.exit     Exit the repl
+.help     Print this help message
+.load     Load JS from a file into the REPL session
+.save     Save all evaluated commands in this REPL session to a file
+Press ^C to abort current expression, ^D to exit the repl
+&gt; let x = 2, y = 3;
+undefined
+&gt; x + y
+5
+&gt; (x === 2) &amp;&amp; (y === 3)
+true
+&gt; (x &gt; 3) || (y &lt; 3)
+false</code></pre>
+      </div>
+      <p>
+        Note that the REPL prints <code>undefined</code> after the declaration
+        statement — declarations don't produce a useful value — and then prints the
+        actual value of each expression you type afterward. That distinction between
+        an expression (produces a value) and a statement (doesn't) resurfaces
+        constantly and is covered properly in <a href="04-statements.html">Statements</a>
+        and <a href="03-expressions-operators.html">Expressions &amp; Operators</a>.
+      </p>
+
+      <h3 id="run-file">3. A saved file (and Hello World)</h3>
+      <p>
+        Line-by-line REPL sessions stop being convenient once your code is more than
+        a few lines long. For anything real, write your code in a text editor, save
+        it with the conventional <code>.js</code> extension, and run the file with
+        Node. Node does not automatically print expression results the way the REPL
+        does, so you must explicitly print with <code>console.log()</code>:
+      </p>
+      <div class="code-block" data-lang="hello.js">
+<pre><code class="language-javascript">console.log("Hello World!");</code></pre>
+      </div>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ node hello.js
+Hello World!</code></pre>
+      </div>
+      <p>
+        To see the same greeting in a browser instead of a terminal, reference the
+        script from an HTML file and open that file with a <code>file://</code> URL,
+        then check the console in developer tools:
+      </p>
+      <div class="code-block" data-lang="hello.html">
+<pre><code class="language-xml">&lt;script src="hello.js"&gt;&lt;/script&gt;</code></pre>
+      </div>
+
+      <h2 id="tour-of-javascript">1.3 A tour of JavaScript</h2>
+      <p>
+        This is a fast survey of the entire core language through small code
+        snippets, before any one topic gets its full, rigorous treatment on its own
+        page. The point is exposure, not mastery — you will see objects, arrays,
+        functions, classes, and asynchronous code many times before their dedicated
+        chapters, so don't worry about absorbing every rule the first time through.
+        Comments of the form <code>// =&gt; value</code> that follow a line of code
+        show what that line evaluates to, mimicking what you'd see typing the same
+        line into a console — you'll see this convention used throughout the rest of
+        the site as well.
+      </p>
+
+      <h3 id="variables-tour">Variables and values</h3>
+      <p>
+        A variable is a symbolic name for a value. Modern JavaScript declares
+        variables with <code>let</code> (or <code>const</code> for a binding that
+        can't be reassigned); the legacy <code>var</code> keyword still works but has
+        looser, function-level scoping rules that are a frequent source of bugs.
+        Full coverage of declarations, scope, and hoisting lives in
+        <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x;         // Declare a variable named x, with no value yet.
+x = 0;         // Assign the value 0 to x with the = sign.
+x              // => 0: a variable evaluates to its current value.</code></pre>
+      </div>
+
+      <h3 id="types-and-values-tour">Types and values</h3>
+      <p>
+        JavaScript's values fall into a small set of primitive types plus objects.
+        Numbers are a single type (no separate int/float), strings can be delimited
+        with single or double quotes (and, since ES6, backticks for template
+        literals), and there are two special "no useful value" values,
+        <code>null</code> and <code>undefined</code>, which are subtly different:
+        <code>undefined</code> is what you get when something was never given a
+        value; <code>null</code> is an explicit, deliberate "no object here." Full
+        rules for numeric precision, string methods, and type coercion are covered
+        in <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">x = 1;              // Numbers.
+x = 0.01;           // Numbers can be integers or reals; JS has just one number type.
+x = "hello world";  // Strings of text in double quotes.
+x = 'JavaScript';   // Single quotes also delimit strings.
+x = `total: ${x}`;  // Template literals (ES6) can interpolate expressions.
+x = true;           // A Boolean value.
+x = false;          // The other Boolean value.
+x = null;           // Null is a special value that means "no value."
+x = undefined;      // Undefined is another special value like null.</code></pre>
+      </div>
+
+      <h3 id="objects-tour">Objects</h3>
+      <p>
+        Objects are JavaScript's single most important datatype: an unordered
+        collection of named properties, where each property maps a string (or
+        <code>Symbol</code>) key to a value of any type, including another object.
+        Properties can be read and written with either dot notation or bracket
+        notation, and the ES2020 optional-chaining operator <code>?.</code> lets you
+        read a possibly-missing nested property without a chain of manual
+        <code>null</code>/<code>undefined</code> checks. Full depth — including
+        property attributes, getters/setters, and enumeration order — is in
+        <a href="05-objects.html">Objects</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let book = {                // Objects are enclosed in curly braces.
+  topic: "JavaScript",      // The property "topic" has value "JavaScript."
+  edition: 7                // The property "edition" has value 7.
+};                          // The curly brace marks the end of the object.
+
+book.topic                  // => "JavaScript": dot notation.
+book["edition"]             // => 7: bracket notation, another way to read properties.
+book.author = "Flanagan";   // Create new properties by simply assigning to them.
+book.contents = {};         // {} is an empty object with no properties of its own.
+
+book.contents?.ch01?.sect1  // => undefined: short-circuits instead of throwing,
+                            // because book.contents has no ch01 property.</code></pre>
+      </div>
+
+      <h3 id="everything-is-an-object">"Everything is an object" — except when it isn't <span class="badge hard">Mental model</span></h3>
+      <p>
+        A common oversimplification of JavaScript is "everything is an object."
+        It's a useful first approximation but not literally true, and the gap
+        between the slogan and the actual rule is exactly the kind of thing that
+        trips up newcomers coming from languages where it really is true (like
+        Python).
+      </p>
+      <p>
+        The precise rule: JavaScript has a small set of <strong>primitive
+        types</strong> — <code>number</code>, <code>string</code>, <code>boolean</code>,
+        <code>null</code>, <code>undefined</code>, plus the newer <code>symbol</code>
+        and <code>bigint</code> — and none of their values are objects. Primitives
+        are immutable, compared by value (two strings with the same characters are
+        <code>===</code>), and have no properties of their own. Everything else —
+        objects, arrays, functions, dates, regular expressions, errors, maps, sets —
+        <em>is</em> an object: mutable, compared by reference (two distinct objects
+        with identical contents are never <code>===</code>), and capable of carrying
+        its own properties.
+      </p>
+      <p>
+        What makes the slogan feel true is that JavaScript lets you write
+        <code>"hello".toUpperCase()</code> even though the string <code>"hello"</code>
+        is a primitive with no methods. Behind the scenes, the engine
+        <em>temporarily</em> wraps the primitive in a throwaway wrapper object (a
+        <code>String</code> instance) just long enough to look up and invoke the
+        method, then discards the wrapper. You never see this object, and you can't
+        add a property that persists on a primitive:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let s = "hello";
+s.exclaim = "!!!";   // No error is thrown...
+s.exclaim            // => undefined: ...but the property vanished. A temporary
+                     // wrapper object received it and was immediately discarded;
+                     // the primitive `s` itself was never, and can never be, modified.
+
+let o = { greeting: "hello" };
+o.exclaim = "!!!";   // o is a real object, so this really does create a property.
+o.exclaim            // => "!!!"</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Why this matters</div>
+        <p>
+          Reach for <code>typeof</code> and <code>===</code> to reason about
+          primitives, and expect object identity (not content) to govern equality
+          and mutation for everything else. The full rules for autoboxing, type
+          coercion, and the seven fundamental types are covered in
+          <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>.
+        </p>
+      </div>
+
+      <h3 id="arrays-tour">Arrays</h3>
+      <p>
+        An array is a specialized kind of object: an ordered, numerically indexed
+        list of values, of any length, that can itself hold other arrays and
+        objects. Indices start at 0, and the array grows automatically when you
+        assign to an index beyond its current length. Full method-by-method
+        coverage lives in <a href="06-arrays.html">Arrays</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let primes = [2, 3, 5, 7];    // An array of 4 values, delimited with [ and ].
+primes[0]                     // => 2: the first element (index 0) of the array.
+primes.length                 // => 4: how many elements are in the array.
+primes[primes.length - 1]     // => 7: the last element of the array.
+primes[4] = 9;                // Add a new element by assignment.
+primes[4] = 11;                // Or alter an existing element by assignment.
+
+let points = [                // An array with 2 elements.
+  { x: 0, y: 0 },              // Each element here is itself an object.
+  { x: 1, y: 1 }
+];</code></pre>
+      </div>
+
+      <h3 id="expressions-and-operators-tour">Expressions and operators</h3>
+      <p>
+        If variables and literals are like nouns, <strong>expressions</strong> are
+        phrases: any piece of code that can be evaluated to produce a value without
+        altering the surrounding program state. The most common way to build one is
+        with an <strong>operator</strong>, which combines one or more operand values
+        into a new one. Full operator-by-operator precedence and associativity rules
+        are in <a href="03-expressions-operators.html">Expressions &amp; Operators</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">3 + 2                      // => 5: addition
+3 - 2                      // => 1: subtraction
+"3" + "2"                  // => "32": + adds numbers but concatenates strings
+
+let count = 0;
+count++;                   // Increment the variable.
+count += 2;                // Same as count = count + 2;
+
+let x = 2, y = 3;
+x === y                    // => false: strict equality (no type coercion)
+x !== y                    // => true: strict inequality
+x &lt; y                      // => true: less-than
+
+(x === 2) &amp;&amp; (y === 3)     // => true: && is logical AND
+(x &gt; 3) || (y &lt; 3)         // => false: || is logical OR
+!(x === y)                 // => true: ! inverts a boolean</code></pre>
+      </div>
+      <p>
+        Statements are the counterpart of expressions: they don't produce a value,
+        but they do alter program state — variable declarations, assignments, and
+        control-flow constructs like <code>if</code> and loops are all statements.
+        The complete list is covered in <a href="04-statements.html">Statements</a>.
+      </p>
+
+      <h3 id="functions-and-closures-tour">Functions</h3>
+      <p>
+        A function is a named, parameterized block of code, defined once and
+        invocable many times. Functions are themselves values in JavaScript — they
+        can be assigned to variables, stored in arrays, and passed as arguments to
+        other functions — which is what makes higher-order patterns like array
+        <code>map</code>/<code>filter</code> possible. When a function is stored as
+        a property of an object, it's called a <strong>method</strong>, and inside a
+        method the keyword <code>this</code> refers to the object the method was
+        invoked on. The full rules for <code>this</code>-binding, arguments,
+        default/rest parameters, and arrow functions are in
+        <a href="07-functions.html">Functions</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function plus1(x) {          // A function named plus1, with parameter x.
+  return x + 1;
+}
+plus1(3)                     // => 4
+
+const square = x =&gt; x * x;   // ES6 arrow-function shorthand: same idea, terser.
+square(plus1(3))             // => 16: invoke two functions in one expression.
+
+let a = [];
+a.push(1, 2, 3);             // push() is a method: a function stored on the array.
+a.reverse();                 // => [3, 2, 1]</code></pre>
+      </div>
+
+      <h3 id="closures-teaser">A first look at closures <span class="badge hard">Preview</span></h3>
+      <p>
+        Every JavaScript function remembers the variable scope it was <em>defined</em>
+        in, not just the scope it's called from — this combination of a function
+        plus its remembered scope is called a <strong>closure</strong>. The reason
+        this deserves flagging now, rather than waiting for its full chapter, is
+        that it's the source of one of the most common beginner bugs in the
+        language: capturing a loop variable that changes after the function was
+        created.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Correct: each call to counter() creates a fresh, private "count".
+function counter() {
+  let count = 0;
+  return function() { return count++; }; // this returned function is a closure
+}
+let next = counter();
+next()   // => 0
+next()   // => 1: the closure remembered its own private `count` between calls.
+
+// The classic mistake: using `var` (function-scoped) inside a loop.
+var fns = [];
+for (var i = 0; i &lt; 3; i++) {
+  fns.push(function() { return i; }); // all three closures share ONE `i`
+}
+fns[0]()   // => 3, not 0! By the time any fn runs, the loop already finished
+fns[1]()   // => 3    and i is 3. All three closures captured the SAME variable.
+
+// The fix: `let` creates a fresh binding of i for each loop iteration.
+let fns2 = [];
+for (let i = 0; i &lt; 3; i++) {
+  fns2.push(function() { return i; });
+}
+fns2[0]()  // => 0
+fns2[1]()  // => 1</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Why this happens</div>
+        <p>
+          <code>var</code> is scoped to the enclosing function (or global scope),
+          so a <code>var</code>-declared loop counter is really just one variable
+          that every iteration's closure shares and sees the final value of.
+          <code>let</code> (and <code>const</code>) are block-scoped, and the
+          <code>for</code> loop specifically creates a fresh binding per iteration,
+          which is exactly the behavior closures over loop variables almost always
+          need. This is one of the strongest practical reasons to prefer
+          <code>let</code>/<code>const</code> over <code>var</code> by default. Full
+          treatment of scope, hoisting, and closures is in
+          <a href="07-functions.html#closures">Functions: Closures</a>.
+        </p>
+      </div>
+
+      <h3 id="classes-and-prototypes-tour">Classes and prototypal inheritance</h3>
+      <p>
+        JavaScript supports object-oriented programming, but its object model is
+        significantly different from "classical" class-based languages like Java or
+        C++. ES6's <code>class</code> keyword gives object-oriented JavaScript a
+        familiar-looking syntax, but underneath it is still built on
+        <strong>prototypes</strong>, not classes in the classical sense.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Point {                 // By convention, class names are capitalized.
+  constructor(x, y) {          // Constructor initializes new instances.
+    this.x = x;                // `this` is the new object being initialized.
+    this.y = y;
+  }
+  distance() {                 // A method, shared by every Point instance.
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+  }
+}
+let p = new Point(1, 1);       // Use the class with `new` to create an instance.
+p.distance()                   // => Math.SQRT2</code></pre>
+      </div>
+
+      <h3 id="prototypal-inheritance-teaser">Why "prototypal" inheritance is a different idea <span class="badge hard">Preview</span></h3>
+      <p>
+        In a classical language, a class is a blueprint, and inheritance copies (or
+        conceptually copies) behavior from a parent class into every instance. In
+        JavaScript, there are no blueprints in that sense — there is only objects,
+        and every object can have a link to another object called its
+        <strong>prototype</strong>. When you access a property that an object
+        doesn't have itself, the engine automatically walks up to that object's
+        prototype, then its prototype's prototype, and so on, until it finds the
+        property or runs out of prototypes. This is called the <strong>prototype
+        chain</strong>, and it's the actual mechanism that makes
+        <code>p.distance()</code> work above: <code>p</code> doesn't own a
+        <code>distance</code> property itself — its prototype (which
+        <code>class Point</code> creates and populates automatically) does.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">p.hasOwnProperty("x")         // => true: x lives directly on the instance.
+p.hasOwnProperty("distance")  // => false: distance is NOT on the instance...
+Object.getPrototypeOf(p) === Point.prototype // => true: ...it's found by walking
+                                              // up to p's prototype instead.</code></pre>
+      </div>
+      <p>
+        The practical upshot is that <code>class</code> in JavaScript is mostly
+        syntax sugar over this delegation model, not a fundamentally different
+        implementation — which matters once you start asking questions that
+        classical OOP doesn't have answers for, like "can an object change its
+        prototype at runtime?" (yes) or "can two objects share a prototype without
+        either one being a 'class'?" (also yes). The full mechanics of prototypes,
+        constructors, and <code>class</code>/<code>extends</code> are covered in
+        <a href="05-objects.html">Objects</a> and <a href="08-classes.html">Classes</a>.
+      </p>
+
+      <h3 id="modules-tour">Modules</h3>
+      <p>
+        A module is simply a file of JavaScript whose code is private by default,
+        with an explicit <code>export</code> for whatever it wants to share and an
+        explicit <code>import</code> for whatever it wants to use from other files.
+        Modules are how nontrivial programs are split across multiple files without
+        every file's top-level variables colliding in one shared global namespace.
+        The full syntax — named exports, default exports, dynamic
+        <code>import()</code>, and how modules interact with strict mode — is in
+        <a href="09-modules.html">Modules</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// In file geometry.js:
+export class Point { /* ... */ }
+
+// In another file that wants to use it:
+import { Point } from "./geometry.js";</code></pre>
+      </div>
+
+      <h3 id="exceptions-tour">Exceptions</h3>
+      <p>
+        When something goes wrong, JavaScript code (and the runtime itself) signals
+        the failure by <strong>throwing</strong> an exception, which propagates up
+        the call stack until some enclosing <code>try</code>/<code>catch</code>
+        block handles it — or, if nothing does, until the program (or that
+        particular event handler / promise chain) crashes. Full coverage of
+        <code>try</code>/<code>catch</code>/<code>finally</code>, the built-in
+        <code>Error</code> hierarchy, and custom error classes is in
+        <a href="04-statements.html">Statements</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function parseIntStrict(s) {
+  let n = Number(s);
+  if (Number.isNaN(n)) {
+    throw new Error(`Cannot parse "${s}" as a number`);
+  }
+  return n;
+}
+
+try {
+  parseIntStrict("not a number");
+} catch (e) {
+  console.log("Caught:", e.message); // => Caught: Cannot parse "not a number" as a number
+}</code></pre>
+      </div>
+
+      <h3 id="asynchronous-javascript-tour">Asynchronous JavaScript</h3>
+      <p>
+        The core JavaScript language itself is not asynchronous, but the
+        environments it runs in overwhelmingly are: reading a file, making a network
+        request, or waiting on a timer all take an unpredictable amount of time, and
+        blocking the single JavaScript thread while waiting would freeze an entire
+        page or server. Three generations of syntax exist for handling this, and
+        you'll meet all three in real code:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// 1. Callbacks: pass a function to be invoked later, when the result is ready.
+fetchData(url, (error, data) => {
+  if (error) { console.error(error); }
+  else { console.log(data); }
+});
+
+// 2. Promises: an object representing a not-yet-known future value.
+fetchDataPromise(url)
+  .then(data =&gt; console.log(data))
+  .catch(error =&gt; console.error(error));
+
+// 3. async/await: write asynchronous code with the same shape as synchronous code.
+async function loadData() {
+  try {
+    let data = await fetchDataPromise(url);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}</code></pre>
+      </div>
+      <p>
+        Each style builds on the one before it — <code>async</code>/<code>await</code>
+        is essentially syntax sugar over promises, and promises exist to fix
+        specific pain points of callback-based code (like deeply nested "callback
+        hell" and inconsistent error handling). Full treatment is in
+        <a href="14-async-javascript.html">Asynchronous JavaScript</a>, and the
+        related <code>for await</code> loop, generators, and the <code>for...of</code>
+        protocol they build on are in <a href="13-iterators-generators.html">Iterators &amp; Generators</a>.
+      </p>
+
+      <div class="admonition tip">
+        <div class="admonition-title">Where the rest of the tour is explained in depth</div>
+        <p>
+          This tour deliberately only scratches the surface. Beyond the pages
+          already linked above, later chapters also cover the built-in standard
+          library — <a href="10-collections-typed-arrays.html">Sets, Maps &amp; typed arrays</a>,
+          <a href="11-regular-expressions.html">regular expressions</a>, and
+          <a href="12-dates-json-intl-utilities.html">dates, JSON &amp; internationalization</a> —
+          plus <a href="15-metaprogramming.html">metaprogramming</a> for library
+          authors, browser APIs from
+          <a href="16-web-basics-events.html">JavaScript in the Browser</a> through
+          <a href="20-storage-workers.html">storage and workers</a>, and finally
+          <a href="21-nodejs.html">Node.js</a> and
+          <a href="22-tools-extensions.html">tools &amp; language extensions</a>.
+        </p>
+      </div>
+
+      <h2 id="character-frequency-histogram">1.4 Example: character frequency histograms</h2>
+      <p>
+        Chapter 1 of the book closes with a short but genuinely nontrivial program,
+        deliberately shown before most of its features have been formally explained,
+        to demonstrate what real-world JavaScript looks like once you put the pieces
+        together. It's a Node program that reads text from standard input, tallies
+        how often each letter occurs, and prints an ASCII-art histogram of the most
+        common letters — touching classes, inheritance, <code>Map</code>, the
+        spread operator, array iteration, generic sorting comparators, and
+        asynchronous iteration over a stream, all in about 40 lines.
+      </p>
+      <div class="code-block" data-lang="charfreq.js">
+<pre><code class="language-javascript">/**
+ * This Node program reads text from standard input, computes the frequency
+ * of each letter in that text, and displays a histogram of the most
+ * frequently used characters. It requires Node 12 or higher to run.
+ *
+ * In a Unix-type environment you can invoke the program like this:
+ *    node charfreq.js &lt; corpus.txt
+ */
+
+// This class extends Map so that the get() method returns the specified
+// default value instead of undefined when the key is not in the map.
+class DefaultMap extends Map {
+  constructor(defaultValue) {
+    super();                          // Invoke the Map superclass constructor.
+    this.defaultValue = defaultValue; // Remember the default value.
+  }
+  get(key) {
+    if (this.has(key)) {              // If the key is already in the map,
+      return super.get(key);          // return its value from the superclass.
+    } else {
+      return this.defaultValue;       // Otherwise return the default value.
+    }
+  }
+}
+
+// This class computes and displays letter-frequency histograms.
+class Histogram {
+  constructor() {
+    this.letterCounts = new DefaultMap(0); // Map from letters to counts.
+    this.totalLetters = 0;                 // How many letters in all.
+  }
+
+  // Update the histogram with the letters of a chunk of text.
+  add(text) {
+    // Remove whitespace from the text and convert to upper case.
+    text = text.replace(/\s/g, "").toUpperCase();
+    // Loop through the characters of the text.
+    for (let character of text) {
+      let count = this.letterCounts.get(character); // Get the old count.
+      this.letterCounts.set(character, count + 1);  // Increment it.
+      this.totalLetters++;
+    }
+  }
+
+  // Convert the histogram to a string that displays an ASCII graphic.
+  toString() {
+    // Convert the Map to an array of [key, value] arrays via the spread operator.
+    let entries = [...this.letterCounts];
+    // Sort by count (descending), breaking ties alphabetically.
+    entries.sort((a, b) => {
+      if (a[1] === b[1]) {             // If the counts are the same,
+        return a[0] &lt; b[0] ? -1 : 1;   // sort alphabetically.
+      } else {                         // Otherwise
+        return b[1] - a[1];            // sort by largest count first.
+      }
+    });
+    // Convert the counts to percentages.
+    for (let entry of entries) {
+      entry[1] = (entry[1] / this.totalLetters) * 100;
+    }
+    // Drop any entries under 1%.
+    entries = entries.filter(entry => entry[1] >= 1);
+    // Convert each remaining entry into one line of ASCII-art text.
+    let lines = entries.map(
+      ([l, n]) => `${l}: ${"#".repeat(Math.round(n))} ${n.toFixed(2)}%`
+    );
+    // Return the concatenated lines, separated by newline characters.
+    return lines.join("\n");
+  }
+}
+
+// This async (Promise-returning) function creates a Histogram object,
+// asynchronously reads chunks of text from standard input, and adds those
+// chunks to the histogram. When it reaches the end of the stream, it
+// returns the finished histogram.
+async function histogramFromStdin() {
+  process.stdin.setEncoding("utf-8"); // Read Unicode strings, not raw bytes.
+  let histogram = new Histogram();
+  for await (let chunk of process.stdin) { // Asynchronous iteration over a stream.
+    histogram.add(chunk);
+  }
+  return histogram;
+}
+
+// This final line is the main body of the program: build a histogram from
+// standard input, then print it once it's ready.
+histogramFromStdin().then(histogram =&gt; { console.log(histogram.toString()); });</code></pre>
+      </div>
+      <p>Running the program against its own source produces output like this:</p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ node charfreq.js &lt; charfreq.js
+T: ########### 11.22%
+E: ########## 10.15%
+R: ####### 6.68%
+S: ###### 6.44%
+A: ###### 6.16%
+N: ###### 5.81%
+O: ##### 5.45%
+I: ##### 4.54%
+H: #### 4.07%
+C: ### 3.36%
+L: ### 3.20%
+U: ### 3.08%
+/: ### 2.88%</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">You aren't expected to understand every line yet</div>
+        <p>
+          <code>class</code>/<code>extends</code> and <code>super</code> are covered
+          in <a href="08-classes.html">Classes</a>; <code>Map</code> is covered in
+          <a href="10-collections-typed-arrays.html">Collections</a>; the spread
+          operator (<code>...</code>) and <code>for...of</code> are covered in
+          <a href="13-iterators-generators.html">Iterators &amp; Generators</a>; and
+          <code>async</code> functions plus <code>for await</code> are covered in
+          <a href="14-async-javascript.html">Asynchronous JavaScript</a>. The point
+          of seeing it now, unexplained, is to set an expectation: by the end of
+          this site, code like this should look ordinary rather than intimidating.
+        </p>
+      </div>
+
+      <h2 id="chapter-1-summary">1.5 Summary</h2>
+      <p>
+        This site — like the book it adapts — is organized from the bottom up:
+        starting with low-level details like comments, identifiers, and types (the
+        rest of this page, plus the next couple of pages); building up to
+        expressions, statements, objects, and functions; and finally arriving at
+        higher-level abstractions like classes, modules, and asynchronous
+        programming. That level of detail is deliberate — genuine mastery of
+        JavaScript requires understanding <em>why</em> its rules exist, not just
+        memorizing the common cases — but you don't need to absorb all of it in
+        order. If a section feels like a slog, it's fine to move on and come back to
+        it once you have a working sense of the language as a whole.
+      </p>
+
+      <h2 id="lexical-structure">Chapter 2: Lexical structure</h2>
+      <p>
+        The <em>lexical structure</em> of a language is its lowest-level grammar —
+        the rules for what a legal identifier looks like, how a comment is
+        delimited, and how the parser knows where one statement ends and the next
+        begins. Most of it is unsurprising if you've used any C-like language before,
+        so this page moves quickly through the mechanical parts and slows down for
+        the one rule that reliably causes real bugs even among experienced
+        JavaScript developers: <a href="#optional-semicolons">automatic semicolon
+        insertion</a>.
+      </p>
+
+      <h3 id="text-of-a-javascript-program">2.1 The text of a JavaScript program</h3>
+      <p>
+        JavaScript is a fully <strong>case-sensitive</strong> language. The
+        <code>while</code> keyword must be typed exactly that way — not
+        <code>While</code> or <code>WHILE</code> — and <code>online</code>,
+        <code>Online</code>, <code>OnLine</code>, and <code>ONLINE</code> are four
+        completely distinct variable names, not four spellings of one.
+      </p>
+      <p>
+        JavaScript ignores the spaces that appear between tokens, and for the most
+        part it ignores line breaks too (the one significant exception is
+        <a href="#optional-semicolons">automatic semicolon insertion</a>, covered
+        below). Because whitespace and newlines are free, you can format and indent
+        code however makes it most readable without affecting its meaning. Beyond
+        the plain space character (<code> </code>), JavaScript also treats tabs,
+        several ASCII control characters, and various Unicode space characters as
+        whitespace, and it recognizes newline, carriage return, and
+        carriage-return-plus-line-feed sequences all as line terminators.
+      </p>
+
+      <h3 id="comments">2.2 Comments</h3>
+      <p>
+        JavaScript supports two comment styles. Anything from <code>//</code> to the
+        end of the line is a single-line comment. Anything between <code>/*</code>
+        and <code>*/</code> is a comment that may span multiple lines — but these
+        block comments may not be nested inside one another.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// This is a single-line comment.
+/* This is also a comment */  // and here is another one, on the same line.
+/*
+ * This is a multi-line comment. The leading * on each line is purely
+ * decorative convention, not required syntax.
+ */</code></pre>
+      </div>
+
+      <h3 id="literals">2.3 Literals</h3>
+      <p>
+        A <strong>literal</strong> is a value written directly into the source code
+        of a program, rather than computed or looked up.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">12              // The number twelve
+1.2             // The number one point two
+"hello world"   // A string of text
+'Hi'            // Another string
+true            // A Boolean value
+false           // The other Boolean value
+null            // Absence of a value</code></pre>
+      </div>
+      <p>
+        This page only needs the concept; the full grammar for numeric literals
+        (hex/octal/binary, exponents, numeric separators, <code>BigInt</code>) and
+        string literals (escape sequences, template literals) is covered in
+        <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>,
+        and object/array literal syntax is covered in
+        <a href="03-expressions-operators.html">Expressions &amp; Operators</a>.
+      </p>
+
+      <h3 id="identifiers-and-reserved-words">2.4 Identifiers and reserved words</h3>
+      <p>
+        An <strong>identifier</strong> is simply a name — used for variables,
+        constants, properties, functions, classes, and loop labels. A legal
+        JavaScript identifier must start with a letter, an underscore
+        (<code>_</code>), or a dollar sign (<code>$</code>); every character after
+        the first may additionally be a digit. Digits are disallowed as the first
+        character specifically so the parser can always tell an identifier apart
+        from a number just by looking at its first character.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">i
+my_variable_name
+v13
+_dummy
+$str</code></pre>
+      </div>
+      <p>
+        A fixed set of <strong>reserved words</strong> is off-limits as the name of
+        a variable, constant, function, or class (though every one of them remains
+        legal as the name of an object <em>property</em>):
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><td><code>as</code></td><td><code>const</code></td><td><code>export</code></td><td><code>get</code></td><td><code>null</code></td><td><code>target</code></td><td><code>void</code></td></tr>
+          <tr><td><code>async</code></td><td><code>continue</code></td><td><code>extends</code></td><td><code>if</code></td><td><code>of</code></td><td><code>this</code></td><td><code>while</code></td></tr>
+          <tr><td><code>await</code></td><td><code>debugger</code></td><td><code>false</code></td><td><code>import</code></td><td><code>return</code></td><td><code>throw</code></td><td><code>with</code></td></tr>
+          <tr><td><code>break</code></td><td><code>default</code></td><td><code>finally</code></td><td><code>in</code></td><td><code>set</code></td><td><code>true</code></td><td><code>yield</code></td></tr>
+          <tr><td><code>case</code></td><td><code>delete</code></td><td><code>for</code></td><td><code>instanceof</code></td><td><code>static</code></td><td><code>try</code></td><td></td></tr>
+          <tr><td><code>catch</code></td><td><code>do</code></td><td><code>from</code></td><td><code>let</code></td><td><code>super</code></td><td><code>typeof</code></td><td></td></tr>
+          <tr><td><code>class</code></td><td><code>else</code></td><td><code>function</code></td><td><code>new</code></td><td><code>switch</code></td><td><code>var</code></td><td></td></tr>
+        </table>
+      </div>
+      <p>
+        Not every word in that table is reserved with equal force. Most —
+        <code>if</code>, <code>while</code>, <code>for</code>, and the like — are
+        strict, unconditional keywords. A few, including <code>from</code>,
+        <code>of</code>, <code>get</code>, and <code>set</code>, are only
+        recognized as keywords in the narrow contexts where the grammar needs them
+        (module imports, <code>for...of</code> loops, and accessor definitions,
+        respectively) and are perfectly legal as ordinary identifiers everywhere
+        else. Others, most notably <code>let</code>, cannot be fully reserved
+        without breaking old scripts, so a set of intricate backward-compatibility
+        rules governs exactly when they're usable as identifiers and when they
+        aren't — for instance, <code>let</code> can name a <code>var</code>-declared
+        variable outside a class, but not one declared with <code>const</code> or
+        one declared inside a class body. The simplest practical rule is: avoid all
+        of them as identifiers, except <code>from</code>, <code>set</code>, and
+        <code>target</code>, which are safe and already in common use.
+      </p>
+      <p>
+        JavaScript additionally reserves a second list of words that the language
+        doesn't currently use for anything, but keeps off-limits in case a future
+        edition needs them:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">enum  implements  interface  package  private  protected  public</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Two more names to avoid</div>
+        <p>
+          For historical reasons, <code>arguments</code> and <code>eval</code> are
+          disallowed as identifiers in certain contexts (for instance, inside strict
+          mode or as a function parameter name) and are best avoided as variable
+          names entirely, even where the language happens to permit them.
+        </p>
+      </div>
+
+      <h3 id="unicode">2.5 Unicode</h3>
+      <p>
+        JavaScript source code is Unicode text throughout, and you can freely use
+        any Unicode characters inside string literals and comments. Identifiers
+        follow the same rule: the language allows Unicode letters, digits, and
+        ideographs in identifiers, not just ASCII (emoji, however, are not legal in
+        identifiers). In practice, most codebases stick to ASCII identifiers purely
+        for portability and ease of editing across tools and teammates — but this is
+        a style convention, not a language requirement:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const π = 3.14;     // A single Unicode symbol as an identifier — legal.
+const sí = true;     // Non-English words work too — also legal.</code></pre>
+      </div>
+
+      <h4>Unicode escape sequences</h4>
+      <p>
+        Some hardware, software, and encodings can't reliably display, type, or
+        transmit the full Unicode character set. To keep JavaScript source portable
+        even in that situation, the language defines Unicode escapes made entirely
+        of ASCII characters. They begin with <code>\u</code> and are followed either
+        by exactly four hexadecimal digits, or by one to six hexadecimal digits
+        wrapped in curly braces (the curly-brace form was added in ES6, precisely to
+        support codepoints beyond 16 bits, like most emoji). These escapes are legal
+        in string literals, regular expression literals, and identifiers — but never
+        inside a language keyword.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let café = 1; // Define a variable using a literal, typed-out Unicode character.
+
+// Three different ways to write and access that SAME variable name:
+café          // => 1: the literal character, typed directly.
+caf\u00e9     // => 1: a 4-digit Unicode escape standing in for the "e" + accent.
+caf\u{e9}     // => 1: the equivalent curly-brace form of the same escape.
+
+console.log("\u{1F600}"); // Prints a smiley-face emoji (needs the curly-brace
+                          // form because the codepoint doesn't fit in 4 hex digits).</code></pre>
+      </div>
+      <p>
+        One easy-to-miss detail: Unicode escapes are also legal <em>inside
+        comments</em>, but since the whole point of a comment is that it's ignored
+        by the parser, an escape sequence written in a comment is never actually
+        interpreted — it just sits there as literal ASCII text.
+      </p>
+
+      <h4 id="unicode-normalization">Unicode normalization <span class="badge hard">Gotcha</span></h4>
+      <p>
+        Unicode frequently allows more than one binary encoding for what looks like
+        the exact same character. The accented letter "é," for example, can be
+        represented either as the single, precomposed codepoint <code>é</code>,
+        or as a plain ASCII "e" immediately followed by the separate combining
+        acute-accent mark <code>́</code>. A text editor typically renders both
+        sequences identically on screen — but they are different sequences of code
+        units, so JavaScript (which compares identifiers and strings by their
+        underlying encoding, not their rendered appearance) treats them as two
+        entirely different, unrelated names:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const café = 1;  // This constant's name is really "caf\u{e9}" (precomposed)
+const café = 2;  // This constant's name is really "cafe\u{301}" (e + combining accent)
+                  // The two lines above look identical, but do NOT collide —
+                  // they declare two different variables that happen to render the same.
+café  // => 1 or 2, depending on which encoding YOU just typed to look it up!</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">JavaScript does not normalize source code for you</div>
+        <p>
+          The Unicode standard defines a canonical normalization procedure for
+          resolving exactly this ambiguity, but JavaScript assumes its input source
+          text has <em>already</em> been normalized before parsing — it performs no
+          normalization of its own. If your codebase uses non-ASCII identifiers (or
+          non-ASCII string content that gets compared for equality), make sure your
+          editor or build tooling normalizes text to a single consistent form, or you
+          risk shipping two visually indistinguishable but functionally unrelated
+          identifiers, and debugging that is miserable precisely because you cannot
+          see the difference by reading the code.
+        </p>
+      </div>
+
+      <h3 id="optional-semicolons">2.6 Optional semicolons <span class="badge hard">Gotcha</span></h3>
+      <p>
+        JavaScript statements are terminated with a semicolon, the same as in C,
+        C++, and Java — but unlike those languages, the semicolon can often be
+        omitted if the next statement starts on a new line. This feature is called
+        <strong>automatic semicolon insertion</strong>, or <strong>ASI</strong>, and
+        it is simultaneously a genuine convenience and one of the most reliable
+        sources of subtle bugs in the entire language.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">a = 3;
+b = 4;      // The first semicolon above could be omitted, since a = 3 and
+            // b = 4 are on separate lines.
+
+a = 3; b = 4;  // Written on ONE line, though, the middle semicolon is required —
+               // there is no line break for ASI to key off of.</code></pre>
+      </div>
+      <p>
+        The general rule (with three specific, spec-defined exceptions covered
+        below): JavaScript treats a line break as though it were a semicolon
+        <em>only when</em> the code genuinely cannot otherwise be parsed — that is,
+        only when the next nonspace character cannot possibly continue the current
+        statement. JavaScript is not scanning for "does this look like a new
+        statement" the way a human reads it; it is doggedly trying to keep parsing
+        the current statement for as long as the grammar allows, and only falls back
+        to inserting a semicolon when continuing is flatly impossible.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a
+a
+=
+3
+console.log(a)
+
+// JavaScript actually parses the above as:
+let a; a = 3; console.log(a);
+// The break after "let a" IS treated as a semicolon (you cannot parse
+// "let a a" as one statement). The break after the second "a" is NOT
+// treated as a semicolon, because "a = 3" is a perfectly valid longer
+// statement for the parser to keep building.</code></pre>
+      </div>
+
+      <h4>The three specific exceptions</h4>
+      <p>
+        Beyond that general "only when parsing would otherwise fail" rule, the
+        specification calls out three narrower situations where a line break is
+        forced to behave as a semicolon (or forced NOT to), regardless of whether
+        the following line could have grammatically continued the statement:
+      </p>
+      <ol>
+        <li>
+          <strong><code>return</code>, <code>throw</code>, <code>yield</code>,
+          <code>break</code>, and <code>continue</code>:</strong> if a line break
+          immediately follows one of these keywords, before any other token, ASI
+          <em>always</em> inserts a semicolon right there — even if the very next
+          line would otherwise have parsed as a valid continuation.
+        </li>
+        <li>
+          <strong>Postfix <code>++</code> and <code>--</code>:</strong> these
+          operators must appear on the <em>same line</em> as the expression they
+          apply to in order to be parsed as postfix at all; a line break before them
+          prevents that interpretation.
+        </li>
+        <li>
+          <strong>Arrow functions:</strong> the <code>=&gt;</code> itself must appear
+          on the same line as the parameter list it belongs to — a line break
+          between the parameters and the arrow breaks the arrow function syntax.
+        </li>
+      </ol>
+
+      <h4>Gotcha #1: <code>return</code> on its own line</h4>
+      <p>
+        This is the single most common real-world ASI bug. Because rule 1 above
+        forces a semicolon immediately after a bare <code>return</code>, putting the
+        returned expression on the next line silently returns <code>undefined</code>
+        instead — with no error of any kind:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function getObj() {
+  return              // ASI inserts a semicolon RIGHT HERE, silently.
+  {
+    value: 42
+  };
+}
+getObj()              // => undefined — not the object you expected, and no error!
+
+// Fix: keep the opening brace on the same line as "return".
+function getObjFixed() {
+  return {
+    value: 42
+  };
+}
+getObjFixed()          // => { value: 42 }</code></pre>
+      </div>
+
+      <h4>Gotcha #2: <code>++</code>/<code>--</code> on the next line</h4>
+      <p>
+        Rule 2 means a postfix increment or decrement can't be "continued" onto a
+        new line either — but here the failure mode is the opposite of gotcha #1:
+        instead of quietly changing meaning, JavaScript ends the first statement
+        early and starts a new (often nonsensical, or separately valid) one with the
+        operator:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x = 3;
+x
+++
+x
+// Parses as three separate statements: `x;` then `++x;` then `x;` —
+// NOT as `x++; x;`. The postfix ++ never gets a chance to apply to the
+// first x, because the line break already terminated that statement.</code></pre>
+      </div>
+
+      <h4>Gotcha #3: a statement starting with <code>(</code> or <code>[</code></h4>
+      <p>
+        This is the trap that doesn't involve one of the three named exceptions at
+        all — it's just the general rule doing exactly what it's designed to do, in
+        a case that happens to surprise almost everyone the first time they see it.
+        A line that opens with <code>(</code>, <code>[</code>, <code>/</code>,
+        <code>+</code>, or <code>-</code> can very often be parsed as a
+        <em>continuation</em> of the previous line (a function call, a
+        property/index access, a division, or a binary +/-), so ASI does not insert
+        a semicolon there:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Looks like two separate statements...
+let y = x + f
+(a + b).toString()
+
+// ...but "(a + b).toString()" can continue the line above as a function call
+// to f, so JavaScript actually parses this as ONE statement:
+let y = x + f(a + b).toString();</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Lines that can silently merge</div>
+        <p>
+          Any statement beginning with <code>(</code>, <code>[</code>, <code>/</code>,
+          <code>+</code>, or <code>-</code> risks being swallowed into whatever
+          statement precedes it. Statements starting with <code>/</code>,
+          <code>+</code>, or <code>-</code> are rare in practice, but statements
+          starting with <code>(</code> or <code>[</code> are common — an
+          immediately invoked function expression or an array literal used as a
+          statement, for example. Defensive JavaScript style often starts such a
+          line with a leading semicolon, so the statement stays independent even if
+          a teammate later edits the line above and removes what used to be its
+          terminating semicolon:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x = 0                          // Semicolon omitted here on purpose
+;[x, x + 1, x + 2].forEach(n => console.log(n)) // Leading ; keeps this its own statement</code></pre>
+        </div>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Practical takeaway</div>
+        <p>
+          Whichever semicolon style you prefer for the rest of your code, treat
+          explicit semicolons as mandatory around exactly the patterns above:
+          after <code>return</code>/<code>throw</code>/<code>break</code>/<code>continue</code>
+          when the value spans lines, and before any line that opens with
+          <code>(</code> or <code>[</code>. It costs nothing to be explicit and
+          removes an entire category of bug that catches even experienced
+          JavaScript developers.
+        </p>
+      </div>
+
+      <h3 id="chapter-2-summary">2.7 Summary</h3>
+      <p>
+        This page has covered JavaScript at its lowest level: how the raw text of a
+        program is structured, delimited, and named. The next layer up is the
+        primitive types and values — numbers, strings, and the rest — that serve as
+        the basic units of computation for every JavaScript program, covered in
+        <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

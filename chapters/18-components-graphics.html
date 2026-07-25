@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Components & Graphics — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="18-components-graphics.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 15, &sect;15.6&ndash;15.9</span>
+      <h1>Components &amp; Graphics</h1>
+      <p class="lede">
+        HTML gives you a fixed vocabulary of tags, but real interfaces need
+        more: reusable widgets with their own private markup and styling,
+        resolution-independent vector art, an imperative pixel canvas for
+        everything a fixed tag set can't express, and a couple of ways to make
+        noise. This page covers the four browser-native APIs that fill those
+        gaps &mdash; Web Components, SVG, <code>&lt;canvas&gt;</code>, and
+        audio &mdash; building on the DOM fundamentals from
+        <a href="17-dom-css-scripting.html">DOM &amp; CSS Scripting</a>.
+      </p>
+
+      <h2 id="web-components">Web Components</h2>
+      <p>
+        Frameworks like React and Angular popularized the idea of a reusable
+        UI element with its own markup, styling, and behavior bundled behind a
+        single custom tag. Web Components bring that idea into the browser
+        platform itself, with no build step or runtime library required. The
+        feature isn't one API but three cooperating ones, each covered in its
+        own subsection below: <strong>custom elements</strong> associate a
+        JavaScript class with a new tag name, <strong>shadow DOM</strong>
+        gives that class a private, style-isolated subtree to render into, and
+        <strong>&lt;template&gt;</strong> gives it an efficient, parse-once
+        stamp for the markup it repeats on every instance.
+      </p>
+
+      <h3 id="using-web-components">Consuming a web component</h3>
+      <p>
+        Before authoring one, it helps to know the rules from the consumer's
+        side, since they explain some otherwise-odd requirements later.
+        Because a component's behavior lives in JavaScript, the script that
+        defines it has to run before the tag does anything useful:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script type="module" src="/components/rating-stars.js"&gt;&lt;/script&gt;
+
+&lt;rating-stars value="3" max="5"&gt;&lt;/rating-stars&gt;</code></pre>
+      </div>
+      <ul>
+        <li>Every custom tag name <strong>must contain a hyphen</strong>
+          (<code>rating-stars</code>, not <code>ratingstars</code>). This is
+          not a style convention &mdash; it's how the spec guarantees future
+          native HTML tags will never collide with a page's custom elements.</li>
+        <li>Custom elements <strong>cannot self-close</strong>. Writing
+          <code>&lt;rating-stars/&gt;</code> is invalid; you must always write
+          both the opening and closing tag, even with no children.</li>
+        <li>Some components accept regular children; others render specially
+          labeled children into named "slots" (see
+          <a href="#slots-light-dom">Shadow DOM slots</a> below). The
+          component's own documentation is the only way to know which
+          attributes, slots, and child content it supports &mdash; there's no
+          way to introspect this generically the way TypeScript types let you
+          introspect a function signature.</li>
+      </ul>
+      <div class="admonition warning">
+        <div class="admonition-title">Custom tags render before they're defined</div>
+        <p>
+          Because <code>type="module"</code> scripts run deferred (after
+          parsing), the browser will often encounter <code>&lt;rating-stars&gt;</code>
+          in the markup before the script that calls
+          <code>customElements.define()</code> has executed. Rather than
+          erroring, the HTML parser inserts a generic, inert
+          <code>HTMLElement</code> placeholder and silently "upgrades" it to
+          the real class later once the definition runs. Until that upgrade
+          happens, any children you supplied will likely render with no
+          styling at all. A common fix is to hide undefined instances with the
+          <code>:not(:defined)</code> CSS pseudo-class:
+        </p>
+      </div>
+      <div class="code-block" data-lang="CSS">
+<pre><code class="language-css">/* Reserve the component's eventual footprint and hide it until upgraded,
+   so the rest of the page doesn't visibly reflow when it appears. */
+rating-stars:not(:defined) {
+  display: inline-block;
+  width: 6em;
+  height: 1.2em;
+  opacity: 0;
+}</code></pre>
+      </div>
+      <p>
+        Once a component is defined, you interact with its element the same
+        way you would any DOM node &mdash; <code>document.querySelector()</code>
+        to find it, and whatever properties/methods its author chose to expose
+        (commonly a getter/setter pair mirroring each supported attribute).
+      </p>
+
+      <h3 id="html-template-element">The &lt;template&gt; element and DocumentFragment</h3>
+      <p>
+        The <code>&lt;template&gt;</code> tag holds markup that the browser
+        parses but never renders and never runs (images inside it don't load,
+        scripts inside it don't execute) until you explicitly clone it into
+        the live document. It exists purely as an efficient stamp for
+        structure you'll duplicate many times &mdash; table rows, list items,
+        or, most commonly, the internals of a web component.
+      </p>
+      <p>
+        In JavaScript, a template's contents live behind its
+        <code>.content</code> property, which is a <code>DocumentFragment</code>
+        &mdash; a special container node that can hold a set of sibling nodes
+        without itself having a parent. The detail that matters: when you
+        insert a <code>DocumentFragment</code> into the document (via
+        <code>append()</code>, for example), the fragment node itself is never
+        inserted &mdash; only its children are, and the fragment is left empty
+        afterward. This lets you build up a batch of nodes off-tree and then
+        splice all of them into place with a single, efficient operation
+        instead of one append per node.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let tableBody = document.querySelector("tbody");
+let rowTemplate = document.querySelector("#row-template");
+
+for (let record of records) {
+  let row = rowTemplate.content.cloneNode(true); // deep clone the fragment
+  row.querySelector(".name").textContent = record.name;
+  row.querySelector(".score").textContent = record.score;
+  tableBody.append(row); // only the &lt;tr&gt; children are actually inserted
+}</code></pre>
+      </div>
+      <p>
+        A <code>&lt;template&gt;</code> doesn't need to exist in the HTML
+        source at all &mdash; components very often build one in JavaScript
+        by creating a <code>&lt;template&gt;</code> element and setting its
+        <code>innerHTML</code> once, up front, then cloning it cheaply on
+        every instantiation rather than re-parsing an HTML string each time.
+        You'll see that pattern in the full component example later on this
+        page.
+      </p>
+
+      <h3 id="custom-elements">Custom elements</h3>
+      <p>
+        <code>customElements.define(tagName, class)</code> is what links a
+        hyphenated tag name to a JavaScript class. The class must extend
+        <code>HTMLElement</code> (not a more specific subtype like
+        <code>HTMLButtonElement</code> &mdash; extending built-in elements
+        beyond the generic base is inconsistently supported across browsers).
+        If the class defines a constructor, it must call <code>super()</code>
+        with no arguments before touching <code>this</code>, exactly like any
+        other subclass constructor.
+      </p>
+      <p>
+        The browser drives instances of the class through a small set of
+        lifecycle callbacks it invokes automatically:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Callback</th><th>Invoked when&hellip;</th></tr>
+          <tr><td><code>connectedCallback()</code></td><td>the element is inserted into the document &mdash; the usual place to do setup, since <code>this.isConnected</code> and layout info aren't reliable in the constructor</td></tr>
+          <tr><td><code>disconnectedCallback()</code></td><td>the element is removed from the document &mdash; used less often, mainly for teardown like clearing timers</td></tr>
+          <tr><td><code>attributeChangedCallback(name, oldValue, newValue)</code></td><td>an attribute listed in <code>observedAttributes</code> is set, changed, or removed &mdash; including the first time it's parsed from HTML</td></tr>
+          <tr><td><code>adoptedCallback()</code></td><td>the element is moved into a different document (rare &mdash; e.g. via <code>document.adoptNode()</code>)</td></tr>
+        </table>
+      </div>
+      <p>
+        Note that <code>attributeChangedCallback</code> only fires for
+        attributes named in a <em>static</em> <code>observedAttributes</code>
+        getter &mdash; the browser has no reason to pay the cost of watching
+        every attribute on every custom element, so you opt in explicitly.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">customElements.define("inline-badge", class InlineBadge extends HTMLElement {
+  connectedCallback() {
+    this.style.display = "inline-block";
+    this.style.borderRadius = "999px";
+    this.style.padding = "0 0.5em";
+    this.style.font = "inherit";
+    if (!this.style.backgroundColor) {
+      this.style.backgroundColor = "#ddd"; // sensible default
+    }
+  }
+
+  // Only changes to these two attributes trigger attributeChangedCallback.
+  static get observedAttributes() { return ["tone", "count"]; }
+
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === "tone") {
+      this.style.backgroundColor = newValue === "danger" ? "#f8d7da" : "#ddd";
+    } else if (name === "count") {
+      this.textContent = newValue;
+    }
+  }
+
+  // Mirror the attributes as JavaScript properties, as component authors
+  // conventionally do. Setting the property sets the attribute, which in
+  // turn re-triggers attributeChangedCallback above.
+  get tone() { return this.getAttribute("tone"); }
+  set tone(value) { this.setAttribute("tone", value); }
+  get count() { return this.getAttribute("count"); }
+  set count(value) { this.setAttribute("count", value); }
+});</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">This example isn't a real component yet</div>
+        <p>
+          <code>InlineBadge</code> mutates its own <code>style</code>
+          attribute directly &mdash; behavior no native HTML element exhibits,
+          and a leaky implementation detail for anyone inspecting the page.
+          It also has no protection against page-level CSS accidentally
+          targeting its internals. Turning it into a properly encapsulated
+          component is exactly what shadow DOM is for, next.
+        </p>
+      </div>
+
+      <h3 id="shadow-dom">Shadow DOM <span class="badge hard">Hard</span></h3>
+      <p>
+        A shadow root is a second, private tree of descendants attached to an
+        element (the "shadow host") in addition to its normal children. Think
+        of the <code>&lt;video&gt;</code> element: it renders play/pause
+        buttons, a scrubber, and a volume slider, but none of that UI shows up
+        if you inspect its <code>children</code> or run
+        <code>querySelector()</code> against the page &mdash; it's rendered
+        from a shadow tree the browser keeps hidden from ordinary DOM
+        traversal. Shadow DOM exposes that exact mechanism to your own
+        components.
+      </p>
+      <p>
+        The regular, ordinary DOM children of a shadow host &mdash; the ones
+        you'd write between its opening and closing tag in markup &mdash; are
+        called the <strong>light DOM</strong> in contrast to the shadow tree.
+        Both trees exist simultaneously on the same host element; how they're
+        reconciled into one rendered result is covered in the slots
+        subsection below.
+      </p>
+      <p>
+        Attaching a shadow root is a single call:
+        <code>element.attachShadow({ mode: "open" })</code>. This returns the
+        new shadow root (itself a <code>DocumentFragment</code>-like node you
+        can append into or set <code>innerHTML</code> on) and also stores it
+        on <code>element.shadowRoot</code>. Passing <code>mode: "closed"</code>
+        instead creates the shadow tree but leaves <code>shadowRoot</code>
+        as <code>null</code> from the outside &mdash; a genuinely sealed
+        subtree that even the component's own consumers cannot reach from
+        JavaScript. Closed mode is rare in practice; open mode already
+        provides the encapsulation that matters, which is CSS and query
+        isolation, not secrecy.
+      </p>
+      <p>
+        That isolation is the entire point of the feature, and it cuts in
+        both directions:
+      </p>
+      <ul>
+        <li>Elements inside a shadow root are invisible to
+          <code>document.querySelectorAll()</code> and similar whole-document
+          traversals run from outside &mdash; you must go through
+          <code>element.shadowRoot.querySelector()</code> instead.</li>
+        <li><strong>CSS rules written inside a shadow root never leak out</strong>
+          to style the rest of the page, and page-level stylesheets
+          <strong>never reach in</strong> to restyle the component's
+          internals &mdash; regardless of how generic the selectors are on
+          either side. Only inherited properties (like <code>font</code> and
+          <code>color</code>) and CSS custom properties cross the boundary,
+          much as they'd inherit into a nested document. An
+          <code>&lt;iframe&gt;</code> is not quite the right mental model,
+          though &mdash; think of a shadow tree instead as its own
+          miniature document that happens to inherit a few properties from
+          its host.</li>
+        <li>Some events, like <code>load</code>, stay confined to the shadow
+          tree. Others &mdash; focus, mouse, keyboard &mdash; bubble out
+          across the boundary as normal, but when they do, their
+          <code>target</code> is rewritten to the shadow host itself, so
+          outside code never learns anything about the component's internal
+          structure just by inspecting an event.</li>
+      </ul>
+      <p>Two worked examples make the encapsulation concrete.</p>
+      <p><strong>Example 1: outer styles don't leak in.</strong></p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;style&gt;
+  /* A page-wide rule that (the author hopes) makes every paragraph red */
+  p { color: red; font-weight: bold; }
+&lt;/style&gt;
+
+&lt;p&gt;This paragraph is red, as expected.&lt;/p&gt;
+&lt;fancy-quote&gt;&lt;/fancy-quote&gt;</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">customElements.define("fancy-quote", class extends HTMLElement {
+  connectedCallback() {
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `
+      &lt;style&gt;
+        /* This p rule only ever matches the &lt;p&gt; below, never the
+           light-DOM &lt;p&gt; sitting next to &lt;fancy-quote&gt; in the page. */
+        p { color: slateblue; font-style: italic; }
+      &lt;/style&gt;
+      &lt;p&gt;A quote, styled entirely by its own component.&lt;/p&gt;
+    `;
+  }
+});</code></pre>
+      </div>
+      <p>
+        Even though the page's <code>p { color: red; }</code> rule is as
+        generic as a selector can be, the paragraph inside
+        <code>&lt;fancy-quote&gt;</code>'s shadow root renders slateblue, not
+        red. The page's stylesheet simply cannot see across the shadow
+        boundary.
+      </p>
+      <p><strong>Example 2: inner styles don't leak out.</strong></p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">customElements.define("danger-button", class extends HTMLElement {
+  connectedCallback() {
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `
+      &lt;style&gt;
+        /* Styling a plain button tag, inside the shadow root only */
+        button { background: crimson; color: white; border: none; padding: .5em 1em; }
+      &lt;/style&gt;
+      &lt;button&gt;&lt;slot&gt;Delete&lt;/slot&gt;&lt;/button&gt;
+    `;
+  }
+});</code></pre>
+      </div>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;danger-button&gt;&lt;/danger-button&gt;
+
+&lt;!-- An ordinary button elsewhere on the same page --&gt;
+&lt;button&gt;Save&lt;/button&gt;</code></pre>
+      </div>
+      <p>
+        The crimson styling defined inside <code>&lt;danger-button&gt;</code>'s
+        shadow root has no effect whatsoever on the plain
+        <code>&lt;button&gt;Save&lt;/button&gt;</code> sitting elsewhere in the
+        page, even though both match the exact same <code>button</code>
+        selector. Each shadow root's stylesheet is scoped to that tree alone.
+        This is what lets a component's author and a component's consumer
+        write CSS without ever coordinating naming conventions like BEM to
+        avoid collisions &mdash; the platform enforces the boundary for them.
+      </p>
+      <p>
+        A component can still style itself from outside using the
+        <code>:host</code> and <code>:host()</code> selectors, written
+        <em>inside</em> the shadow root's own stylesheet:
+      </p>
+      <div class="code-block" data-lang="CSS">
+<pre><code class="language-css">:host {
+  display: inline-block;   /* default display for the host element itself */
+  border: 1px solid #ccc;
+}
+:host([disabled]) {        /* matches &lt;my-widget disabled&gt; from outside */
+  opacity: 0.5;
+}</code></pre>
+      </div>
+      <p>
+        These are only defaults, though: light-DOM CSS that targets the host
+        element by tag name, class, or ID from outside will always win over
+        <code>:host</code> rules, giving consumers the final say over layout
+        and positioning while the component keeps control of its internals.
+      </p>
+
+      <h3 id="slots-light-dom">Slots: mixing light DOM into a shadow tree</h3>
+      <p>
+        A shadow host effectively has two children lists at once: the real
+        <code>children</code> array (light DOM) and the shadow root's own
+        descendants. The <code>&lt;slot&gt;</code> element is how a shadow
+        tree makes room for the host's light-DOM children to actually appear
+        on screen:
+      </p>
+      <ul>
+        <li>If the shadow tree contains no <code>&lt;slot&gt;</code> at all,
+          any light-DOM children of the host are parsed and kept in the DOM
+          but never rendered anywhere.</li>
+        <li>An unnamed <code>&lt;slot&gt;</code> renders <em>all</em> of the
+          host's light-DOM children in its place.</li>
+        <li>A <code>&lt;slot name="left"&gt;</code> only renders light-DOM
+          children carrying a matching <code>slot="left"</code> attribute.</li>
+        <li>If a named slot has no matching light-DOM child, whatever fallback
+          content is written directly inside the <code>&lt;slot&gt;&hellip;&lt;/slot&gt;</code>
+          tag in the shadow tree is rendered as the default.</li>
+      </ul>
+      <p>
+        Crucially, "slotting" a light-DOM node into a shadow-tree slot is a
+        purely visual reprojection &mdash; the node doesn't move. It's still
+        reachable via <code>querySelector()</code> as a normal child of the
+        host, and it's still styled by the page's own stylesheets, not the
+        component's. Only its on-screen position changes.
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;search-box&gt;
+  &lt;img src="/icons/search.svg" slot="left" alt="Search"&gt;
+  &lt;img src="/icons/close.svg" slot="right" alt="Clear"&gt;
+&lt;/search-box&gt;</code></pre>
+      </div>
+      <p>
+        If the component's internal <code>&lt;slot&gt;</code> elements ever
+        need to react to which nodes are currently assigned to them (say, to
+        re-measure layout), they can listen for the <code>slotchange</code>
+        event fired directly on the <code>&lt;slot&gt;</code>.
+      </p>
+
+      <h3 id="search-box-example">Putting it together: a &lt;search-box&gt; component</h3>
+      <p>
+        The following combines all three technologies &mdash; a
+        <code>&lt;template&gt;</code> built once and cloned per instance, a
+        shadow root for style isolation, and named slots so consumers can
+        swap in their own icons &mdash; into a self-contained search input
+        that dispatches its own <code>search</code> and <code>clear</code>
+        custom events.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class SearchBox extends HTMLElement {
+  static observedAttributes = ["placeholder", "disabled", "value"];
+
+  // Build the template once, on the class, and clone it per instance
+  // instead of re-parsing an HTML string every time one is constructed.
+  static template = (() => {
+    let t = document.createElement("template");
+    t.innerHTML = `
+      &lt;style&gt;
+        :host { display: inline-flex; align-items: center;
+                border: 1px solid #999; border-radius: 6px; padding: 2px 8px; }
+        :host([disabled]) { opacity: 0.5; }
+        input { border: 0; outline: none; font: inherit; background: transparent; }
+        slot { cursor: pointer; user-select: none; }
+      &lt;/style&gt;
+      &lt;slot name="left"&gt;🔍&lt;/slot&gt;
+      &lt;input id="field" type="text" /&gt;
+      &lt;slot name="right"&gt;✕&lt;/slot&gt;
+    `;
+    return t;
+  })();
+
+  constructor() {
+    super(); // must run before touching `this`
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.append(SearchBox.template.content.cloneNode(true));
+    this.input = this.shadowRoot.querySelector("#field");
+
+    this.shadowRoot.querySelector('slot[name="left"]').onclick = () => {
+      if (this.disabled) return;
+      this.dispatchEvent(new CustomEvent("search", { detail: this.input.value }));
+    };
+    this.shadowRoot.querySelector('slot[name="right"]').onclick = () => {
+      if (this.disabled) return;
+      let e = new CustomEvent("clear", { cancelable: true });
+      this.dispatchEvent(e);
+      if (!e.defaultPrevented) this.input.value = "";
+    };
+  }
+
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === "disabled") this.input.disabled = newValue !== null;
+    else if (name === "placeholder") this.input.placeholder = newValue ?? "";
+    else if (name === "value") this.input.value = newValue ?? "";
+  }
+
+  get disabled() { return this.hasAttribute("disabled"); }
+  set disabled(v) { v ? this.setAttribute("disabled", "") : this.removeAttribute("disabled"); }
+}
+customElements.define("search-box", SearchBox);</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Reach for a library before writing this by hand often</div>
+        <p>
+          Getting focus handling, ARIA attributes, and form participation
+          right for a hand-rolled component is genuinely hard &mdash; the
+          example above deliberately skips accessibility wiring to keep the
+          three core APIs visible. Libraries like Lit exist specifically to
+          take over that boilerplate; know the raw platform APIs so you can
+          read what they generate, even if you rarely write it by hand.
+        </p>
+      </div>
+
+      <h2 id="svg">SVG: Scalable Vector Graphics</h2>
+      <p>
+        SVG is a vector image format: instead of a grid of pixel values, an
+        SVG document is an XML description of the shapes to draw, which lets
+        it scale to any resolution or zoom level without blurring. There are
+        three ways to get SVG onto a page &mdash; as a standalone
+        <code>.svg</code> file referenced by an <code>&lt;img&gt;</code> tag,
+        embedded directly as inline markup in an HTML document, or built up
+        node-by-node with the DOM API. The last two are what make SVG
+        interesting from a scripting standpoint, since SVG's XML tags become
+        ordinary (if slightly unusual) nodes in the same DOM tree as the rest
+        of the page.
+      </p>
+
+      <h3 id="svg-in-html">Embedding SVG in HTML</h3>
+      <p>
+        Because SVG's XML grammar is so close to HTML's, an
+        <code>&lt;svg&gt;</code> element and its descendants can be written
+        directly inline, and the HTML parser is forgiving enough to accept
+        them without namespace prefixes. A handful of primitive shape
+        elements cover most simple graphics: <code>&lt;circle&gt;</code>,
+        <code>&lt;rect&gt;</code>, <code>&lt;line&gt;</code>,
+        <code>&lt;ellipse&gt;</code>, <code>&lt;polygon&gt;</code>, and the
+        general-purpose <code>&lt;path&gt;</code> for arbitrary curves.
+        <code>&lt;g&gt;</code> groups related shapes (much like a
+        <code>&lt;div&gt;</code>), and <code>&lt;text&gt;</code> draws
+        labels.
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;svg id="gauge" viewBox="0 0 100 100" width="150" height="150"&gt;
+  &lt;!-- viewBox defines the internal coordinate system; width/height are
+       the on-screen CSS pixel size -- SVG rescales one to fit the other --&gt;
+  &lt;circle class="dial" cx="50" cy="50" r="45"/&gt;
+  &lt;line class="needle" x1="50" y1="50" x2="50" y2="12"/&gt;
+&lt;/svg&gt;
+
+&lt;style&gt;
+  /* CSS can style SVG presentation attributes directly */
+  #gauge .dial { fill: #eee; stroke: black; stroke-width: 2; }
+  #gauge .needle { stroke: crimson; stroke-width: 3; stroke-linecap: round; }
+&lt;/style&gt;</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">SVG's CSS properties aren't quite normal CSS</div>
+        <p>
+          Properties like <code>fill</code>, <code>stroke</code>, and
+          <code>stroke-width</code> only exist for SVG content &mdash; they
+          have no equivalent on HTML elements. And the CSS <code>font</code>
+          shorthand doesn't work on SVG text; you must set
+          <code>font-family</code>, <code>font-size</code>, and
+          <code>font-weight</code> as separate declarations.
+        </p>
+      </div>
+
+      <h3 id="scripting-svg">Scripting SVG</h3>
+      <p>
+        Because inline SVG becomes real DOM nodes, ordinary DOM methods work
+        on it exactly as they do on HTML &mdash; <code>querySelector()</code>
+        to find a shape, <code>setAttribute()</code> to change how it's
+        drawn, event listeners to make it interactive. A live clock face is a
+        natural example: the hour and minute hands are just
+        <code>&lt;line&gt;</code> elements whose rotation is updated on a
+        timer using the SVG <code>transform</code> attribute.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function updateClockHands() {
+  let now = new Date();
+  let minutes = now.getMinutes() + now.getSeconds() / 60;
+  let hours = (now.getHours() % 12) + minutes / 60;
+
+  let minuteHand = document.querySelector("#gauge .minute-hand");
+  let hourHand = document.querySelector("#gauge .hour-hand");
+  minuteHand.setAttribute("transform", `rotate(${minutes * 6} 50 50)`);
+  hourHand.setAttribute("transform", `rotate(${hours * 30} 50 50)`);
+
+  setTimeout(updateClockHands, 10_000); // refresh every 10 seconds
+}
+updateClockHands();</code></pre>
+      </div>
+      <p>
+        Because these are ordinary DOM elements, you can also attach a normal
+        <code>click</code> or <code>pointerenter</code> listener directly to
+        an individual <code>&lt;circle&gt;</code> or <code>&lt;path&gt;</code>
+        and it will fire only when that specific shape is hit &mdash; a
+        capability canvas fundamentally cannot offer without you rebuilding
+        hit-testing yourself, as the deep dive below explains.
+      </p>
+
+      <h3 id="creating-svg-with-javascript">Creating SVG elements with JavaScript</h3>
+      <p>
+        SVG tags are XML elements in a different namespace than HTML, so the
+        ordinary <code>document.createElement()</code> silently produces a
+        useless, unrendered generic element if you hand it an SVG tag name.
+        Building SVG programmatically instead requires
+        <code>document.createElementNS()</code>, passing the SVG namespace
+        URI as the first argument.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">createElement() doesn't work for SVG</div>
+        <p>
+          Always use <code>document.createElementNS("http://www.w3.org/2000/svg", tagName)</code>
+          when building SVG nodes from JavaScript. Forgetting the namespace
+          is one of the most common SVG-scripting mistakes &mdash; the
+          element gets created but never renders, with no error to point you
+          at the cause.
+        </p>
+      </div>
+      <p>
+        This makes SVG well suited to rendering data visualizations built
+        from live data, since each data point becomes an addressable,
+        individually stylable node. A minimal pie-chart builder illustrates
+        the pattern, including the compact path grammar (<code>M</code> move
+        to, <code>L</code> line to, <code>A</code> elliptical arc) used to
+        describe each wedge:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function pieChart(data, { cx, cy, r }) {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  let svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${cx * 2} ${cy * 2}`);
+
+  let entries = Object.entries(data);
+  let total = entries.reduce((sum, [, value]) => sum + value, 0);
+  let angle = 0;
+
+  for (const [label, value] of entries) {
+    let startAngle = angle;
+    angle += (value / total) * 2 * Math.PI;
+    let x1 = cx + r * Math.sin(startAngle), y1 = cy - r * Math.cos(startAngle);
+    let x2 = cx + r * Math.sin(angle),      y2 = cy - r * Math.cos(angle);
+    let largeArc = angle - startAngle &gt; Math.PI ? 1 : 0;
+
+    let slice = document.createElementNS(SVG_NS, "path");
+    slice.setAttribute("d", `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc} 1 ${x2},${y2} Z`);
+    slice.setAttribute("fill", `hsl(${(angle * 60) % 360} 70% 55%)`);
+    slice.setAttribute("data-label", label); // each slice stays addressable later
+    svg.append(slice);
+  }
+  return svg;
+}
+
+document.querySelector("#chart").append(
+  pieChart({ JavaScript: 71.5, Python: 37.9, "C#": 35.3 }, { cx: 200, cy: 200, r: 180 })
+);</code></pre>
+      </div>
+      <p>
+        Notice <code>data-label</code> on each slice &mdash; because the pie
+        chart is a live DOM tree rather than a flattened bitmap, you can
+        attach a listener to a single slice, look up a slice by its label
+        later, or animate one slice's fill color independently, all without
+        redrawing anything else. That capability, and its cost at large
+        element counts, is the crux of the SVG-vs-canvas decision below.
+      </p>
+
+      <h3 id="svg-vs-canvas">SVG vs. canvas: which one?</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Consideration</th><th>SVG</th><th>Canvas</th></tr>
+          <tr><td>Underlying model</td><td>Retained tree of DOM nodes, one per shape</td><td>Immediate-mode pixel buffer, no shape memory</td></tr>
+          <tr><td>Editing a shape later</td><td>Change an attribute on the existing node</td><td>Erase and redraw the whole frame</td></tr>
+          <tr><td>Per-shape events / hit-testing</td><td>Free &mdash; attach a listener to the node</td><td>Manual &mdash; you compute what was clicked</td></tr>
+          <tr><td>Resolution independence</td><td>Perfect at any zoom (it's vector math)</td><td>Fixed to the pixel buffer's resolution</td></tr>
+          <tr><td>Scales to many objects</td><td>Degrades as node count climbs into the thousands</td><td>Comfortably handles thousands of dynamic particles</td></tr>
+          <tr><td>Best fit</td><td>Icons, charts, diagrams, UI graphics with a modest, addressable shape count</td><td>Games, particle effects, image processing, generative art</td></tr>
+        </table>
+      </div>
+
+      <h2 id="canvas">Graphics in a &lt;canvas&gt;</h2>
+      <p>
+        A <code>&lt;canvas&gt;</code> element has no appearance of its own
+        &mdash; it's a blank drawing surface that exposes a rich imperative
+        API through a "context" object, obtained by calling
+        <code>canvas.getContext("2d")</code> for two-dimensional graphics.
+        Every drawing operation below is a method or property on that context
+        object, not on the canvas element itself.
+      </p>
+
+      <h3 id="canvas-immediate-mode">The immediate-mode drawing model <span class="badge hard">Hard</span></h3>
+      <p>
+        The single most important thing to internalize about canvas, and the
+        idea most beginners trip over after coming from SVG or a DOM-based UI
+        framework: <strong>a canvas has no retained scene graph</strong>.
+        When you call <code>arc()</code> followed by <code>fill()</code>, the
+        browser rasterizes a circle-shaped set of pixels into the bitmap
+        right now and then <em>forgets you ever drew a circle</em>. There is
+        no node representing "the circle," no way to ask the canvas what
+        shapes it contains, and no way to select, move, restyle, or delete
+        that circle afterward except by erasing pixels and drawing something
+        new in their place. Everything the canvas remembers is a flat grid of
+        RGBA pixel values &mdash; nothing more.
+      </p>
+      <p>
+        This is the direct opposite of SVG's model, where every shape is a
+        permanent, addressable node in a real DOM tree that persists until
+        you explicitly remove it. Picking the wrong one for a job is a
+        classic beginner mistake: reaching for canvas to build an interactive
+        diagram means reinventing hit-testing, selection, and per-shape
+        styling that SVG gives you for free; reaching for SVG to animate
+        thousands of particles means fighting a DOM that was never designed
+        to have that many live nodes.
+      </p>
+      <p><strong>Worked example 1 &mdash; there is no "the circle" to click.</strong></p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let c = document.querySelector("canvas").getContext("2d");
+c.beginPath();
+c.arc(75, 75, 50, 0, 2 * Math.PI);
+c.fillStyle = "steelblue";
+c.fill();
+
+// This listener fires for ANY click anywhere on the canvas element --
+// the canvas has no idea a circle lives at (75,75). To know whether the
+// click actually landed inside "the circle," you must redo the geometry
+// test yourself using the same math you used to draw it.
+canvas.addEventListener("click", (event) => {
+  let rect = canvas.getBoundingClientRect();
+  let x = event.clientX - rect.left, y = event.clientY - rect.top;
+  let dx = x - 75, dy = y - 75;
+  let clickedInsideCircle = Math.sqrt(dx * dx + dy * dy) &lt;= 50;
+  console.log(clickedInsideCircle ? "hit the circle" : "missed");
+});</code></pre>
+      </div>
+      <p>
+        Compare this to the equivalent SVG version, where hit-testing is not
+        code you write at all:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// The &lt;circle&gt; element from an SVG document IS the hit target --
+// no manual geometry required, and event.target is the circle itself.
+document.querySelector("circle").addEventListener("click", () => {
+  console.log("hit the circle");
+});</code></pre>
+      </div>
+      <p><strong>Worked example 2 &mdash; "moving" a shape means redrawing everything.</strong></p>
+      <p>
+        Because nothing drawn to a canvas persists as an object, animating a
+        shape doesn't mean changing a property on it &mdash; it means
+        clearing the canvas and redrawing every visible shape, once per
+        frame, at its new position. <code>requestAnimationFrame()</code> is
+        the standard way to schedule that redraw in sync with the browser's
+        repaint cycle (it also automatically pauses in background tabs,
+        unlike a raw <code>setInterval()</code>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x = 0;
+function drawFrame() {
+  c.clearRect(0, 0, canvas.width, canvas.height); // erase last frame entirely
+  c.beginPath();
+  c.arc(x, 75, 20, 0, 2 * Math.PI);               // redraw the "same" circle
+  c.fill();                                        // ...at its new position
+  x = (x + 2) % canvas.width;
+  requestAnimationFrame(drawFrame);
+}
+requestAnimationFrame(drawFrame);</code></pre>
+      </div>
+      <p>
+        The SVG equivalent needs no clear-and-redraw step at all &mdash; you
+        mutate the one retained node in place, and the browser handles
+        repainting it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let circle = document.querySelector("circle");
+let x = 0;
+function moveCircle() {
+  x = (x + 2) % 300;
+  circle.setAttribute("cx", x); // the SAME node, just relocated
+  requestAnimationFrame(moveCircle);
+}
+requestAnimationFrame(moveCircle);</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">A useful rule of thumb</div>
+        <p>
+          If you find yourself wanting to ask "what did I draw at this
+          position" after the fact, or wanting to change just one shape
+          without touching the rest, that's a strong signal you want SVG (or
+          a DOM-based approach) instead of canvas. Canvas earns its keep when
+          the number of independently-tracked objects is too large for the
+          DOM to comfortably hold, or when the visuals are generated
+          per-pixel rather than per-shape.
+        </p>
+      </div>
+
+      <h3 id="paths-and-polygons">Paths, fill, and stroke</h3>
+      <p>
+        Canvas has its own notion of a path, built imperatively rather than
+        described as a string. <code>beginPath()</code> starts a fresh path;
+        <code>moveTo()</code> starts a new subpath at a point;
+        <code>lineTo()</code> extends the current subpath with a straight
+        line; <code>closePath()</code> connects the subpath's end back to its
+        start. Once a path is defined, <code>fill()</code> and
+        <code>stroke()</code> render it using whatever <code>fillStyle</code>/
+        <code>strokeStyle</code>/<code>lineWidth</code> are set on the
+        context <em>at the moment those methods are called</em> &mdash; these
+        are properties of the drawing context, not attached to the path.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">c.beginPath();
+c.moveTo(100, 100);
+c.lineTo(200, 200);
+c.lineTo(100, 200);
+// The subpath is still "open" -- fill() treats it as if a line closed it,
+// but stroke() only draws the two segments actually added above.
+c.fillStyle = "#ccc";
+c.fill();     // fills the implied triangle
+c.strokeStyle = "#008";
+c.lineWidth = 5;
+c.stroke();   // strokes only two of the triangle's three sides
+
+c.closePath(); // now connect the third side explicitly
+c.stroke();    // this time all three sides are stroked</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">fill() and stroke() never clear the path</div>
+        <p>
+          Calling <code>fill()</code> does not remove the path &mdash;
+          <code>stroke()</code> immediately afterward operates on the exact
+          same accumulated subpaths, and so would a third or fourth call.
+          Forgetting to call <code>beginPath()</code> before starting the
+          next shape is one of the most common canvas bugs: old subpaths
+          silently keep getting redrawn underneath (or on top of) every new
+          one.
+        </p>
+      </div>
+      <p>
+        When two subpaths overlap (or a single subpath crosses itself),
+        canvas decides what counts as "inside" using the
+        <strong>nonzero winding rule</strong>: the winding direction (clockwise
+        vs. counterclockwise) each subpath was drawn in determines whether
+        overlapping regions get filled or treated as a hole. Drawing a large
+        polygon clockwise and a smaller one counterclockwise inside it, for
+        instance, punches the smaller shape out as an unfilled hole &mdash; a
+        common technique for donuts and cutouts.
+      </p>
+
+      <h3 id="canvas-dimensions">Dimensions, coordinates, and crisp rendering</h3>
+      <p>
+        A canvas's <code>width</code>/<code>height</code> attributes set both
+        the actual pixel buffer size <em>and</em> its default on-screen CSS
+        size &mdash; the origin sits at the top-left, x increases rightward,
+        y increases downward. Setting either dimension (even to its current
+        value) wipes the canvas clean, discards the current path, and resets
+        every graphics attribute, including any active transform or clip
+        region.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Crisp canvases on high-DPI screens</div>
+        <p>
+          If you size a canvas purely with CSS, the browser stretches its
+          existing pixel buffer to fit, which looks blurry on high-DPI
+          ("Retina") displays. The fix: set the CSS on-screen size with
+          stylesheet rules, then set the canvas's <code>width</code>/
+          <code>height</code> <em>attributes</em> to that CSS size multiplied
+          by <code>window.devicePixelRatio</code>, allocating a sharper pixel
+          buffer than the CSS box it's displayed in.
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let ratio = window.devicePixelRatio || 1;
+canvas.width = canvas.clientWidth * ratio;
+canvas.height = canvas.clientHeight * ratio;
+c.scale(ratio, ratio); // so drawing code can keep using CSS-pixel coordinates</code></pre>
+      </div>
+
+      <h3 id="graphics-attributes">Graphics attributes</h3>
+      <p>
+        A handful of context properties govern how every subsequent
+        <code>fill()</code>/<code>stroke()</code>/<code>fillText()</code>
+        call renders, independent of the drawing commands themselves &mdash;
+        conceptually similar to how CSS separates presentation from markup.
+      </p>
+      <ul>
+        <li><strong>Line styles</strong>: <code>lineWidth</code> (evaluated
+          at <code>stroke()</code> time, centered over the path so half the
+          width falls on either side), <code>lineCap</code>
+          (<code>"butt"</code> default, or <code>"round"</code>/<code>"square"</code>),
+          <code>lineJoin</code> (<code>"miter"</code> default, or
+          <code>"round"</code>/<code>"bevel"</code>, with sharp miters beyond
+          <code>miterLimit</code> automatically beveled), and
+          <code>setLineDash([...])</code> for dashed/dotted strokes.</li>
+        <li><strong>Colors, gradients, patterns</strong>: <code>fillStyle</code>/
+          <code>strokeStyle</code> accept a plain CSS color string, a
+          <code>CanvasGradient</code> from <code>createLinearGradient()</code>/
+          <code>createRadialGradient()</code> (each color stop added via
+          <code>addColorStop(offset, color)</code> with offset between 0 and
+          1), or a <code>CanvasPattern</code> from <code>createPattern()</code>
+          built from an image, video, or another canvas.</li>
+        <li><strong>Text styles</strong>: <code>font</code> (CSS font
+          shorthand syntax), <code>textAlign</code> (<code>start</code>,
+          <code>left</code>, <code>center</code>, <code>right</code>,
+          <code>end</code>), and <code>textBaseline</code> controlling
+          vertical alignment relative to the drawing y-coordinate.</li>
+        <li><strong>Shadows</strong>: <code>shadowColor</code>,
+          <code>shadowOffsetX</code>/<code>shadowOffsetY</code>, and
+          <code>shadowBlur</code> apply a drop shadow to anything drawn while
+          they're set; shadows default to fully transparent (invisible) until
+          a color is assigned.</li>
+        <li><strong>Translucency</strong>: use an <code>rgba()</code>/
+          <code>hsla()</code> color directly, or set <code>globalAlpha</code>
+          to scale the opacity of everything drawn afterward, including
+          images. <code>globalCompositeOperation</code> (default
+          <code>"source-over"</code>) controls how new pixels blend with
+          what's already on the canvas.</li>
+      </ul>
+      <p>
+        Because every one of these lives on the single shared context object
+        &mdash; there is only ever one context per canvas, no matter how many
+        times you call <code>getContext()</code> &mdash;
+        <code>save()</code>/<code>restore()</code> let you push and pop the
+        entire graphics state (styles, transform, clip region, but
+        <em>not</em> the current path) around a block of drawing code without
+        manually resetting every property afterward.
+      </p>
+
+      <h3 id="canvas-drawing-operations">Rectangles, curves, text, and images</h3>
+      <p>
+        Beyond straight-line paths, the 2D context provides several more
+        shape and content primitives:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Draws</th></tr>
+          <tr><td><code>fillRect(x,y,w,h)</code> / <code>strokeRect(...)</code> / <code>clearRect(...)</code></td><td>A rectangle immediately, bypassing the path entirely; <code>clearRect</code> resets pixels to transparent</td></tr>
+          <tr><td><code>rect(x,y,w,h)</code></td><td>Adds a rectangular subpath to the current path (doesn't draw by itself)</td></tr>
+          <tr><td><code>arc(x,y,r,start,end,ccw)</code></td><td>A circular arc; connects from the current point with a straight line first if one exists</td></tr>
+          <tr><td><code>ellipse(x,y,rx,ry,rotation,start,end,ccw)</code></td><td>Like <code>arc()</code> but with independent x/y radii and an overall rotation</td></tr>
+          <tr><td><code>arcTo(x1,y1,x2,y2,radius)</code></td><td>A line plus a rounding arc between two tangent points &mdash; the standard way to draw rounded rectangle corners</td></tr>
+          <tr><td><code>quadraticCurveTo(cx,cy,x,y)</code> / <code>bezierCurveTo(...)</code></td><td>A smooth curve to a new point, shaped by one or two control points</td></tr>
+          <tr><td><code>fillText(text,x,y)</code> / <code>strokeText(...)</code></td><td>Text using the current <code>font</code>/<code>fillStyle</code>; <code>measureText(text).width</code> gives you its rendered width in advance</td></tr>
+          <tr><td><code>drawImage(source, ...)</code></td><td>Copies pixels from an <code>&lt;img&gt;</code>, <code>&lt;video&gt;</code>, or another <code>&lt;canvas&gt;</code>, in 3-, 5-, or 9-argument forms (whole image; scaled into a destination rectangle; or a source rectangle scaled into a destination rectangle)</td></tr>
+        </table>
+      </div>
+      <p>
+        <code>canvas.toDataURL()</code> runs the opposite direction &mdash;
+        it serializes the whole canvas's current pixels as a PNG data URL,
+        letting you snapshot a drawing into a plain <code>&lt;img&gt;</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let snapshot = document.createElement("img");
+snapshot.src = canvas.toDataURL();
+document.body.append(snapshot);</code></pre>
+      </div>
+
+      <h3 id="coordinate-transforms">Coordinate transforms</h3>
+      <p>
+        Every canvas keeps a current transformation matrix as part of its
+        graphics state, mapping the coordinates you pass to drawing methods
+        into the default pixel coordinate system. <code>translate(dx,dy)</code>
+        moves the origin, <code>rotate(angle)</code> (radians, clockwise)
+        rotates the axes, and <code>scale(sx,sy)</code> stretches or
+        compresses them &mdash; a negative scale factor mirrors an axis.
+        These compose in the order you call them, and because
+        <code>save()</code>/<code>restore()</code> include the transform in
+        the saved graphics state, wrapping a block of drawing in
+        <code>save()</code>&hellip;<code>restore()</code> is the standard way
+        to apply a temporary transform without it bleeding into subsequent
+        drawing.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function drawSpoke(c, angleDeg) {
+  c.save();
+  c.translate(150, 150);          // move origin to the hub
+  c.rotate(angleDeg * Math.PI / 180);
+  c.fillRect(0, -3, 80, 6);       // draw as if pointing along the x-axis
+  c.restore();                    // undo translate+rotate for the next spoke
+}
+for (let i = 0; i &lt; 8; i++) drawSpoke(c, i * 45);</code></pre>
+      </div>
+      <p>
+        For an arbitrary affine transform (shears, or rotation about a point
+        other than the origin), <code>transform(a,b,c,d,e,f)</code> composes
+        six matrix parameters onto the current transform, while
+        <code>setTransform(a,b,c,d,e,f)</code> replaces it outright &mdash;
+        useful for briefly resetting to the default pixel coordinate system
+        (<code>setTransform(1,0,0,1,0,0)</code>) in the middle of otherwise
+        transformed drawing code. Recursive use of <code>save()</code>/
+        <code>translate()</code>/<code>rotate()</code>/<code>scale()</code>/
+        <code>restore()</code> is also how classic self-similar fractals like
+        a Koch snowflake get drawn with almost no trigonometry in the calling
+        code &mdash; each recursive call just draws one line segment and lets
+        the accumulated transform place it correctly.
+      </p>
+
+      <h3 id="clipping">Clipping regions</h3>
+      <p>
+        Calling <code>clip()</code> instead of (or in addition to)
+        <code>fill()</code>/<code>stroke()</code> turns the current path into
+        a clipping region: nothing drawn afterward renders outside it.
+        Clipping can only ever shrink the current clip region, never enlarge
+        it, and there's no method to reset it directly &mdash; the
+        conventional pattern is to <code>save()</code> before clipping so you
+        can <code>restore()</code> the unclipped region once you're done.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">c.save();
+c.beginPath();
+c.arc(100, 100, 60, 0, 2 * Math.PI);
+c.clip();                          // restrict drawing to this circle
+c.drawImage(photo, 40, 40, 120, 120); // photo appears masked to a circle
+c.restore();                       // clip region reverts to what it was before</code></pre>
+      </div>
+
+      <h3 id="pixel-manipulation">Pixel manipulation</h3>
+      <p>
+        Below the shape-drawing API sits raw pixel access.
+        <code>getImageData(x, y, w, h)</code> returns an <code>ImageData</code>
+        object exposing the requested rectangle's pixels as a flat,
+        writable byte array in the fixed order red, green, blue, alpha, four
+        bytes per pixel, row by row. After modifying the bytes,
+        <code>putImageData(imageData, x, y)</code> writes them straight back.
+        Both methods work in the canvas's default (untransformed) pixel
+        coordinate system, and <code>putImageData()</code> bypasses
+        compositing, <code>globalAlpha</code>, and shadows entirely &mdash;
+        it overwrites pixels outright.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A simple horizontal "motion blur": each pixel becomes a weighted
+// average of itself and the pixel to its left.
+function smear(c, x, y, w, h, strength = 8) {
+  let frame = c.getImageData(x, y, w, h);
+  let px = frame.data;
+  let keep = strength - 1;
+  for (let row = 0; row &lt; h; row++) {
+    let rowStart = row * w * 4;
+    for (let col = 1, i = rowStart + 4; col &lt; w; col++, i += 4) {
+      px[i]     = (px[i]     + px[i - 4] * keep) / strength; // R
+      px[i + 1] = (px[i + 1] + px[i - 3] * keep) / strength; // G
+      px[i + 2] = (px[i + 2] + px[i - 2] * keep) / strength; // B
+      px[i + 3] = (px[i + 3] + px[i - 1] * keep) / strength; // A
+    }
+  }
+  c.putImageData(frame, x, y);
+}</code></pre>
+      </div>
+      <p>
+        This same building block underlies most in-browser image processing
+        &mdash; blurs, color adjustments, thresholding, edge detection &mdash;
+        all of it is just arithmetic over the same flat byte array.
+      </p>
+
+      <h3 id="animating-canvas">Animating a canvas</h3>
+      <p>
+        Because the canvas remembers nothing between frames (see the
+        immediate-mode deep dive above), every canvas animation follows the
+        same shape: clear, recompute state, redraw everything, and schedule
+        the next frame with <code>requestAnimationFrame()</code> rather than
+        <code>setInterval()</code>, since it synchronizes with the display's
+        refresh rate and automatically pauses while the tab is hidden or the
+        page is backgrounded.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let particles = createParticles(200);
+
+function tick(timestamp) {
+  c.clearRect(0, 0, canvas.width, canvas.height);
+  for (let p of particles) {
+    p.update(timestamp);
+    c.beginPath();
+    c.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
+    c.fillStyle = p.color;
+    c.fill();
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);</code></pre>
+      </div>
+
+      <h3 id="webgl-3d">3D graphics: WebGL, briefly</h3>
+      <p>
+        Passing <code>"webgl"</code> (or <code>"webgl2"</code>) instead of
+        <code>"2d"</code> to <code>getContext()</code> returns a context for
+        hardware-accelerated 3D rendering, giving direct access to the GPU
+        for custom shaders and vertex pipelines. It is a large, low-level API
+        that most application developers reach through a higher-level library
+        rather than by writing raw WebGL calls, and it's beyond the scope of
+        this page &mdash; everything above concerns the 2D context only.
+      </p>
+
+      <h2 id="audio-apis">Audio APIs</h2>
+
+      <h3 id="audio-element-playback">Playback with &lt;audio&gt; / HTMLAudioElement</h3>
+      <p>
+        The <code>&lt;audio&gt;</code> (and <code>&lt;video&gt;</code>)
+        element renders a substantial built-in playback UI, but crucially
+        that UI itself lives in a browser-internal shadow tree, not the light
+        DOM &mdash; it's the canonical real-world example motivating shadow
+        DOM's design, mentioned earlier. Scripting playback doesn't require
+        that built-in UI at all: <code>play()</code>, <code>pause()</code>,
+        and properties like <code>currentTime</code>, <code>volume</code>,
+        and <code>playbackRate</code> work whether or not the element is
+        visible, or even attached to the document.
+      </p>
+      <p>
+        For simple sound effects, the <code>Audio()</code> constructor is a
+        shortcut for creating an <code>&lt;audio&gt;</code> element without
+        writing any HTML:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Load once, up front, so playback starts instantly on demand.
+let clickSound = new Audio("/sounds/click.mp3");
+
+document.addEventListener("click", () => {
+  // cloneNode() creates a fresh, independent Audio instance each time, so
+  // rapid clicks can overlap instead of cutting each other off. Clones
+  // that are never attached to the document are still played and are
+  // simply garbage collected once playback ends.
+  clickSound.cloneNode().play();
+});</code></pre>
+      </div>
+
+      <h3 id="web-audio-api">The Web Audio API, briefly</h3>
+      <p>
+        <code>&lt;audio&gt;</code> and <code>Audio()</code> only play back
+        existing recordings. Generating tones, mixing multiple sources,
+        applying filters/effects, or analyzing frequency data for a
+        visualizer requires the considerably larger Web Audio API instead.
+        Its model is a graph of connectable <code>AudioNode</code> objects
+        &mdash; oscillators as sources, gain nodes for volume envelopes,
+        filters, analysers &mdash; wired together much like patch cords on a
+        modular synthesizer, all driven by a single
+        <code>AudioContext</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let audioContext = new AudioContext();
+
+// A single oscillator generating a 440Hz sine tone
+let tone = audioContext.createOscillator();
+tone.frequency.value = 440;
+
+// A gain node to fade the tone out instead of stopping it abruptly
+let volume = audioContext.createGain();
+volume.gain.setValueAtTime(1, audioContext.currentTime);
+volume.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
+
+// Wire oscillator -> gain -> speakers, then play for one second
+tone.connect(volume);
+volume.connect(audioContext.destination);
+tone.start();
+tone.stop(audioContext.currentTime + 1);</code></pre>
+      </div>
+      <p>
+        The full API is substantial enough that using it well assumes some
+        background in signal processing and electronic music concepts.
+        Reach for it specifically when <code>&lt;audio&gt;</code>/
+        <code>Audio()</code> playback stops being enough &mdash;
+        procedurally generated sound, real-time effects, or anything that
+        needs to inspect or reshape a waveform rather than just play it back.
+      </p>
+
+      <div class="admonition note">
+        <div class="admonition-title">Where to next</div>
+        <p>
+          This page covered the UI-and-graphics corner of the browser
+          platform. For the DOM traversal and CSSOM APIs these examples lean
+          on, see <a href="17-dom-css-scripting.html">DOM &amp; CSS Scripting</a>;
+          for events and the base browser environment, see
+          <a href="16-web-basics-events.html">Web Basics &amp; Events</a>;
+          and for fetching data to feed a chart or component, see
+          <a href="19-navigation-networking.html">Navigation &amp; Networking</a>.
+        </p>
+      </div>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Objects — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="05-objects.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 6</span>
+      <h1>Objects</h1>
+      <p class="lede">
+        An object is a composite value: a named collection of properties, each
+        pointing to a primitive or to another object. You have already been
+        using objects informally in earlier chapters — this chapter is where
+        we take them apart. We cover how objects get created, how property
+        lookup and assignment actually work (and why they aren't mirror
+        images of each other), how to delete, test, and enumerate properties,
+        how to copy and serialize objects, the handful of methods every
+        object inherits, and the modern shorthand syntax for writing object
+        literals. Threaded through all of it is the single idea that explains
+        almost every surprising thing objects do: <strong>prototypal
+        inheritance</strong>.
+      </p>
+
+      <h2 id="introduction-to-objects">6.1 Introduction to objects</h2>
+      <p>
+        Formally, an object is an unordered collection of properties, and
+        each property is a name/value pair. Names are ordinary strings (with
+        one twist — a property name can also be a <code>Symbol</code>, which
+        we get to in <a href="#symbols-as-property-names">§6.10.3</a>), which
+        is why people sometimes describe JavaScript objects as "hashes,"
+        "dictionaries," or "associative arrays." A property name may even be
+        the empty string, and no two properties on the same object may share
+        a name. A property's value can be any JavaScript value at all — or,
+        as we'll see later in this chapter, it can be a pair of accessor
+        functions (a getter and/or a setter) instead of a plain value.
+      </p>
+      <p>
+        Any value that isn't a string, number, boolean, <code>Symbol</code>,
+        <code>null</code>, or <code>undefined</code> is an object. That
+        includes arrays and functions, which get their own chapters
+        (<a href="06-arrays.html">Arrays</a> and
+        <a href="07-functions.html">Functions</a>) because they add extra
+        behavior on top of everything described here — but everything you
+        learn in this chapter about property access, inheritance, and
+        enumeration applies to arrays and functions too, since under the hood
+        they <em>are</em> objects.
+      </p>
+      <p>
+        Objects in JavaScript are mutable and are manipulated <em>by
+        reference</em>, never by value. If a variable <code>x</code> refers
+        to an object and you write <code>let y = x;</code>, both variables
+        now point at the exact same object — there is no copy. Mutating the
+        object through <code>y</code> is visible through <code>x</code> too.
+        Keep this in mind throughout the chapter: "copying an object" always
+        means creating a genuinely new object and copying properties into it
+        (<a href="#extending-objects">§6.7</a>), never just reassigning a
+        variable.
+      </p>
+      <p>
+        Every object property carries more than just a name and a value.
+        Three boolean <strong>attributes</strong> ride along with every
+        property and control what you're allowed to do with it:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Attribute</th><th>Controls</th></tr>
+          <tr><td><code>writable</code></td><td>Whether an assignment can change the property's value</td></tr>
+          <tr><td><code>enumerable</code></td><td>Whether the property shows up in a <code>for/in</code> loop or in functions like <code>Object.keys()</code></td></tr>
+          <tr><td><code>configurable</code></td><td>Whether the property can be deleted, and whether its attributes (other than value, from writable) can be changed at all</td></tr>
+        </table>
+      </div>
+      <p>
+        Properties you create yourself — through an object literal or a
+        plain assignment — default to <code>writable: true</code>,
+        <code>enumerable: true</code>, and <code>configurable: true</code>.
+        Many built-in properties are not so permissive: array
+        <code>length</code> is writable but not enumerable, and most
+        <code>Math</code> properties are neither writable nor configurable.
+        We give this trio a full dedicated treatment later in
+        <a href="#property-attributes">the property attributes deep dive
+        below</a>, including
+        how to set them yourself with <code>Object.defineProperty()</code>.
+      </p>
+      <p>
+        Beyond its own properties, almost every object is also linked to a
+        second object called its <strong>prototype</strong>, from which it
+        <em>inherits</em> properties. This is the single most important idea
+        in this chapter, and it gets a full deep dive in
+        <a href="#the-prototype-chain">§6.2.3</a>. For now, the key
+        vocabulary word is <strong>own property</strong>: a property defined
+        directly on an object, as opposed to one it merely inherits from
+        somewhere up its prototype chain. Nearly every operation in this
+        chapter — querying, setting, deleting, testing, enumerating — cares
+        about the own/inherited distinction, so get comfortable with the
+        term now.
+      </p>
+      <p>
+        Prototypal inheritance is also the mechanism underneath JavaScript's
+        <code>class</code> keyword: a class is largely syntax sugar over
+        "a constructor function whose <code>prototype</code> property holds
+        the shared methods." We won't build classes in this chapter, but
+        everything here — prototypes, <code>Object.create()</code>, property
+        attributes — is the foundation <a href="08-classes.html">Classes</a>
+        is built on, so it's worth understanding this chapter well before you
+        get there.
+      </p>
+      <p>
+        Finally, objects come in a few different flavors of "how locked
+        down" they are, ranging from the ordinary, wide-open objects you get
+        by default to objects that reject new properties entirely:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Level</th><th>Set with</th><th>Effect</th></tr>
+          <tr><td>Extensible (default)</td><td>—</td><td>New own properties may be added at any time</td></tr>
+          <tr><td>Non-extensible</td><td><code>Object.preventExtensions(o)</code></td><td>No new own properties; existing ones can still be modified or deleted</td></tr>
+          <tr><td>Sealed</td><td><code>Object.seal(o)</code></td><td>Non-extensible, and every existing property becomes non-configurable (no delete, no re-defining) — but writable data properties can still be reassigned</td></tr>
+          <tr><td>Frozen</td><td><code>Object.freeze(o)</code></td><td>Sealed, and every data property also becomes non-writable — the object is fully immutable at the top level</td></tr>
+        </table>
+      </div>
+      <p>
+        We come back to <code>seal()</code> and <code>freeze()</code> with
+        worked examples in
+        <a href="#property-attributes">the property attributes deep dive
+        below</a>, since
+        they're really just bulk operations over the property attributes
+        introduced above.
+      </p>
+
+      <h2 id="creating-objects">6.2 Creating objects</h2>
+      <p>
+        JavaScript gives you three ways to create a new object: an object
+        literal, the <code>new</code> keyword in front of a constructor
+        call, or <code>Object.create()</code>. All three are common in real
+        code, and each hands you a different amount of control over the new
+        object's prototype.
+      </p>
+
+      <h3 id="object-literals">6.2.1 Object literals</h3>
+      <p>
+        The object literal is the workhorse: a comma-separated list of
+        <code>name: value</code> pairs inside curly braces. Property names
+        can be written as bare identifiers or as string literals (useful
+        when a name contains spaces, hyphens, or is a reserved word); values
+        can be any expression, including another object literal.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let empty = {};                          // An object with no properties at all
+let point = { x: 0, y: 0 };              // Two numeric properties
+let p2 = { x: point.x, y: point.y + 1 }; // Values can be arbitrary expressions
+
+let book = {
+  "main title": "JavaScript",           // Spaces force a string-literal name
+  "sub-title": "The Definitive Guide",  // So does a hyphen
+  for: "all audiences",                 // "for" is a reserved word, but fine here
+  author: {                             // A property's value can be an object
+    firstname: "David",
+    surname: "Flanagan",
+  },                                    // A trailing comma is legal and common
+};</code></pre>
+      </div>
+      <p>
+        Every time an object literal is <em>evaluated</em> it produces a
+        brand-new, distinct object — the property values are recomputed each
+        time. Put a literal inside a loop body or a function that's called
+        repeatedly, and you get a fresh object (potentially with different
+        property values) on every pass:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function makeCounter(start) {
+  return { count: start };  // A new object each call, not a shared one
+}
+let a = makeCounter(0);
+let b = makeCounter(0);
+a.count++;
+a.count === b.count   // =&gt; false: two independent objects</code></pre>
+      </div>
+      <p>
+        Every object created by an object literal automatically gets the
+        same prototype: <code>Object.prototype</code>. That's where methods
+        like <code>toString()</code> and <code>hasOwnProperty()</code> come
+        from — see <a href="#the-prototype-chain">§6.2.3</a>.
+      </p>
+
+      <h3 id="creating-with-new">6.2.2 Creating objects with <code>new</code></h3>
+      <p>
+        The <code>new</code> operator creates and initializes a new object.
+        It must be followed by a function call; a function invoked this way
+        is called a <strong>constructor</strong>, and its job is to set up
+        the freshly created object. JavaScript ships constructors for all of
+        its built-in reference types:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = new Object();  // Same as {}
+let a = new Array();    // Same as []
+let d = new Date();     // The current date and time
+let m = new Map();      // An empty Map — see Collections</code></pre>
+      </div>
+      <p>
+        You can also write your own constructor functions to initialize
+        objects of your own design; that's the subject of
+        <a href="08-classes.html">Classes</a>, which builds directly on the
+        prototype mechanics introduced next.
+      </p>
+
+      <h3 id="the-prototype-chain">6.2.3 Prototypes <span class="badge hard">Deep dive</span></h3>
+      <p>
+        Nearly every JavaScript object carries a hidden link to a second
+        object — its <strong>prototype</strong> — and inherits properties
+        from it. Which object becomes the prototype depends entirely on how
+        the object was created:
+      </p>
+      <ul>
+        <li>Every object created from an object literal has its prototype set to <code>Object.prototype</code>.</li>
+        <li>An object created with <code>new Ctor()</code> gets its prototype from <code>Ctor.prototype</code> — so <code>new Date()</code>'s prototype is <code>Date.prototype</code>, and <code>new Array()</code>'s prototype is <code>Array.prototype</code>.</li>
+        <li>An object created with <code>Object.create(proto)</code> gets exactly the object you pass in as its prototype — see <a href="#object-create">§6.2.4</a>.</li>
+      </ul>
+      <div class="admonition note">
+        <div class="admonition-title">Objects vs. functions that have a <code>prototype</code> property</div>
+        <p>
+          It's easy to conflate "an object's prototype" with "an object's
+          <code>prototype</code> property," but they're different things.
+          Almost every object <em>has a prototype</em>. Only a relatively
+          small number of objects — functions intended to be used as
+          constructors — <em>have a property named</em> <code>prototype</code>.
+          It's <em>that</em> property that supplies the prototype for objects
+          created with <code>new</code>. <code>Object.prototype</code> itself
+          is one of the rare objects with no prototype of its own — it sits
+          at the top of every chain and inherits nothing.
+        </p>
+      </div>
+      <p>
+        Prototypes chain: a prototype object can itself have a prototype,
+        which can have a prototype, and so on, until you reach an object
+        whose prototype is <code>null</code> — that's where the chain
+        terminates. When you read a property that an object doesn't have
+        itself, JavaScript walks up this chain looking for it. Here's the
+        chain built by hand with <code>Object.create()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = {};                 // o's prototype is Object.prototype
+o.x = 1;                     // o now has an own property x
+
+let p = Object.create(o);   // p's prototype is o
+p.y = 2;                     // p has its own property y, and inherits x
+
+let q = Object.create(p);   // q's prototype is p
+q.z = 3;                     // q has its own z, inherits y from p and x from o
+
+q.x + q.y + q.z              // =&gt; 6: x and y are inherited, z is q's own
+q.toString                   // inherited all the way from Object.prototype
+Object.getPrototypeOf(q) === p   // =&gt; true
+Object.getPrototypeOf(p) === o   // =&gt; true
+Object.getPrototypeOf(Object.prototype)  // =&gt; null: chain terminates here</code></pre>
+      </div>
+      <p>
+        <code>Object.getPrototypeOf()</code> is the standard, non-magical way
+        to ask "what is this object's prototype?" (the older
+        <code>__proto__</code> accessor does the same thing but is
+        legacy — prefer the function form in new code, and see
+        <a href="#proto-in-literals">§6.10</a> for the one place
+        <code>__proto__</code> is still idiomatic: object literals). The
+        <code>instanceof</code> operator is built directly on this chain: an
+        expression <code>obj instanceof Ctor</code> walks
+        <code>obj</code>'s prototype chain checking whether
+        <code>Ctor.prototype</code> appears anywhere in it — it is not
+        checking a type tag, it's a search up the same chain
+        <code>Object.getPrototypeOf()</code> traverses:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let arr = [1, 2, 3];
+arr instanceof Array    // =&gt; true: Array.prototype is on arr's chain
+arr instanceof Object    // =&gt; true: Object.prototype is further up the SAME chain
+arr instanceof Date      // =&gt; false: Date.prototype never appears on this chain
+
+// You can see instanceof "by hand":
+function isInstanceOf(obj, Ctor) {
+  let proto = Object.getPrototypeOf(obj);
+  while (proto !== null) {
+    if (proto === Ctor.prototype) return true;
+    proto = Object.getPrototypeOf(proto);
+  }
+  return false;
+}
+isInstanceOf(arr, Array)  // =&gt; true</code></pre>
+      </div>
+      <p>
+        Most built-in and user-defined constructors have a
+        <code>prototype</code> that itself inherits from
+        <code>Object.prototype</code>, forming a chain that's usually two or
+        three links long. A <code>Date</code> instance, for example, inherits
+        first from <code>Date.prototype</code> (which supplies methods like
+        <code>getFullYear()</code>) and then from <code>Object.prototype</code>
+        (which supplies <code>toString()</code> as a fallback). Chapter 9's
+        equivalent, <a href="08-classes.html">Classes</a>, and the deep dive
+        on prototype manipulation in
+        <a href="15-metaprogramming.html">Metaprogramming</a>, both build
+        directly on this mechanism.
+      </p>
+
+      <h3 id="object-create">6.2.4 <code>Object.create()</code></h3>
+      <p>
+        <code>Object.create()</code> is the explicit, no-surprises way to
+        create an object with a prototype of your choosing — you hand it the
+        prototype directly as its first argument:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o1 = Object.create({ x: 1, y: 2 });  // o1 inherits properties x and y
+o1.x + o1.y                               // =&gt; 3
+
+let o3 = Object.create(Object.prototype); // Equivalent to {} or new Object()</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title"><code>Object.create(null)</code>: an object with no prototype at all</div>
+        <p>
+          Passing <code>null</code> produces an object that inherits
+          absolutely nothing — not <code>toString()</code>, not
+          <code>hasOwnProperty()</code>, nothing. This is the closest thing
+          JavaScript has to a "pure" dictionary: every key you ever see on it
+          is one you (or your program) put there, with zero risk of an
+          inherited name like <code>constructor</code> or
+          <code>toString</code> silently shadowing a key you wanted to store.
+          The tradeoff is that ordinary conveniences stop working — a
+          proto-less object won't coerce to a string with <code>+</code>, and
+          calling <code>o.hasOwnProperty(k)</code> throws a
+          <code>TypeError</code> because there's no
+          <code>hasOwnProperty</code> to call. Use
+          <code>Object.hasOwn(o, k)</code> (or
+          <code>Object.prototype.hasOwnProperty.call(o, k)</code>) to test
+          such objects safely.
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let dict = Object.create(null);
+dict["toString"] = "a plain string value now"; // Totally safe: no inherited toString to clash with
+dict.toString                                    // =&gt; "a plain string value now"
+Object.hasOwn(dict, "toString")                  // =&gt; true</code></pre>
+        </div>
+      </div>
+      <p>
+        A second, optional argument to <code>Object.create()</code> lets you
+        describe the new object's own properties with full attribute control
+        — the same descriptor objects used by
+        <code>Object.defineProperty()</code>, covered in
+        <a href="#property-attributes">the property attributes deep dive
+        below</a>.
+      </p>
+      <p>
+        One classic use of <code>Object.create()</code> is defensive: guard
+        an object against accidental modification by code you don't control,
+        without the overhead of a deep copy. Pass the library function an
+        object that <em>inherits from</em> your real object rather than the
+        object itself:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let original = { x: "don't change this value" };
+thirdPartyLibrary.doSomething(Object.create(original));
+// If the library only READS properties, it sees original's values just fine.
+// If it WRITES properties, those writes land on the throwaway wrapper —
+// original itself is never touched.
+original.x   // =&gt; "don't change this value" — guaranteed, no matter what the library did</code></pre>
+      </div>
+      <p>
+        Why does that guard actually work? Because reading and writing
+        properties are <em>not</em> symmetric operations in JavaScript —
+        which is exactly the subject of the next section.
+      </p>
+
+      <h2 id="querying-and-setting-properties">6.3 Querying and setting properties</h2>
+      <p>
+        You read a property with the dot operator (<code>obj.name</code>) or
+        square brackets (<code>obj["name"]</code>), and you write one the
+        same way, just on the left of an <code>=</code>. Dot notation needs a
+        literal identifier on the right; bracket notation needs any
+        expression that evaluates to a string (or a value coercible to one,
+        or a <code>Symbol</code>) — which is the whole reason bracket
+        notation exists, as the next section shows.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let author = book.author;         // Read: dot notation, static name
+let title = book["main title"];   // Read: bracket notation, needed for the space
+
+book.edition = 7;                    // Write: creates a new "edition" property
+book["main title"] = "ECMAScript";   // Write: bracket notation works the same way</code></pre>
+      </div>
+      <p>
+        Full coverage of the property-access operators themselves — including
+        optional chaining — lives in
+        <a href="03-expressions-operators.html#property-access-expressions">Expressions
+        &amp; Operators</a>; this chapter is about what happens
+        <em>after</em> the operator fires: how the name gets resolved to a
+        value (or a slot to write into).
+      </p>
+
+      <h3 id="objects-as-associative-arrays">6.3.1 Objects as associative arrays</h3>
+      <p>
+        <code>obj.property</code> and <code>obj["property"]</code> always
+        mean the same thing, but they aren't interchangeable in practice: the
+        dot form requires the name to be typed literally into your source
+        code, while the bracket form takes a string <em>value</em> — meaning
+        it can be computed, stored in a variable, built at runtime, or looped
+        over. That's what makes a JavaScript object double as an
+        <strong>associative array</strong> (a.k.a. hash, map, dictionary):
+        arbitrary string keys, decided while the program runs, not while it's
+        being written.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Property names built at runtime — only bracket notation can express this:
+let addr = "";
+for (let i = 0; i &lt; 4; i++) {
+  addr += customer[`address${i}`] + "\n";
+}
+
+// A portfolio keyed by ticker symbols the user types in — unknowable in advance:
+function addStock(portfolio, ticker, shares) {
+  portfolio[ticker] = shares;   // Can't write portfolio.ticker — "ticker" is a variable, not a name
+}
+
+function computeValue(portfolio) {
+  let total = 0;
+  for (let stock in portfolio) {        // for/in walks the enumerable keys
+    total += portfolio[stock] * getQuote(stock);
+  }
+  return total;
+}</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Prefer <code>Map</code> for real dictionaries</div>
+        <p>
+          Plain objects work fine as associative arrays, and you'll see the
+          pattern constantly in existing code, but a real
+          <code>Map</code> (see
+          <a href="10-collections-typed-arrays.html">Collections &amp; Typed
+          Arrays</a>) is usually the better tool in modern code: it doesn't
+          confuse your data keys with inherited properties, its keys can be
+          any value (not just strings and Symbols), and it tracks its own
+          size.
+        </p>
+      </div>
+
+      <h3 id="inheritance-the-query-set-asymmetry">6.3.2 Inheritance during property access <span class="badge hard">Deep dive</span></h3>
+      <p>
+        This is the single most load-bearing rule in the chapter, and it's
+        easy to state but easy to forget: <strong>querying a property walks
+        the prototype chain; setting one (almost) never does.</strong>
+      </p>
+      <p>
+        When you read <code>o.x</code>, JavaScript first checks whether
+        <code>o</code> has an <em>own</em> property named <code>x</code>. If
+        not, it checks <code>o</code>'s prototype. If that object doesn't
+        have it either, it checks the prototype's prototype, and so on, all
+        the way up to <code>Object.prototype</code> and then to
+        <code>null</code>, at which point the read produces
+        <code>undefined</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = {};                // Inherits from Object.prototype
+o.x = 1;                    // o gets its own property x
+let p = Object.create(o);  // p inherits from o (and, through o, from Object.prototype)
+p.y = 2;                    // p gets its own property y
+let q = Object.create(p);  // q inherits from p, o, and Object.prototype
+q.z = 3;                    // q gets its own property z
+
+q.x + q.y                  // =&gt; 3: BOTH found by walking up the chain
+q.toString                 // found all the way at Object.prototype</code></pre>
+      </div>
+      <p>
+        Writing works completely differently. Assigning <code>o.x = v</code>
+        does <em>not</em> search the chain looking for somewhere to put the
+        value. Instead: if <code>o</code> already has an <em>own</em>
+        property <code>x</code>, the assignment updates it in place. If it
+        doesn't — even if a prototype somewhere up the chain has a property
+        of the same name — the assignment creates a brand-new own property
+        <code>x</code> directly on <code>o</code>. The chain is consulted
+        only to check whether the write is <em>allowed</em> (an inherited
+        read-only property blocks it — see
+        <a href="#property-access-errors">§6.3.3</a>), never as a place to
+        put the value.
+      </p>
+      <p>
+        The practical consequence: creating an own property with the same
+        name as an inherited one doesn't edit anything upstream — it
+        <strong>shadows</strong> the inherited property for that one object,
+        leaving everyone else who shares the prototype completely unaffected:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let unitcircle = { r: 1 };          // A shared prototype object
+let c = Object.create(unitcircle);  // c inherits r (= 1) from unitcircle
+c.x = 1; c.y = 1;                    // c gets its own x and y
+c.r = 2;                             // c now SHADOWS r with its own value 2
+
+c.r            // =&gt; 2: c's own property wins
+unitcircle.r   // =&gt; 1: the shared prototype was never touched
+
+let d = Object.create(unitcircle);  // A second object sharing the same prototype
+d.r            // =&gt; 1: unaffected by what happened to c</code></pre>
+      </div>
+      <p>
+        This is exactly the mechanism the defensive-copy trick from
+        <a href="#object-create">§6.2.4</a> relies on: wrap an object in
+        <code>Object.create()</code>, hand the wrapper to code you don't
+        trust, and any writes it performs create own properties on the
+        disposable wrapper — the original object underneath is structurally
+        incapable of being changed by that write.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">The one exception: inherited accessor properties</div>
+        <p>
+          If the property found up the chain is an <strong>accessor
+          property</strong> with a setter function (see
+          <a href="#getters-and-setters">§6.10.6</a>), assignment does
+          <em>not</em> create a shadowing own property. Instead it calls the
+          inherited setter — but it calls that setter <em>as a method of the
+          object you assigned to</em>, so if the setter itself does
+          <code>this.something = ...</code>, that write lands on the
+          original object, not on the prototype where the setter is defined:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let base = {
+  _n: 0,
+  get n() { return this._n; },
+  set n(v) { this._n = v; },   // Setter writes to this._n
+};
+let derived = Object.create(base);
+derived.n = 99;         // Calls base's setter, but with "this" bound to derived
+derived.hasOwnProperty("_n")  // =&gt; true: the setter created _n on DERIVED
+base._n                       // =&gt; 0: base's own _n is untouched</code></pre>
+        </div>
+      </div>
+
+      <h3 id="property-access-errors">6.3.3 Property access errors</h3>
+      <p>
+        Reading a property that doesn't exist — as an own property or an
+        inherited one — is never an error. It just evaluates to
+        <code>undefined</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">book.subtitle          // =&gt; undefined: no such property, no error</code></pre>
+      </div>
+      <p>
+        What <em>is</em> an error is trying to read a property <em>of</em>
+        <code>undefined</code> or <code>null</code> — those two values have
+        no properties whatsoever, so chaining a second access onto a
+        possibly-missing result throws:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">book.subtitle.length   // TypeError: Cannot read properties of undefined (reading 'length')</code></pre>
+      </div>
+      <p>
+        The classic guard is a chain of <code>&amp;&amp;</code> checks, which
+        works because of short-circuit evaluation; the modern, concise
+        equivalent is optional chaining, covered fully in
+        <a href="03-expressions-operators.html#optional-chaining">Expressions
+        &amp; Operators</a>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let surname = book &amp;&amp; book.author &amp;&amp; book.author.surname;  // Old-school guard
+let surname2 = book?.author?.surname;                        // Modern equivalent</code></pre>
+      </div>
+      <p>
+        Writing has its own error modes. Assigning to a property of
+        <code>null</code> or <code>undefined</code> always throws a
+        <code>TypeError</code>. Beyond that, a write can silently fail (or,
+        in strict mode, throw) for any of these reasons:
+      </p>
+      <ul>
+        <li><code>o</code> has an <em>own</em> property <code>p</code> that is non-writable.</li>
+        <li><code>o</code> <em>inherits</em> a property <code>p</code> that is non-writable — you cannot shadow a read-only inherited property with your own value.</li>
+        <li><code>o</code> has no own or inherited-with-setter property <code>p</code>, and <code>o</code> itself is non-extensible (see the <a href="#property-attributes">property attributes deep dive below</a>) — there's simply nowhere to put a new property.</li>
+      </ul>
+      <div class="admonition note">
+        <div class="admonition-title">Strict mode makes failures loud</div>
+        <p>
+          Outside strict mode, a failed write is usually silent — your
+          program just keeps running as if nothing happened, which can hide
+          bugs for a long time. In strict mode (the default inside ES
+          modules and classes; see
+          <a href="04-statements.html#use-strict">Statements</a>), the same
+          failure throws a <code>TypeError</code> immediately.
+        </p>
+      </div>
+
+      <h2 id="deleting-properties">6.4 Deleting properties</h2>
+      <p>
+        The <code>delete</code> operator removes a property from an object
+        entirely — name, value, and attributes all gone, as opposed to just
+        setting the value to <code>undefined</code>. It only ever operates on
+        <em>own</em> properties; <code>delete</code>-ing a name that's only
+        inherited does nothing (and still "succeeds").
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1 };       // o has own property x, inherits toString
+delete o.x               // =&gt; true: property x is gone
+delete o.x               // =&gt; true: no-op (x already gone), but still true
+delete o.toString        // =&gt; true: no-op (toString isn't an own property)
+delete 1                 // =&gt; true: meaningless on a non-property-access, but true</code></pre>
+      </div>
+      <p>
+        A <code>delete</code> expression evaluates to <code>true</code> if
+        the property is gone afterward (whether it actually removed
+        something or there was nothing to remove) and <code>false</code> if
+        the property still exists — which happens when the property's
+        <code>configurable</code> attribute is <code>false</code>. Most
+        built-in properties, and properties created at the top level with
+        <code>var</code> or a function declaration, are non-configurable:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">delete Object.prototype       // =&gt; false: non-configurable, can't be removed
+
+var g = 1;                     // A var declaration creates a non-configurable global property
+delete globalThis.g            // =&gt; false
+
+globalThis.h = 1;              // A plain assignment IS configurable
+delete globalThis.h            // =&gt; true</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Strict mode changes the failure mode, not just the syntax</div>
+        <p>
+          In strict mode, attempting to delete a non-configurable property
+          throws a <code>TypeError</code> instead of quietly returning
+          <code>false</code>. Strict mode also outright forbids
+          <code>delete</code> on a bare identifier (<code>delete x</code>) —
+          that's a <code>SyntaxError</code> at parse time, not a runtime
+          failure. You must delete through an explicit property access:
+          <code>delete globalThis.x</code>.
+        </p>
+      </div>
+
+      <h2 id="testing-properties">6.5 Testing properties</h2>
+      <p>
+        Four different techniques answer "does this object have a property
+        named X," and they don't all mean the same thing — the differences
+        are almost entirely about own vs. inherited and about enumerability.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Technique</th><th>Matches inherited?</th><th>Requires enumerable?</th></tr>
+          <tr><td><code>"x" in o</code></td><td>Yes</td><td>No</td></tr>
+          <tr><td><code>o.hasOwnProperty("x")</code></td><td>No</td><td>No</td></tr>
+          <tr><td><code>o.propertyIsEnumerable("x")</code></td><td>No</td><td>Yes</td></tr>
+          <tr><td><code>o.x !== undefined</code></td><td>Yes</td><td>No (but can't tell "missing" from "present but undefined")</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1 };
+"x" in o                        // =&gt; true: own property
+"y" in o                        // =&gt; false
+"toString" in o                 // =&gt; true: inherited, but "in" still finds it
+
+o.hasOwnProperty("x")           // =&gt; true
+o.hasOwnProperty("toString")    // =&gt; false: inherited, not own
+
+o.propertyIsEnumerable("x")             // =&gt; true: own AND enumerable
+Object.prototype.propertyIsEnumerable("toString")  // =&gt; false: not enumerable</code></pre>
+      </div>
+      <p>
+        Simply reading the property and comparing against
+        <code>undefined</code> is often good enough and reads naturally, but
+        it has a genuine blind spot: it can't tell the difference between "no
+        such property" and "the property exists and its value happens to be
+        <code>undefined</code>." The <code>in</code> operator can:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let obj = { x: undefined };   // Property explicitly set to undefined
+obj.x !== undefined            // =&gt; false — looks exactly like a missing property
+"x" in obj                     // =&gt; true  — but "in" reveals the property really is there
+"y" in obj                     // =&gt; false — this one genuinely doesn't exist
+
+delete obj.x;
+"x" in obj                     // =&gt; false: now it's really gone</code></pre>
+      </div>
+
+      <h2 id="enumerating-properties">6.6 Enumerating properties</h2>
+      <p>
+        Sometimes you don't want to test for one property — you want every
+        property. <code>for/in</code> (introduced in
+        <a href="04-statements.html#for-in">Statements</a>) is the original
+        tool: it loops once per <strong>enumerable</strong> property,
+        <em>own or inherited</em>, assigning each property name to the loop
+        variable in turn. Built-in methods are marked non-enumerable
+        specifically so that routine code you write doesn't trip over them:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: 2, z: 3 };       // Three enumerable own properties
+o.propertyIsEnumerable("toString")   // =&gt; false
+
+for (let key in o) {
+  console.log(key);                 // Logs "x", "y", "z" — never "toString"
+}</code></pre>
+      </div>
+      <p>
+        Because <code>for/in</code> also walks inherited enumerable
+        properties, code that shares a prototype often needs to filter:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">for (let key in o) {
+  if (!o.hasOwnProperty(key)) continue;      // Skip anything inherited
+  if (typeof o[key] === "function") continue; // Skip methods too, if you like
+}</code></pre>
+      </div>
+      <p>
+        Modern code usually prefers building an array of names or entries
+        and looping over that with <code>for/of</code> — see
+        <a href="04-statements.html#for-of-vs-for-in">why <code>for/of</code>
+        is usually the right default</a>. Four functions produce that array,
+        differing in whether they include non-enumerable properties,
+        inherited properties, and <code>Symbol</code>-named properties:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Function</th><th>Own only?</th><th>Includes non-enumerable?</th><th>Includes Symbol keys?</th></tr>
+          <tr><td><code>Object.keys(o)</code></td><td>Yes</td><td>No</td><td>No</td></tr>
+          <tr><td><code>Object.values(o)</code></td><td>Yes</td><td>No</td><td>No — returns values, not names</td></tr>
+          <tr><td><code>Object.entries(o)</code></td><td>Yes</td><td>No</td><td>No — returns <code>[key, value]</code> pairs</td></tr>
+          <tr><td><code>Object.getOwnPropertyNames(o)</code></td><td>Yes</td><td>Yes</td><td>No</td></tr>
+          <tr><td><code>Object.getOwnPropertySymbols(o)</code></td><td>Yes</td><td>Yes</td><td>Only Symbols</td></tr>
+          <tr><td><code>Reflect.ownKeys(o)</code></td><td>Yes</td><td>Yes</td><td>Yes — everything</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: 2, z: 3 };
+for (let [key, value] of Object.entries(o)) {
+  console.log(`${key} = ${value}`);
+}
+// Object.keys() covers the overwhelming majority of real use cases</code></pre>
+      </div>
+
+      <h3 id="property-enumeration-order">6.6.1 Property enumeration order</h3>
+      <p>
+        ES6 nailed down a precise order for the enumeration functions above
+        (<code>Object.keys()</code>, <code>Object.getOwnPropertyNames()</code>,
+        <code>Object.getOwnPropertySymbols()</code>,
+        <code>Reflect.ownKeys()</code>, and anything built on them, including
+        <code>JSON.stringify()</code>):
+      </p>
+      <ol>
+        <li>String keys that look like non-negative integer array indices come first, sorted numerically (smallest to largest) — this is why arrays and array-like objects enumerate "in order."</li>
+        <li>Every other string key comes next, in <strong>insertion order</strong> — the order the properties were first added to the object (for an object literal, that's the order they appear in the literal).</li>
+        <li>Symbol keys come last, also in insertion order.</li>
+      </ol>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let mixed = { b: 1, 2: "two", a: 2, 1: "one" };
+Object.keys(mixed)   // =&gt; ["1", "2", "b", "a"] — integer keys first &amp; sorted, then insertion order</code></pre>
+      </div>
+      <p>
+        <code>for/in</code>'s order is not as strictly specified, but in
+        practice implementations enumerate an object's own properties in the
+        order above, then move up the prototype chain and do the same for
+        each prototype object in turn — skipping any name that's already
+        been seen (even if the earlier sighting was non-enumerable).
+      </p>
+
+      <h2 id="extending-objects">6.7 Extending objects</h2>
+      <p>
+        Copying every property of one object into another is common enough —
+        merging user-supplied options over a defaults object is the classic
+        case — that the language provides <code>Object.assign()</code>
+        specifically for it, on top of the equivalent spread syntax covered
+        in <a href="#extended-object-literal-syntax">§6.10</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Object.assign(target, ...sources) MUTATES and returns target;
+// sources are applied left-to-right, so later sources win on conflicts:
+Object.assign({ x: 1 }, { x: 2, y: 2 }, { y: 3, z: 4 })  // =&gt; { x: 2, y: 3, z: 4 }
+
+// The spread operator expresses the same idea without mutating anything,
+// and is generally the preferred modern style:
+let merged = { ...defaults, ...overrides };  // overrides wins on any conflict
+
+// Both copy only OWN, ENUMERABLE properties — inherited ones are left behind:
+let base = Object.create({ x: 1 });
+let copy1 = Object.assign({}, base);
+let copy2 = { ...base };
+copy1.x   // =&gt; undefined
+copy2.x   // =&gt; undefined</code></pre>
+      </div>
+      <p>
+        A common mistake is trying to use <code>Object.assign()</code> to
+        fill in <em>missing</em> defaults on an existing object — but
+        <code>Object.assign(o, defaults)</code> does the opposite of what you
+        want, since <code>defaults</code> is the source and unconditionally
+        overwrites whatever <code>o</code> already had. The fix is to build a
+        new object with defaults applied first, then let <code>o</code>
+        override them:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">o = Object.assign({}, defaults, o);   // Correct order: o's own values win
+o = { ...defaults, ...o };             // Equivalent, spread form
+
+// A hand-rolled "only fill in what's missing" merge, for when neither reads right:
+function merge(target, ...sources) {
+  for (let source of sources) {
+    for (let key of Object.keys(source)) {
+      if (!(key in target)) target[key] = source[key];
+    }
+  }
+  return target;
+}
+merge({ x: 1 }, { x: 2, y: 2 }, { y: 3, z: 4 })   // =&gt; { x: 1, y: 2, z: 4 }</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Getters and setters fire during a copy</div>
+        <p>
+          <code>Object.assign()</code> (and spread) perform ordinary property
+          <em>get</em> and <em>set</em> operations under the hood. If a
+          source object has a getter, it's invoked to produce the value being
+          copied; if the target has a setter for that name, it's invoked to
+          receive it. Neither the getter nor the setter function itself gets
+          copied — only whatever value passes through them.
+        </p>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Spread/assign inside a loop is an O(n²) trap</div>
+        <p>
+          Copying <code>n</code> properties is <code>O(n)</code> work. Doing
+          <code>acc = { ...acc, [key]: value }</code> once per iteration of an
+          <code>n</code>-iteration loop is therefore
+          <code>O(n²)</code> overall — it silently degrades as data grows.
+          Accumulate into a single mutable object (<code>acc[key] = value</code>)
+          or a <code>Map</code> instead, and only spread/assign at the end if
+          you need an immutable result.
+        </p>
+      </div>
+
+      <h2 id="serializing-objects">6.8 Serializing objects</h2>
+      <p>
+        <code>JSON.stringify()</code> turns a JavaScript value into a JSON
+        text string; <code>JSON.parse()</code> reverses the process. Together
+        they're the standard way to serialize an object's state so it can be
+        saved or transmitted and later reconstructed as a structurally
+        equivalent (but distinct) object:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: { z: [false, null, ""] } };
+let s = JSON.stringify(o);   // '{"x":1,"y":{"z":[false,null,""]}}'
+let p = JSON.parse(s);        // A new, independent object, deep-equal to o</code></pre>
+      </div>
+      <p>
+        JSON's data model is a subset of JavaScript's, so serialization is
+        lossy at the edges: <code>undefined</code>, functions, and
+        <code>Symbol</code> values are dropped from objects entirely (or
+        become <code>null</code> when they appear inside an array);
+        <code>NaN</code> and <code>±Infinity</code> serialize to
+        <code>null</code>; and only <em>own, enumerable</em> properties are
+        ever considered. This chapter only needs the basics — the full
+        picture, including the optional <em>replacer</em>/<em>reviver</em>
+        arguments and the <code>toJSON()</code> hook, is covered in
+        <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp;
+        Utilities</a>.
+      </p>
+
+      <h2 id="object-methods">6.9 Object methods</h2>
+      <p>
+        Every object (except one deliberately created with no prototype —
+        <a href="#object-create">§6.2.4</a>) inherits a handful of general
+        methods from <code>Object.prototype</code>. They're not very useful
+        in their default form, but overriding them on your own objects is
+        how you hook into JavaScript's implicit conversions.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Invoked when...</th></tr>
+          <tr><td><code>toString()</code></td><td>The object needs to become a string: <code>+</code> with a string, template literals, <code>String(x)</code></td></tr>
+          <tr><td><code>toLocaleString()</code></td><td>A locale-aware string is wanted; by default just calls <code>toString()</code></td></tr>
+          <tr><td><code>valueOf()</code></td><td>The object needs to become a number or be compared with <code>&lt;</code>/<code>&gt;</code>/arithmetic</td></tr>
+          <tr><td><code>toJSON()</code></td><td><code>JSON.stringify()</code> is about to serialize the object — return the replacement value instead</td></tr>
+          <tr><td><code>[Symbol.toPrimitive]()</code></td><td>Any coercion to a primitive — lets one method override both <code>toString</code> and <code>valueOf</code> based on the requested "hint"</td></tr>
+        </table>
+      </div>
+      <p>
+        The default <code>toString()</code> is famously unhelpful — it
+        produces the string <code>"[object Object]"</code> — which is why so
+        many built-ins, and so much of your own code, defines a better one:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let generic = { x: 1, y: 1 };
+generic.toString()   // =&gt; "[object Object]" — the unhelpful default
+
+let point = {
+  x: 1, y: 2,
+  toString() { return `(${this.x}, ${this.y})`; },
+};
+String(point)          // =&gt; "(1, 2)": toString() drives string conversion
+`Point is ${point}`    // =&gt; "Point is (1, 2)"</code></pre>
+      </div>
+      <p>
+        <code>toLocaleString()</code> exists so classes can format their
+        <code>toString()</code> output according to locale conventions —
+        <code>Date</code> and <code>Number</code> both override it for this
+        reason, and <code>Array</code>'s version calls
+        <code>toLocaleString()</code> (not <code>toString()</code>) on each
+        element:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let big = {
+  x: 1000, y: 2000,
+  toString() { return `(${this.x}, ${this.y})`; },
+  toLocaleString() {
+    return `(${this.x.toLocaleString()}, ${this.y.toLocaleString()})`;
+  },
+};
+big.toString()        // =&gt; "(1000, 2000)"
+big.toLocaleString()  // =&gt; "(1,000, 2,000)" — thousands separators, locale-dependent</code></pre>
+      </div>
+      <p>
+        <code>valueOf()</code> is <code>toString()</code>'s counterpart for
+        numeric contexts. <code>Date</code> defines it to return a timestamp,
+        which is why two <code>Date</code> objects can be compared with
+        <code>&lt;</code>/<code>&gt;</code> directly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let vec = {
+  x: 3, y: 4,
+  valueOf() { return Math.hypot(this.x, this.y); },
+};
+Number(vec)   // =&gt; 5: valueOf() drives numeric conversion
+vec &gt; 4        // =&gt; true
+vec &gt; 5        // =&gt; false
+vec &lt; 6        // =&gt; true</code></pre>
+      </div>
+      <p>
+        <code>toJSON()</code> isn't actually defined on
+        <code>Object.prototype</code> — but <code>JSON.stringify()</code>
+        specifically looks for one on any object it's asked to serialize, and
+        if it finds one, serializes <em>that method's return value</em>
+        instead of the object itself. <code>Date</code> defines a
+        <code>toJSON()</code> that returns an ISO date string, which is why
+        dates survive a JSON round trip as readable strings rather than
+        <code>{}</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let point = {
+  x: 1, y: 2,
+  toString() { return `(${this.x}, ${this.y})`; },
+  toJSON() { return this.toString(); },
+};
+JSON.stringify([point])   // =&gt; '["(1, 2)"]'</code></pre>
+      </div>
+      <p>
+        <span class="badge new">ES2015</span>
+        <code>Symbol.toPrimitive</code> is the most general of the bunch: a
+        single method that JavaScript calls for <em>any</em> primitive
+        conversion, passed a <code>"string"</code>, <code>"number"</code>, or
+        <code>"default"</code> hint so you can tailor the result instead of
+        maintaining separate <code>toString()</code>/<code>valueOf()</code>
+        methods that might disagree with each other:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let temperature = {
+  celsius: 100,
+  [Symbol.toPrimitive](hint) {
+    if (hint === "number") return this.celsius;
+    if (hint === "string") return `${this.celsius}°C`;
+    return `Temperature: ${this.celsius}°C`;  // "default" hint, e.g. + or ==
+  },
+};
+Number(temperature)     // =&gt; 100
+`${temperature}`         // =&gt; "100°C"
+temperature + ""         // =&gt; "Temperature: 100°C"</code></pre>
+      </div>
+
+      <h2 id="extended-object-literal-syntax">6.10 Extended object literal syntax</h2>
+      <p>
+        Every ES6-and-later release has added convenience syntax to object
+        literals. None of it changes what objects fundamentally are — it
+        just removes repetition that older code was full of.
+      </p>
+
+      <h3 id="shorthand-properties">6.10.1 Shorthand properties <span class="badge new">ES2015</span></h3>
+      <p>
+        When a property's name matches the name of a variable already holding
+        its value, you can drop the colon and the repeated identifier:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x = 1, y = 2;
+let old = { x: x, y: y };   // Pre-ES6: name repeated
+let modern = { x, y };       // Shorthand: identical result
+modern.x + modern.y           // =&gt; 3</code></pre>
+      </div>
+
+      <h3 id="computed-property-names">6.10.2 Computed property names <span class="badge new">ES2015</span></h3>
+      <p>
+        When the property name you need isn't a compile-time constant — it's
+        stored in a variable, or the result of calling a function — square
+        brackets inside the literal let you compute it inline instead of
+        assigning it as a separate statement afterward:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const PROPERTY_NAME = "p1";
+function computeName() { return "p" + 2; }
+
+// Before computed properties, this took two steps:
+let stepwise = {};
+stepwise[PROPERTY_NAME] = 1;
+stepwise[computeName()] = 2;
+
+// With computed properties, it's inline:
+let inline = {
+  [PROPERTY_NAME]: 1,
+  [computeName()]: 2,
+};
+inline.p1 + inline.p2   // =&gt; 3</code></pre>
+      </div>
+      <p>
+        The expression inside the brackets is evaluated and coerced to a
+        string (or left as-is if it's already a <code>Symbol</code>) to
+        become the property name — this is what makes Symbol-named
+        properties possible in a literal at all.
+      </p>
+
+      <h3 id="symbols-as-property-names">6.10.3 Symbols as property names</h3>
+      <p>
+        Property names are usually strings, but a <code>Symbol</code> works
+        too, via the same computed-property bracket syntax. Every
+        <code>Symbol()</code> call produces a value that is guaranteed unequal
+        to every other value, including other Symbols created with the exact
+        same descriptive string — that string is purely a debugging label,
+        never a basis for equality:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const extension = Symbol("my extension");
+let o = {
+  [extension]: { note: "extra data, safely out of the way" },
+};
+o[extension].note   // =&gt; "extra data, safely out of the way"</code></pre>
+      </div>
+      <p>
+        The point of Symbol-keyed properties isn't security — code that
+        really wants to find them can, via
+        <code>Object.getOwnPropertySymbols()</code> — it's guaranteeing
+        <em>no accidental collision</em> when you need to attach a property
+        to an object whose other property names you don't fully control
+        (third-party objects, or objects from a library you don't own). It's
+        also how JavaScript itself extends built-in objects with special
+        behavior without squatting on an ordinary string name — an object
+        becomes iterable, for instance, by defining a method named
+        <code>Symbol.iterator</code>, covered in
+        <a href="13-iterators-generators.html">Iterators &amp;
+        Generators</a>.
+      </p>
+
+      <h3 id="spread-in-object-literals">6.10.4 The spread operator in object literals <span class="badge new">ES2018</span></h3>
+      <p>
+        Three dots inside an object literal "spread" another object's own,
+        enumerable properties directly into the new object, as if they'd been
+        typed there by hand. (Despite the name, this isn't a general-purpose
+        JavaScript operator — it's special-case syntax that only means
+        something inside an object or array literal.)
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let position = { x: 0, y: 0 };
+let dimensions = { width: 100, height: 75 };
+let rect = { ...position, ...dimensions };
+rect.x + rect.y + rect.width + rect.height   // =&gt; 175
+
+// Later properties always win on a name conflict, spread or literal:
+let p1 = { x: 0, ...{ x: 1 } };
+p1.x   // =&gt; 1
+let p2 = { ...{ x: 1 }, x: 2 };
+p2.x   // =&gt; 2
+
+// Only OWN properties are spread — inherited ones are left behind:
+let base = Object.create({ x: 1 });
+let copy = { ...base };
+copy.x   // =&gt; undefined</code></pre>
+      </div>
+      <p>
+        Spreading <code>n</code> properties is <code>O(n)</code> work — see
+        the accumulation warning in <a href="#extending-objects">§6.7</a> for
+        why that matters inside a loop.
+      </p>
+
+      <h3 id="proto-in-literals"><code>__proto__</code> inside an object literal</h3>
+      <p>
+        As a special case recognized only by literal syntax (never by
+        ordinary property access), writing <code>__proto__: value</code>
+        directly inside an object literal sets the new object's prototype to
+        <code>value</code>, instead of creating an own property literally
+        named <code>"__proto__"</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let proto = { greet() { return "hi"; } };
+let obj = {
+  __proto__: proto,   // Sets obj's PROTOTYPE — not a property named "__proto__"
+  own: 1,
+};
+Object.getPrototypeOf(obj) === proto   // =&gt; true
+obj.greet()                              // =&gt; "hi": inherited from proto
+obj.hasOwnProperty("__proto__")          // =&gt; false: it was never a real property</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Legacy outside a literal, but fine inside one</div>
+        <p>
+          Outside of an object literal, <code>obj.__proto__</code> is a
+          legacy getter/setter accessor for the prototype — it works in every
+          engine but is considered legacy in favor of
+          <code>Object.getPrototypeOf()</code> /
+          <code>Object.setPrototypeOf()</code>. The
+          <code>__proto__: value</code> literal form above is different: it's
+          standardized purely as object-literal syntax and remains the most
+          concise way to create an object with both a custom prototype
+          <em>and</em> a batch of own properties in a single expression —
+          <code>Object.create()</code> can't set own data properties as
+          conveniently.
+        </p>
+      </div>
+
+      <h3 id="shorthand-methods">6.10.5 Shorthand methods <span class="badge new">ES2015</span></h3>
+      <p>
+        A property whose value is a function is called a method (much more
+        on methods and <code>this</code> in
+        <a href="07-functions.html#method-invocation">Functions</a>). Pre-ES6, defining
+        one meant writing out <code>function</code> and a colon like any
+        other property; the shorthand form omits both:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let oldStyle = {
+  side: 10,
+  area: function () { return this.side * this.side; },
+};
+
+let shorthand = {
+  side: 10,
+  area() { return this.side * this.side; },   // Identical behavior, less noise
+};
+shorthand.area()   // =&gt; 100</code></pre>
+      </div>
+      <p>
+        Shorthand method names can be anything a property name can be —
+        plain identifiers, quoted strings, or computed names (including
+        Symbols):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const METHOD_NAME = "m";
+const sym = Symbol();
+let weird = {
+  "method with spaces"(x) { return x + 1; },
+  [METHOD_NAME](x) { return x + 2; },
+  [sym](x) { return x + 3; },
+};
+weird["method with spaces"](1)   // =&gt; 2
+weird[METHOD_NAME](1)             // =&gt; 3
+weird[sym](1)                     // =&gt; 4</code></pre>
+      </div>
+
+      <h3 id="getters-and-setters">6.10.6 Property getters and setters <span class="badge new">ES5</span></h3>
+      <p>
+        An <strong>accessor property</strong> has no stored value of its own
+        — instead it has a getter function, a setter function, or both,
+        which run whenever the property is read or written. A getter-only
+        property is effectively read-only; a setter-only property is
+        write-only (reading it always yields <code>undefined</code>) — a
+        combination that's impossible with an ordinary data property.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = {
+  dataProp: 1,
+  get accessorProp() { return this.dataProp; },
+  set accessorProp(v) { this.dataProp = v; },
+};</code></pre>
+      </div>
+      <p>
+        A more useful example: represent a point with ordinary
+        <code>x</code>/<code>y</code> data properties, and expose its polar
+        coordinates as computed accessor properties layered on top:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let p = {
+  x: 1.0, y: 1.0,
+  get r() { return Math.hypot(this.x, this.y); },
+  set r(newValue) {
+    let ratio = newValue / this.r;
+    this.x *= ratio;
+    this.y *= ratio;
+  },
+  get theta() { return Math.atan2(this.y, this.x); },   // read-only: getter only
+};
+p.r        // =&gt; Math.SQRT2
+p.theta    // =&gt; Math.PI / 4
+p.r = 1;   // Rescales x and y down to unit length via the setter</code></pre>
+      </div>
+      <p>
+        Because <code>this</code> inside a getter/setter refers to whatever
+        object the property was accessed on, accessor properties are
+        inherited exactly like data properties — a prototype can define
+        <code>r</code> and <code>theta</code> once, and every object that
+        inherits from it gets live, computed versions for free:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let q = Object.create(p);   // Inherits the r/theta accessors
+q.x = 3; q.y = 4;             // q's own data properties
+q.r        // =&gt; 5: the inherited getter computes it from q's own x and y
+q.theta    // =&gt; Math.atan2(4, 3)</code></pre>
+      </div>
+      <p>
+        Accessors are also how you validate writes or return a different
+        value on every read:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const serialNumber = {
+  _n: 0,
+  get next() { return this._n++; },       // Different value each read
+  set next(n) {
+    if (n &lt;= this._n) throw new Error("serial number must increase");
+    this._n = n;
+  },
+};
+serialNumber.next = 10;
+serialNumber.next   // =&gt; 10
+serialNumber.next   // =&gt; 11</code></pre>
+      </div>
+
+      <h2 id="property-attributes">Property attributes, in depth <span class="badge hard">Deep dive</span></h2>
+      <p>
+        Section 6.1 introduced <code>writable</code>, <code>enumerable</code>,
+        and <code>configurable</code> as flags that ride along with every
+        property. Ordinary object-literal and assignment syntax always gives
+        you all three set to <code>true</code> — there's no literal syntax
+        for creating a non-writable or non-enumerable property. To get finer
+        control, you need <code>Object.defineProperty()</code>, which takes
+        the target object, a property name, and a <strong>descriptor</strong>
+        object spelling out exactly which attributes you want:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = {};
+Object.defineProperty(o, "x", {
+  value: 1,
+  writable: true,
+  enumerable: false,     // Hide it from for/in, Object.keys(), JSON.stringify()
+  configurable: true,
+});
+
+o.x                          // =&gt; 1: reading works completely normally
+Object.keys(o)                // =&gt; []: x is invisible to enumeration
+JSON.stringify(o)             // =&gt; "{}": also invisible here
+"x" in o                      // =&gt; true: "in" still finds it
+o.hasOwnProperty("x")         // =&gt; true</code></pre>
+      </div>
+      <p>
+        Any attribute you omit from the descriptor defaults to
+        <code>false</code> (or <code>undefined</code> for
+        <code>value</code>) — <code>Object.defineProperty()</code> is
+        conservative by default, unlike an object literal which is permissive
+        by default. This is exactly how a getter/setter pair from
+        <a href="#getters-and-setters">§6.10.6</a> is really represented
+        under the hood: instead of a <code>value</code>/<code>writable</code>
+        pair, an accessor descriptor has <code>get</code>/<code>set</code>
+        functions:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let account = {};
+Object.defineProperty(account, "balanceInCents", {
+  value: 0, writable: true, enumerable: false, configurable: true,
+});
+Object.defineProperty(account, "balance", {
+  get() { return account.balanceInCents / 100; },
+  set(dollars) { account.balanceInCents = Math.round(dollars * 100); },
+  enumerable: true,
+  configurable: true,
+});
+account.balance = 19.99;
+account.balance          // =&gt; 19.99
+account.balanceInCents   // =&gt; 1999</code></pre>
+      </div>
+      <p>
+        Making a property non-writable is a much more targeted lockdown than
+        deep-freezing an entire object — attempting to write to it fails
+        exactly the way an inherited read-only property does (silently, or
+        loudly in strict mode — see <a href="#property-access-errors">§6.3.3</a>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"use strict";
+const config = {};
+Object.defineProperty(config, "VERSION", {
+  value: "1.0.0", writable: false, enumerable: true, configurable: false,
+});
+config.VERSION = "2.0.0";   // TypeError in strict mode: VERSION is not writable
+delete config.VERSION;       // TypeError in strict mode: VERSION is not configurable</code></pre>
+      </div>
+      <p>
+        <code>Object.seal()</code> and <code>Object.freeze()</code> are
+        shortcuts that apply attribute changes to <em>every</em> property on
+        an object at once, plus flip the object's own extensibility:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let sealed = Object.seal({ x: 1 });
+sealed.x = 2;              // OK: existing writable properties can still change
+sealed.y = 3;               // Silently ignored (or throws in strict mode): sealed is non-extensible
+delete sealed.x;             // Silently ignored: every property became non-configurable
+Object.isSealed(sealed)       // =&gt; true
+
+let frozen = Object.freeze({ x: 1, nested: { y: 2 } });
+frozen.x = 99;               // Silently ignored: frozen properties are non-writable too
+frozen.x                     // =&gt; 1: unchanged
+Object.isFrozen(frozen)       // =&gt; true
+frozen.nested.y = 99;         // WORKS — freeze is shallow! nested objects are untouched
+frozen.nested.y               // =&gt; 99</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>Object.freeze()</code> is shallow</div>
+        <p>
+          Freezing an object locks down only its <em>own, top-level</em>
+          properties. Any object referenced by one of those properties is a
+          completely separate object with its own attributes, untouched by
+          the outer freeze. A "deep freeze" has to walk the object graph
+          recursively and freeze every nested object individually — the
+          language doesn't do this for you.
+        </p>
+      </div>
+      <p>
+        Reading back the attributes of an existing property — including ones
+        you didn't define yourself — is the mirror-image operation,
+        <code>Object.getOwnPropertyDescriptor()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Object.getOwnPropertyDescriptor([], "length")
+// =&gt; { value: 0, writable: true, enumerable: false, configurable: false }
+// Array length is writable (you CAN resize an array by assigning it)
+// but not enumerable and not configurable — you can't delete "length"</code></pre>
+      </div>
+      <p>
+        Even finer-grained control over property definition — and the
+        related mechanics of <code>Reflect</code> and <code>Proxy</code>,
+        which can intercept property access itself — is the subject of
+        <a href="15-metaprogramming.html">Metaprogramming</a>.
+      </p>
+
+      <h2 id="summary">6.11 Summary</h2>
+      <p>This chapter covered JavaScript objects end to end:</p>
+      <ul>
+        <li>Vocabulary: property, own vs. inherited property, and the writable/enumerable/configurable attribute trio every property carries.</li>
+        <li>Three ways to create an object — literal, <code>new</code>, <code>Object.create()</code> — and the prototype each one hands you, including <code>Object.create(null)</code> for a prototype-free dictionary.</li>
+        <li>The prototype chain, and the crucial asymmetry that reading walks it while writing (almost always) doesn't — which is how an own property comes to shadow an inherited one.</li>
+        <li>Reading, writing, deleting, testing, and enumerating properties, plus the specific errors and silent failures each operation can produce.</li>
+        <li>Copying properties between objects with <code>Object.assign()</code> and object-spread, and the O(n²) trap of doing either inside a loop.</li>
+        <li>The basics of JSON serialization, and the handful of methods — <code>toString()</code>, <code>valueOf()</code>, <code>toJSON()</code>, <code>Symbol.toPrimitive</code> — that let your objects participate in JavaScript's implicit conversions.</li>
+        <li>Modern object literal syntax: shorthand properties and methods, computed and Symbol-valued property names, spread, <code>__proto__</code>, and getter/setter accessor properties.</li>
+        <li>Fine-grained control over a property's own attributes with <code>Object.defineProperty()</code>, and the bulk lockdown operations <code>Object.seal()</code> and <code>Object.freeze()</code>.</li>
+      </ul>
+      <p>
+        Every value that isn't a primitive is an object — including arrays
+        and functions, which layer specialized behavior on top of everything
+        covered here and get their own dedicated chapters next:
+        <a href="06-arrays.html">Arrays</a> and
+        <a href="07-functions.html">Functions</a>.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

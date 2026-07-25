@@ -1,0 +1,1398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Functions & Closures — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="07-functions.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 8</span>
+      <h1>Functions &amp; Closures</h1>
+      <p class="lede">
+        A function is a block of code, written once, that can be invoked any
+        number of times with different arguments. In JavaScript, functions are
+        also full-fledged values — they can be stored in variables, passed
+        around, attached to objects as methods, and even carry their own
+        properties. This page works through every part of that story: the
+        three ways to define a function, the five ways to invoke one (and the
+        wildly different rules each applies to <code>this</code>), how
+        parameters really work under the hood, what a closure actually is and
+        why the classic loop bug happens, and how treating functions as data
+        opens the door to a functional style of programming.
+      </p>
+
+      <h2 id="defining-functions">8.1 Defining functions</h2>
+      <p>
+        JavaScript gives you three distinct syntaxes for creating a function,
+        and they are not interchangeable — they differ in hoisting behavior,
+        in whether they get a name, and (for arrows) in which variables they
+        capture from the surrounding scope. There is also a fourth,
+        rarely-used mechanism, the <code>Function()</code> constructor,
+        covered later in <a href="#function-constructor">§8.7.7</a>. Generator
+        functions (<code>function*</code>) and <code>async function</code>s
+        are specialized variants covered in
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>
+        and <a href="14-async-javascript.html">Asynchronous JavaScript</a>.
+      </p>
+
+      <h3 id="function-declarations">Function declarations</h3>
+      <p>
+        A function declaration is the <code>function</code> keyword followed
+        by a required name, a parenthesized parameter list, and a body in
+        curly braces. The name becomes a variable in the enclosing scope that
+        refers to the function object.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Print every enumerable property name and value of an object.
+function describeProps(o) {
+  for (let key in o) {
+    console.log(`${key}: ${o[key]}`);
+  }
+}
+
+// A recursive function: it calls itself.
+function factorial(n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
+
+// distance() computes a value and returns it; describeProps() above
+// has no return statement, so invoking it always yields undefined.
+function distance(x1, y1, x2, y2) {
+  let dx = x2 - x1, dy = y2 - y1;
+  return Math.sqrt(dx * dx + dy * dy);
+}</code></pre>
+      </div>
+      <p>
+        A function that never reaches a <code>return</code> statement — or
+        reaches a bare <code>return;</code> with no expression — simply
+        evaluates to <code>undefined</code> when invoked. That's fine for
+        functions like <code>describeProps()</code> above, whose entire job
+        is a side effect (printing), not a computed value.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Declarations are hoisted, in full</div>
+        <p>
+          A function declaration's name <em>and its entire body</em> are
+          processed before any statement in the enclosing script, function, or
+          (as of ES6, in strict-mode blocks) block begins to run. That means
+          you can legally call a declared function from code that appears
+          textually above the declaration. Prior to ES6 it was technically
+          illegal (though widely tolerated) to put a function declaration
+          inside a loop or <code>if</code> block; ES6 formalized block-scoped
+          function declarations, but a function declared inside a block is
+          only visible inside that block.
+        </p>
+      </div>
+
+      <h3 id="function-expressions">Function expressions</h3>
+      <p>
+        A function expression looks similar but appears as part of a larger
+        expression or statement, and its name is optional. Because it's an
+        expression, you typically assign it to a variable, pass it directly
+        as an argument, or invoke it immediately.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Anonymous function expression, assigned to a const.
+const square = function (x) { return x * x; };
+
+// A named function expression — the name is useful for self-recursion
+// and shows up in stack traces, but it is NOT visible outside the function.
+const fact = function recur(n) { return n <= 1 ? 1 : n * recur(n - 1); };
+
+// Passed directly as an argument — no variable needed at all.
+[3, 1, 2].sort(function (a, b) { return a - b; });
+
+// Defined and invoked immediately (an IIFE — see §8.5).
+let hundred = (function (x) { return x * x; })(10);</code></pre>
+      </div>
+      <p>
+        Two consequences follow from a function expression not being hoisted
+        the way a declaration is: first, the variable it's assigned to
+        doesn't hold a callable function until that line of code actually
+        executes, so calling it earlier fails; second, prefer
+        <code>const</code> for the assignment so you don't accidentally
+        clobber the function reference later in the file.
+      </p>
+
+      <h3 id="arrow-functions">Arrow functions <span class="badge new">ES2015</span></h3>
+      <p>
+        Arrow functions drop the <code>function</code> keyword entirely and
+        use <code>=&gt;</code> to separate the parameter list from the body.
+        They are always expressions, never declarations, so they're never
+        hoisted and never have an implicit name of their own (though
+        JavaScript will infer a display name from the variable they're
+        assigned to, for debugging purposes).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const sum = (x, y) => { return x + y; };   // Full block body
+const sum2 = (x, y) => x + y;              // Concise body: implicit return
+const square = x => x * x;                 // One parameter: parens optional
+const answer = () => 42;                   // Zero parameters: parens required
+
+// Danger: an arrow function's params and `=>` must be on the same line.
+// const bad = x
+//   => x * 2;   // parses as two statements, not one arrow function!
+
+// Returning an object literal from a concise body needs parens, or the
+// `{` is parsed as the start of a block, not an object.
+const wrap = x => ({ value: x });   // Correct: returns {value: x}
+const broken = x => { value: x };   // Wrong: `value:` is parsed as a label,
+                                     // the function body is a no-op, and it
+                                     // returns undefined.</code></pre>
+      </div>
+      <p>
+        Their concise syntax is exactly why arrows dominate as callback
+        arguments to <code>map()</code>, <code>filter()</code>, and
+        <code>reduce()</code> (see <a href="06-arrays.html#iterator-methods">Arrays</a>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let cleaned = [4, null, 9, undefined, 16].filter(x => x != null); // [4,9,16]
+let roots   = cleaned.map(x => Math.sqrt(x));                     // [2,3,4]</code></pre>
+      </div>
+      <p>
+        But arrows are not just a shorthand for <code>function</code> — they
+        genuinely behave differently, and the differences all point the same
+        direction: an arrow function has <strong>no invocation identity of
+        its own</strong>. It does not create its own binding for
+        <code>this</code>, <code>arguments</code>, <code>super</code>, or
+        <code>new.target</code> — instead it transparently inherits all four
+        from whichever non-arrow function textually encloses it. It also has
+        no <code>prototype</code> property, so it can never be used as a
+        constructor — <code>new (() =&gt; {})()</code> throws a
+        <code>TypeError</code>.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">What "no own <code>arguments</code>" means in practice</div>
+        <p>
+          Reference <code>arguments</code> inside an arrow function and
+          you'll get the <code>arguments</code> object of the nearest
+          enclosing non-arrow function (or a <code>ReferenceError</code> if
+          there isn't one) — never an arguments list for the arrow itself.
+          This is one more reason to reach for a rest parameter (<a href="#rest-parameters">§8.3.2</a>)
+          instead of <code>arguments</code> when a callback needs to accept a
+          variable number of values.
+        </p>
+      </div>
+
+      <h3 id="nested-functions">Nested functions</h3>
+      <p>
+        Functions may be defined inside other functions. A nested function
+        can read and write every parameter and local variable of the
+        function(s) it's textually nested inside, following ordinary lexical
+        scoping rules — this is the seed of closures, treated fully in
+        <a href="#closures">§8.6</a>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function hypotenuse(a, b) {
+  function sq(x) { return x * x; }   // sq() can see a and b
+  return Math.sqrt(sq(a) + sq(b));
+}
+hypotenuse(3, 4);   // => 5</code></pre>
+      </div>
+
+      <h2 id="invoking-functions">8.2 Invoking functions</h2>
+      <p>
+        Defining a function does not run its body — only invoking it does.
+        JavaScript has five invocation mechanisms, and — this is the single
+        most important idea in this chapter — <strong>which one you use
+        determines the value of <code>this</code> inside the function
+        body</strong>. The function's own source code never changes; only
+        the way it's called does.
+      </p>
+
+      <h3 id="function-invocation">Function invocation</h3>
+      <p>
+        A plain invocation expression — a function expression followed by
+        parentheses that is <em>not</em> a property access — is a regular
+        function call. Each argument expression is evaluated left to right
+        and the resulting values are bound to the corresponding parameters.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">describeProps({ x: 1 });
+let total = distance(0, 0, 2, 1) + distance(2, 1, 3, 5);</code></pre>
+      </div>
+      <p>
+        In non-strict mode, a plain function call sets <code>this</code> to
+        the global object. In strict mode — which every ES module and every
+        class body is implicitly in — <code>this</code> is <code>undefined</code>
+        instead, which is why calling an ordinary method-style function
+        without an object produces a <code>TypeError</code> the moment it
+        tries to read a property off <code>this</code>.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Optional call: <code>f?.()</code> <span class="badge new">ES2020</span></div>
+        <p>
+          Insert <code>?.</code> between the function expression and the
+          parentheses to invoke only if the expression isn't
+          <code>null</code>/<code>undefined</code>: <code>callback?.(value)</code>
+          is shorthand for <code>callback === null || callback === undefined
+          ? undefined : callback(value)</code>. See
+          <a href="03-expressions-operators.html">Expressions &amp; Operators</a>
+          for the full optional-chaining family.
+        </p>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Recursion and the call stack</div>
+        <p>
+          Every active function invocation needs an execution context kept
+          somewhere so the interpreter knows where to resume once that call
+          returns; these contexts stack up as functions call other functions.
+          A recursive function that calls itself hundreds of times is
+          ordinarily fine on modern hardware, but one that recurses tens of
+          thousands of levels deep will typically fail with something like
+          <code>RangeError: Maximum call stack size exceeded</code>. Deeply
+          recursive algorithms are often better rewritten iteratively, or
+          restructured to use tail position (though JavaScript engines are
+          not required to optimize tail calls).
+        </p>
+      </div>
+
+      <h3 id="method-invocation">Method invocation</h3>
+      <p>
+        A method is nothing more than a function stored as a property of an
+        object. When the expression being invoked is a property access —
+        <code>obj.f()</code> or <code>obj["f"]()</code> — the invocation is a
+        <em>method</em> invocation, and the object to the left of the dot (or
+        inside the brackets) becomes <code>this</code> for the duration of
+        that call.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let calculator = {
+  a: 3,
+  b: 4,
+  add() {                        // Method shorthand syntax
+    this.result = this.a + this.b;
+  },
+};
+calculator.add();                // Method invocation: this === calculator
+calculator.result;                // => 7
+
+// Bracket access and array-element access invoke as methods too:
+calculator["add"]();
+let handlers = [() => {}, function () { return this; }];
+handlers[1]();                    // this is whatever's left of the brackets</code></pre>
+      </div>
+      <p>
+        Because <code>this</code> is rebound on every method call, the
+        <em>same</em> function value can serve as a method of many different
+        objects, each time operating on whichever object it was invoked
+        through:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function reportBalance() { return `${this.owner}: $${this.balance}`; }
+let acctA = { owner: "Amina", balance: 200, report: reportBalance };
+let acctB = { owner: "Bilal", balance: 50,  report: reportBalance };
+acctA.report();   // "Amina: $200"
+acctB.report();   // "Bilal: $50" — same function, different this</code></pre>
+      </div>
+      <p>
+        When a method returns an object — often <code>this</code> itself —
+        you can chain further method calls onto the result in a single
+        expression, a style sometimes called method chaining:
+        <code>doStepOne().then(doStepTwo).then(doStepThree).catch(onError)</code>.
+        Designing your own methods to <code>return this</code> when they have
+        no other meaningful return value lets callers of your API chain calls
+        the same way.
+      </p>
+
+      <h3 id="constructor-invocation">Constructor invocation</h3>
+      <p>
+        Preceding a function or method call with <code>new</code> makes it a
+        constructor invocation, and constructors follow different rules for
+        arguments, invocation context, and return value than the other
+        styles. (Constructors are covered in full alongside classes in
+        <a href="08-classes.html">Classes</a>.)
+      </p>
+      <ul>
+        <li>
+          A brand-new, empty object is created first. It inherits from
+          whatever object is currently the constructor function's
+          <code>prototype</code> property.
+        </li>
+        <li>
+          That new object — not any object the call syntax might resemble —
+          becomes <code>this</code> inside the constructor body, even for
+          something that looks like a method call: in <code>new obj.M()</code>,
+          <code>obj</code> is <em>not</em> the invocation context.
+        </li>
+        <li>
+          If the constructor returns no value, or returns a primitive, the
+          newly created object is used as the result of the whole
+          <code>new</code> expression regardless. Only an explicit
+          <code>return</code> of an <em>object</em> overrides that and
+          becomes the result instead.
+        </li>
+        <li>
+          The empty parentheses are optional when there are no arguments:
+          <code>new Date()</code> and <code>new Date</code> are equivalent.
+        </li>
+      </ul>
+
+      <h3 id="indirect-invocation">Indirect invocation</h3>
+      <p>
+        Because functions are objects, they carry methods of their own.
+        <code>call()</code> and <code>apply()</code> invoke a function while
+        letting you dictate <code>this</code> explicitly, effectively
+        pretending the function is a method of whatever object you name —
+        even if it never was. Full mechanics, including <code>bind()</code>,
+        are covered in the dedicated deep dive at
+        <a href="#call-apply">§8.7.4</a> and <a href="#bind-method">§8.7.5</a>,
+        since this is one of the load-bearing ideas of the chapter.
+      </p>
+
+      <h3 id="implicit-invocation">Implicit invocation</h3>
+      <p>
+        Several JavaScript language features quietly invoke a function
+        without any call syntax appearing at the use site. These deserve
+        extra care, precisely because a bug or an expensive side effect
+        hidden inside one of them is much harder to spot than in a function
+        you can see being called:
+      </p>
+      <ul>
+        <li>
+          <strong>Getters and setters</strong> — reading or assigning a
+          property backed by an accessor (see
+          <a href="05-objects.html">Objects</a>) runs the getter or setter
+          function even though the syntax at the call site is just property
+          access.
+        </li>
+        <li>
+          <strong>Object-to-primitive conversion</strong> — using an object
+          where a string is expected calls its <code>toString()</code>
+          method; using it where a number is expected calls
+          <code>valueOf()</code> (and <code>Symbol.toPrimitive</code>, if
+          defined, takes priority over both).
+        </li>
+        <li>
+          <strong>The iterator protocol</strong> — a <code>for/of</code> loop
+          or spread over an iterable calls <code>obj[Symbol.iterator]()</code>
+          and then repeatedly calls <code>.next()</code> on the result; see
+          <a href="13-iterators-generators.html">Iterators &amp; Generators</a>.
+        </li>
+        <li>
+          <strong>Tagged template literals</strong> — writing
+          <code>tag\`Hello ${name}\`</code> is really a function call:
+          <code>tag</code> is invoked with the literal's string pieces and
+          interpolated values as arguments.
+        </li>
+        <li>
+          <strong>Proxy traps</strong> — a <code>Proxy</code> object (see
+          <a href="15-metaprogramming.html">Metaprogramming</a>) routes
+          nearly every operation performed on it — property reads, writes,
+          deletion, enumeration — through handler functions you supplied.
+        </li>
+      </ul>
+
+      <h3 id="this-binding">How <code>this</code> is chosen, invocation by invocation <span class="badge hard">Core mental model</span></h3>
+      <p>
+        Pull the five invocation styles together and one rule governs all of
+        them except arrow functions: <code>this</code> is not lexical — it is
+        re-decided at <em>every single call</em>, based purely on the syntax
+        used to make that call, never on where the function was defined.
+        Arrow functions are the sole exception: they never receive their own
+        <code>this</code> binding at all, no matter how they're called.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Invocation style</th><th>Example</th><th><code>this</code> inside the function body</th></tr>
+          <tr><td>Plain function call</td><td><code>f(a, b)</code></td><td>Global object (non-strict) or <code>undefined</code> (strict mode)</td></tr>
+          <tr><td>Method call</td><td><code>obj.f(a, b)</code></td><td><code>obj</code> — whatever sits to the left of the dot/bracket at call time</td></tr>
+          <tr><td>Constructor call</td><td><code>new F(a, b)</code></td><td>The freshly created object, before it's even returned</td></tr>
+          <tr><td>Indirect call</td><td><code>f.call(obj, a, b)</code> / <code>f.apply(obj, [a, b])</code></td><td>Whatever object you pass as the first argument</td></tr>
+          <tr><td>Bound call</td><td><code>const g = f.bind(obj); g(a, b)</code></td><td><code>obj</code> — permanently, cannot be re-bound again</td></tr>
+          <tr><td>Arrow function</td><td><code>const g = (a, b) =&gt; {...}</code></td><td>Whatever <code>this</code> was in the <em>enclosing</em> (lexical) scope — fixed forever at definition time</td></tr>
+        </table>
+      </div>
+      <p>Worked example 1 — the same function object, called four different ways:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function whoAmI() { return this && this.label; }
+
+whoAmI();                          // undefined (strict) — plain call
+let alice = { label: "alice", whoAmI };
+alice.whoAmI();                    // "alice" — method call
+whoAmI.call({ label: "carol" });   // "carol" — indirect call
+const asDave = whoAmI.bind({ label: "dave" });
+asDave();                          // "dave" — bound call
+new whoAmI();                      // {} — the new object; this.label is undefined
+                                    // (whoAmI doesn't set any property on it)</code></pre>
+      </div>
+      <p>
+        Worked example 2 — the bug almost everyone hits once: a plain
+        (non-arrow) nested function does <em>not</em> automatically see the
+        outer method's <code>this</code>, because calling it as
+        <code>helper()</code> (not <code>obj.helper()</code>) is a plain
+        function call, and plain function calls get their own,
+        independent <code>this</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let widget = {
+  label: "widget",
+  report() {
+    console.log(this.label);        // "widget" — called as widget.report()
+    function helper() {
+      console.log(this && this.label); // undefined! plain call, own this
+    }
+    helper();
+    const arrowHelper = () => {
+      console.log(this.label);      // "widget" — arrow inherits report's this
+    };
+    arrowHelper();
+  },
+};
+widget.report();</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Three ways to fix the nested-function-loses-<code>this</code> bug</div>
+        <p>
+          <strong>1. Arrow function</strong> — define the nested helper as
+          an arrow so it inherits <code>this</code> lexically (shown above).
+          <strong>2. Capture a variable</strong> — write
+          <code>const self = this;</code> at the top of the outer method and
+          reference <code>self</code> instead of <code>this</code> inside the
+          nested plain function. <strong>3. <code>bind()</code></strong> —
+          call <code>helper.bind(this)()</code>, or store the bound version
+          before invoking it. All three are common in real codebases; arrow
+          functions are the modern default.
+        </p>
+      </div>
+
+      <h2 id="arguments-and-parameters">8.3 Function arguments and parameters</h2>
+      <p>
+        JavaScript never checks argument types, and it never enforces
+        argument <em>count</em> either — you can call a function with too
+        few arguments, too many arguments, or arguments of the "wrong" type,
+        and the call proceeds regardless. What happens to unsupplied or
+        extra arguments is entirely governed by the parameter-list features
+        below.
+      </p>
+
+      <h3 id="default-parameters">Optional parameters and defaults <span class="badge new">ES2015</span></h3>
+      <p>
+        Any parameter not given a corresponding argument is simply
+        <code>undefined</code> inside the function — unless the parameter
+        list assigns it a default. A default-value expression is evaluated
+        fresh on <em>every call</em> that needs it (never once, at
+        definition time), and it may reference any parameter declared before
+        it in the list:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Pre-ES6 idiom for a missing/falsy argument:
+function collectKeys(o, target) {
+  target = target || [];          // falsy target (incl. undefined) -> new array
+  for (let k in o) target.push(k);
+  return target;
+}
+
+// ES6 default parameter — cleaner, and only triggers on `undefined`
+// specifically (not on other falsy values like 0, "", or null).
+function rectangle(width, height = width * 2) {
+  return { width, height };
+}
+rectangle(5);        // => { width: 5, height: 10 }
+rectangle(5, 1);      // => { width: 5, height: 1 }</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Put optional parameters last</div>
+        <p>
+          A caller can't skip an earlier parameter to supply a later one —
+          they'd have to pass <code>undefined</code> explicitly for every
+          parameter in between. Always place parameters with defaults after
+          the required ones.
+        </p>
+      </div>
+
+      <h3 id="rest-parameters">Rest parameters <span class="badge new">ES2015</span></h3>
+      <p>
+        A parameter prefixed with <code>...</code> must be the last one in
+        the list; it gathers every remaining argument into a genuine array
+        (never <code>undefined</code>, worst case an empty array). Functions
+        built this way — accepting any number of arguments — are called
+        <em>variadic</em> functions.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function largest(first = -Infinity, ...others) {
+  return others.reduce((best, n) => (n > best ? n : best), first);
+}
+largest(4, 19, 2, 77, 3);   // => 77</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Don't confuse the two <code>...</code>s</div>
+        <p>
+          <code>...</code> in a <em>parameter list</em> (rest parameter)
+          gathers arguments into an array. <code>...</code> at a
+          <em>call site</em> (the spread operator, next section) does the
+          opposite — it unpacks an iterable into individual arguments. Same
+          three dots, opposite jobs, depending entirely on which side of the
+          call boundary they appear on.
+        </p>
+      </div>
+
+      <h3 id="arguments-object">The <code>arguments</code> object</h3>
+      <p>
+        Before rest parameters existed, every non-arrow function body had
+        access to an implicit local called <code>arguments</code>: an
+        <strong>array-like</strong> object (numeric indices and a
+        <code>length</code>, but no <code>Array.prototype</code> methods)
+        exposing whatever was actually passed at the call site, by position.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function largestLegacy() {
+  let best = -Infinity;
+  for (let i = 0; i < arguments.length; i++) {
+    if (arguments[i] > best) best = arguments[i];
+  }
+  return best;
+}
+largestLegacy(4, 19, 2, 77, 3);   // => 77</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Quirks that make <code>arguments</code> worth avoiding in new code</div>
+        <p>
+          It is not a real array, so <code>.map()</code>/<code>.filter()</code>/<code>.reduce()</code>
+          require first converting it (<code>Array.from(arguments)</code> or
+          <code>[...arguments]</code>). Historically, in non-strict mode, its
+          indexed properties were even "linked" to the named parameters
+          (mutating <code>arguments[0]</code> could change the first
+          parameter's value, and vice versa) — a source of confusing bugs
+          that strict mode disables. Arrow functions have <em>no</em>
+          <code>arguments</code> of their own at all — inside an arrow, the
+          name resolves to the nearest enclosing non-arrow function's
+          <code>arguments</code>, which is rarely what's wanted. And in
+          strict mode, <code>arguments</code> is treated as effectively
+          reserved — you cannot name a parameter or local variable
+          <code>arguments</code>. Prefer a rest parameter in every function
+          you write today.
+        </p>
+      </div>
+
+      <h3 id="spread-at-call-site">The spread operator at a call site</h3>
+      <p>
+        <code>...</code> in an argument list unpacks an array (or any other
+        iterable, including strings) into individual positional arguments:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let readings = [5, 2, 10, -1, 9, 100, 1];
+Math.min(...readings);          // => -1
+
+// Rest params (gather) and spread (unpack) often pair up, e.g. to wrap
+// a function with instrumentation while forwarding its real arguments:
+function timed(f) {
+  return function (...args) {
+    console.log(`entering ${f.name}`);
+    let start = Date.now();
+    try {
+      return f(...args);        // spread the collected args back out
+    } finally {
+      console.log(`exiting ${f.name} after ${Date.now() - start}ms`);
+    }
+  };
+}</code></pre>
+      </div>
+
+      <h3 id="destructured-parameters">Destructured parameters</h3>
+      <p>
+        Because binding arguments to parameters is fundamentally an
+        assignment, every destructuring pattern usable in a variable
+        declaration is usable in a parameter list too — array patterns,
+        object patterns, defaults within the pattern, nesting, and rest
+        elements inside the pattern.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Array destructuring: unpack a 2-element array into two named parameters.
+function addVectors([x1, y1], [x2, y2]) {
+  return [x1 + x2, y1 + y2];
+}
+addVectors([1, 2], [3, 4]);     // => [4, 6]
+
+// Object destructuring: property names on the left of the colon,
+// parameter names on the right — easy to mix up, so keep it in mind.
+function scaleVector({ x, y, z = 0 }, factor) {
+  return { x: x * factor, y: y * factor, z: z * factor };
+}
+scaleVector({ x: 1, y: 2 }, 3);           // => { x: 3, y: 6, z: 0 }
+
+// Renaming during destructuring: `x: x1` means "read property x,
+// bind it to local name x1".
+function addNamedVectors({ x: x1, y: y1 }, { x: x2, y: y2 }) {
+  return { x: x1 + x2, y: y1 + y2 };
+}
+
+// Object destructuring simulates named/keyword arguments — handy once
+// a function has many optional parameters and callers would otherwise
+// have to remember positional order.
+function copyRange({ from, to = from, count = from.length, fromIndex = 0, toIndex = 0 }) {
+  let slice = from.slice(fromIndex, fromIndex + count);
+  to.splice(toIndex, 0, ...slice);
+  return to;
+}
+copyRange({ from: [1, 2, 3, 4, 5], count: 3, to: [9, 8, 7, 6, 5], toIndex: 4 });
+// => [9, 8, 7, 6, 1, 2, 3, 5]
+
+// Rest inside a destructuring pattern (array or object) vs. a true rest
+// parameter for the function itself — these are two independent concepts:
+function splitFirstTwo([a, b, ...restOfArray], ...restOfArgs) {
+  return [a + b, ...restOfArgs, ...restOfArray];
+}
+splitFirstTwo([1, 2, 3, 4], 5, 6);  // => [3, 5, 6, 3, 4]
+
+// Object rest parameter (ES2018) captures whatever wasn't destructured:
+function scaleKeepingExtras({ x, y, z = 0, ...rest }, factor) {
+  return { x: x * factor, y: y * factor, z: z * factor, ...rest };
+}
+scaleKeepingExtras({ x: 1, y: 2, label: "P" }, 2); // => {x:2,y:4,z:0,label:"P"}</code></pre>
+      </div>
+      <p>
+        Destructuring can nest arbitrarily deep — arrays of objects, objects
+        containing arrays, objects containing objects — but readability
+        degrades quickly past two or three levels. If a destructuring
+        pattern is hard to read at a glance, plain property access and
+        indexing is often the clearer choice.
+      </p>
+
+      <h3 id="argument-types">Argument types</h3>
+      <p>
+        Since nothing about a parameter list declares an expected type,
+        self-documenting parameter names and comments are your main defense.
+        JavaScript's automatic type coercion (see
+        <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>)
+        means passing the "wrong" primitive type to a function expecting a
+        string, for instance, rarely throws — it just gets converted. But
+        that safety net doesn't extend to every case, so functions that would
+        otherwise fail confusingly deep inside their logic are often better
+        off validating up front and failing loudly and immediately:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function sumAll(iterable) {
+  let total = 0;
+  for (let value of iterable) {          // throws TypeError if not iterable
+    if (typeof value !== "number") {
+      throw new TypeError("sumAll(): every element must be a number");
+    }
+    total += value;
+  }
+  return total;
+}
+sumAll([1, 2, 3]);      // => 6
+sumAll([1, 2, "3"]);    // throws TypeError — fails fast and clearly</code></pre>
+      </div>
+
+      <h2 id="functions-as-values">8.4 Functions as values</h2>
+      <p>
+        A function's name is just a variable holding a reference to a
+        function object — there is nothing more special about
+        <code>square</code> in <code>function square(x){...}</code> than
+        about any other variable. That's why the same function object can be
+        aliased, stored in an object property (where we call it a method), or
+        stashed in an array with no name at all:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function square(x) { return x * x; }
+let alias = square;         // alias and square refer to the same function
+alias(4);                   // => 16
+
+let obj = { square: function (x) { return x * x; } };
+obj.square(4);               // => 16 — invoked as a method
+
+let arr = [x => x * x, 5];
+arr[0](arr[1]);               // => 25 — an unusual-looking, but legal, call</code></pre>
+      </div>
+      <p>
+        This is exactly why <code>Array.prototype.sort()</code> can accept a
+        comparator function: passing behavior as data is what makes
+        <code>sort()</code> generic over any ordering you can express as a
+        two-argument function (see <a href="06-arrays.html">Arrays</a> for
+        the sort-callback contract). A lookup table of functions works the
+        same way:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const operators = {
+  add:      (x, y) => x + y,
+  subtract: (x, y) => x - y,
+  multiply: (x, y) => x * y,
+  divide:   (x, y) => x / y,
+  power:    Math.pow,             // built-in functions work here too
+};
+function apply(opName, a, b) {
+  if (typeof operators[opName] !== "function") throw "unknown operator";
+  return operators[opName](a, b);
+}
+apply("multiply", 4, 5);   // => 20
+apply("power", 2, 10);     // => 1024</code></pre>
+      </div>
+
+      <h3 id="own-properties">Functions can have their own properties</h3>
+      <p>
+        Functions are a specialized object type, so — just like any other
+        object — you can attach arbitrary properties to a function value.
+        This is occasionally the cleanest place to keep state that should
+        persist across calls but has no business living in a global
+        variable, because it stays visually and lexically tied to the
+        function that uses it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A counter that hands out a new integer every call, using a property
+// of the function itself as storage (declarations are hoisted, so this
+// assignment above the declaration is legal).
+nextId.count = 0;
+function nextId() {
+  return nextId.count++;
+}
+nextId();   // => 0
+nextId();   // => 1
+
+// Self-caching factorial, using the function object itself as the cache.
+function fact(n) {
+  if (Number.isInteger(n) && n > 0) {
+    if (!(n in fact)) fact[n] = n * fact(n - 1);
+    return fact[n];
+  }
+  return NaN;
+}
+fact[1] = 1;   // seed the base case
+fact(6);       // => 720, caching fact[2] through fact[6] along the way</code></pre>
+      </div>
+      <p>
+        A closure (<a href="#closures">§8.6</a>) achieves the same
+        persistence with real privacy — nothing outside the closure can
+        tamper with the counter — so closures are generally the preferred
+        tool when the state genuinely needs to be protected.
+      </p>
+
+      <h2 id="functions-as-namespaces">8.5 Functions as namespaces</h2>
+      <p>
+        A variable declared anywhere inside a function body — with
+        <code>var</code>, <code>let</code>, or <code>const</code> — is
+        invisible outside that function. Before ES6 block scope existed,
+        this was the standard trick for keeping a chunk of throwaway code
+        from leaking variables into the global scope: wrap it in a function,
+        then call that function once.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function setupWidgets() {
+  // Every variable declared in here is local to setupWidgets,
+  // no matter how many of them there are.
+}
+setupWidgets();   // Don't forget to actually invoke it!</code></pre>
+      </div>
+      <p>
+        If you don't even want to leave a named function sitting in scope,
+        define and invoke it in the same expression — an Immediately Invoked
+        Function Expression, or IIFE:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">(function () {
+  // Runs once, right now; nothing here is visible outside.
+})();</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Why the leading parenthesis is required</div>
+        <p>
+          Without the opening <code>(</code>, the parser sees the
+          <code>function</code> keyword at the start of a statement and
+          tries to read a function <em>declaration</em> — which requires a
+          name and cannot be immediately invoked. Wrapping the whole
+          function literal in parentheses forces the parser to treat it as
+          an expression instead, so it can legally be followed by a call.
+          The leading parenthesis also acts as a visual signal to human
+          readers: "this function is meant to run immediately, not to be
+          reused later."
+        </p>
+      </div>
+      <p>
+        The technique becomes genuinely powerful once the namespace function
+        defines inner functions that <em>use</em> its private variables and
+        then hands those inner functions back out as its return value — at
+        that point you've built a closure, which is the subject of the next
+        section. In modern code, an ES module (<a href="09-modules.html">Modules</a>)
+        gives every file this same private-by-default scoping without any
+        IIFE ceremony at all.
+      </p>
+
+      <h2 id="closures">8.6 Closures <span class="badge hard">The central idea of this chapter</span></h2>
+      <p>
+        JavaScript is <strong>lexically scoped</strong>: a function's
+        variables resolve according to where that function was
+        <em>written</em> in the source, not according to who calls it or
+        from where. To make that work, every function object must
+        internally remember not just its own code but a reference to the
+        entire chain of scopes that surrounded it at definition time. That
+        pairing — a function plus the scope it closes over — is a
+        <strong>closure</strong>. Every JavaScript function is technically a
+        closure; it's just that closures only become <em>visible</em> and
+        interesting once a nested function is invoked from somewhere other
+        than the scope it was defined in — most commonly because the outer
+        function returned it.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let scope = "global";
+function outerA() {
+  let scope = "outerA";
+  function inner() { return scope; }
+  return inner();          // called right here — nothing surprising
+}
+outerA();                  // => "outerA"
+
+function outerB() {
+  let scope = "outerB";
+  function inner() { return scope; }
+  return inner;             // returns the FUNCTION, not its result
+}
+let laterCall = outerB();
+laterCall();                // => "outerB", NOT "global" — inner() still
+                             // resolves `scope` in the scope it was
+                             // defined in, even though outerB already
+                             // finished running long ago.</code></pre>
+      </div>
+      <p>
+        That last example is the whole trick: <code>inner</code> keeps a
+        live link to <code>outerB</code>'s variable environment for as long
+        as anything can still reach <code>inner</code> — even after
+        <code>outerB()</code> itself has returned and, from the outside,
+        looks like it's "finished." This gives JavaScript native private
+        state, no special syntax required: a variable declared in an outer
+        function is unreachable to any code outside it, yet stays alive as
+        long as an inner function still references it.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function makeCounter() {
+  let n = 0;                       // unreachable from outside this closure
+  return {
+    increment() { return ++n; },
+    reset() { n = 0; },
+  };
+}
+let c1 = makeCounter();
+let c2 = makeCounter();            // an entirely separate `n`
+c1.increment(); c1.increment();    // c1's n is now 2
+c2.increment();                    // c2's n is 1 — totally independent
+c1.reset();                        // only resets c1's n; c2 unaffected</code></pre>
+      </div>
+      <p>
+        Multiple closures can also deliberately <em>share</em> one private
+        variable, simply by being defined together in the same invocation of
+        the outer function:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function counter(start = 0) {
+  let n = start;                   // shared private state
+  return {
+    get count() { return n++; },   // getter: read-and-increment
+    set count(newValue) {          // setter: only allow increasing
+      if (newValue > n) n = newValue;
+      else throw new Error("count can only increase");
+    },
+  };
+}
+let c = counter(1000);
+c.count;          // => 1000
+c.count;          // => 1001
+c.count = 2000;
+c.count;          // => 2000
+c.count = 500;     // throws Error — this looks like plain property access
+                    // syntax at the call site, but it's really invoking a
+                    // closure-backed setter function (see §8.2.5).</code></pre>
+      </div>
+
+      <h3 id="closure-loop-bug">The <code>var</code>-in-a-loop capture bug <span class="badge hard">Classic gotcha</span></h3>
+      <p>
+        A closure captures the <em>variable</em> itself, live, not a
+        snapshot of whatever value that variable happened to hold at the
+        moment the closure was created. That distinction is invisible until
+        you create several closures inside one loop — at which point,
+        depending on whether the loop variable was declared with
+        <code>var</code> or with <code>let</code>, you get either one shared
+        variable or a fresh, independent one per iteration.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// BUGGY — var is function-scoped, so there is only ONE variable i,
+// shared by all 10 closures created in this loop.
+function makeReadersVar() {
+  let readers = [];
+  for (var i = 0; i < 10; i++) {
+    readers.push(() => i);
+  }
+  return readers;
+}
+let rv = makeReadersVar();
+rv[5]();     // => 10 — NOT 5! By the time any reader runs, the loop has
+             // already finished and i has already reached its final value.
+rv[0]();     // => 10 as well — every single closure shares that one i.</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// FIXED with let — each iteration of a for(let ...) loop gets its OWN
+// fresh binding of i, independent of every other iteration's binding.
+function makeReadersLet() {
+  let readers = [];
+  for (let i = 0; i < 10; i++) {
+    readers.push(() => i);
+  }
+  return readers;
+}
+let rl = makeReadersLet();
+rl[5]();     // => 5, exactly as expected
+rl[0]();     // => 0 — each closure has its own private i</code></pre>
+      </div>
+      <p>
+        Before <code>let</code> existed, the standard workaround was to wrap
+        the loop body in an IIFE that takes the current value as a
+        parameter — a fresh function invocation means a fresh parameter
+        binding, which is exactly the isolation we need:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// PRE-ES6 FIX: an IIFE creates a new function-call scope per iteration,
+// and the parameter `iCopy` captures that iteration's value by value.
+function makeReadersIIFE() {
+  let readers = [];
+  for (var i = 0; i < 10; i++) {
+    readers.push((function (iCopy) {
+      return function () { return iCopy; };
+    })(i));
+  }
+  return readers;
+}
+let ri = makeReadersIIFE();
+ri[5]();     // => 5 — the IIFE's parameter froze this iteration's value</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Why this is more than a loop quirk</div>
+        <p>
+          The underlying rule generalizes far past loops: with
+          <code>var</code>, every iteration of any loop — and indeed every
+          statement in the whole enclosing function — shares one variable
+          per name, because <code>var</code> is function-scoped, not
+          block-scoped. With <code>let</code>/<code>const</code>, each block
+          (including each loop iteration) gets an independent binding. This
+          single fact is one of the strongest practical reasons to default
+          to <code>let</code>/<code>const</code> everywhere and reserve
+          <code>var</code> for maintaining legacy code.
+        </p>
+      </div>
+
+      <h3 id="closures-and-this">Closures and <code>this</code></h3>
+      <p>
+        Remember that <code>this</code> is a keyword, not a lexically scoped
+        variable — a plain <code>function</code>-defined closure does
+        <em>not</em> automatically see the <code>this</code> of the code
+        that encloses it, for exactly the reasons covered in
+        <a href="#this-binding">§8.2's this-binding deep dive</a>. The same
+        three fixes apply here: define the closure as an arrow function,
+        capture <code>const self = this;</code> before defining it, or
+        <code>.bind(this)</code> it explicitly.
+      </p>
+
+      <h2 id="function-properties">8.7 Function properties, methods, and the constructor</h2>
+      <p>
+        <code>typeof</code> reports <code>"function"</code>, but under the
+        hood a function is just a specialized object, so it can carry
+        properties and expose methods exactly as any other object can.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Member</th><th>What it gives you</th></tr>
+          <tr><td><code>length</code></td><td>Read-only. The number of declared parameters <em>before</em> the first default or rest parameter (a rest parameter itself is never counted).</td></tr>
+          <tr><td><code>name</code></td><td>Read-only. The name used at definition, or the variable/property name an anonymous function expression was first assigned to. Mainly useful for debugging and error messages.</td></tr>
+          <tr><td><code>prototype</code></td><td>Every ordinary function (not arrows, not most built-ins) gets one automatically; it becomes the object that instances created with <code>new</code> inherit from. Covered fully with <a href="08-classes.html">Classes</a>.</td></tr>
+          <tr><td><code>call()</code> / <code>apply()</code></td><td>Invoke immediately with an explicit <code>this</code>. See the deep dive below.</td></tr>
+          <tr><td><code>bind()</code></td><td>Return a new function permanently bound to a given <code>this</code> (and optionally some leading arguments). See the deep dive below.</td></tr>
+          <tr><td><code>toString()</code></td><td>Returns (in most implementations) the function's source text; built-ins typically report something like <code>"function foo() { [native code] }"</code>.</td></tr>
+        </table>
+      </div>
+
+      <h3 id="call-apply">The <code>call()</code> and <code>apply()</code> methods <span class="badge hard">Explicit <code>this</code>, deep dive</span></h3>
+      <p>
+        <code>call()</code> and <code>apply()</code> both invoke a function
+        immediately with a <code>this</code> value you supply as their first
+        argument — as though the function had been a method of that object
+        all along, even if it never was and never will be again. They differ
+        only in how you supply the remaining arguments: <code>call()</code>
+        takes them individually, comma-separated; <code>apply()</code> takes
+        a single array (or array-like) containing them.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function reportBalance(currency) {
+  return `${this.owner}: ${currency}${this.balance}`;
+}
+let acct = { owner: "Priya", balance: 340 };
+
+reportBalance.call(acct, "$");     // "Priya: $340" — args listed individually
+reportBalance.apply(acct, ["$"]);  // "Priya: $340" — args packed in an array
+
+// This is conceptually equivalent to temporarily attaching the function
+// as a method, calling it, then removing it again:
+acct.tmp = reportBalance;
+acct.tmp("$");
+delete acct.tmp;</code></pre>
+      </div>
+      <p>
+        <code>apply()</code>'s array-of-arguments form is especially handy
+        when you're forwarding a caller's arguments to another function
+        without knowing in advance how many there are — the traditional use
+        case before the spread operator existed for exactly this purpose:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let readings = [4, 19, 2, 77, 3];
+let biggest = Math.max.apply(Math, readings);   // pre-ES6 idiom
+let biggestModern = Math.max(...readings);       // equivalent, modern spread
+
+// A logging wrapper that preserves the wrapped method's `this` AND its
+// original arguments, using apply() to forward both:
+function withLogging(obj, methodName) {
+  let original = obj[methodName];
+  obj[methodName] = function (...args) {
+    console.log(`calling ${methodName}`);
+    let result = original.apply(this, args);   // same this, same args
+    console.log(`returned`, result);
+    return result;
+  };
+}</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Arrow functions ignore the <code>this</code> argument</div>
+        <p>
+          Arrow functions never accept a new <code>this</code> binding from
+          anywhere, including from <code>call()</code>/<code>apply()</code>.
+          Calling <code>arrowFn.call(someObj)</code> silently ignores
+          <code>someObj</code> for binding purposes — the arrow still uses
+          whatever <code>this</code> was in effect at its own definition
+          site. Any extra arguments after that first one, however, are still
+          passed through normally.
+        </p>
+      </div>
+
+      <h3 id="bind-method">The <code>bind()</code> method <span class="badge hard">Permanent binding, deep dive</span></h3>
+      <p>
+        <code>bind()</code> does not invoke the function — it returns a
+        <strong>brand-new function</strong> permanently wired to call the
+        original with a fixed <code>this</code>, no matter how that new
+        function is later invoked (as a plain call, as a method of some other
+        object, even with another <code>bind()</code> — the original binding
+        wins).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function greet(greeting) { return `${greeting}, ${this.name}`; }
+let user = { name: "Noor" };
+let greetUser = greet.bind(user);
+greetUser("Hello");                 // "Hello, Noor"
+
+// Binding survives being reassigned as someone else's method:
+let other = { name: "Ravi", greetUser };
+other.greetUser("Hi");               // "Hi, Noor" — still bound to `user`,
+                                      // NOT to `other`, despite the syntax
+                                      // looking like a method call on other.</code></pre>
+      </div>
+      <p>
+        <code>bind()</code> also performs <strong>partial application</strong>:
+        any arguments supplied after the <code>this</code> value are baked
+        into every future call, prepended before whatever arguments the
+        caller supplies later. This works even on arrow functions (which
+        otherwise ignore the <code>this</code> argument) since binding
+        arguments has nothing to do with <code>this</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let sum = (x, y) => x + y;
+let addOne = sum.bind(null, 1);     // this is irrelevant here; bind arg 1
+addOne(9);                           // => 10
+
+function scaleThenAdd(y, z) { return this.factor * y + z; }
+let scaleBy10AndAddTwo = scaleThenAdd.bind({ factor: 10 }, 2);
+scaleBy10AndAddTwo(5);               // => 10*2 + 5 = 25
+
+// bind()'s name property is the original name, prefixed with "bound ":
+scaleThenAdd.name;              // "scaleThenAdd"
+scaleBy10AndAddTwo.name;         // "bound scaleThenAdd"</code></pre>
+      </div>
+      <p>
+        In practice, the single most common reason to reach for
+        <code>bind()</code> is making an ordinary <code>function</code>
+        behave like an arrow — permanently pinning it to a particular
+        <code>this</code> before handing it off as a callback (an event
+        handler, a <code>setTimeout</code> callback, a promise
+        <code>.then()</code>), so it doesn't lose track of its intended
+        receiver once JavaScript's normal call-site-determines-<code>this</code>
+        rule would otherwise kick in.
+      </p>
+
+      <h3 id="function-constructor">The <code>Function()</code> constructor</h3>
+      <p>
+        Because functions are objects, there's naturally a constructor that
+        builds one from strings at runtime: every argument except the last
+        is a parameter name, and the last argument is the body's source
+        text.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const multiply = new Function("x", "y", "return x * y;");
+multiply(3, 4);   // => 12 — equivalent to function(x,y){ return x*y; }</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Why you'll basically never use this</div>
+        <p>
+          Three problems make <code>Function()</code> a poor everyday tool.
+          First, it re-parses and recompiles its source text on every single
+          call, unlike an ordinary nested function or function expression,
+          which is compiled once — calling it inside a hot loop is a real
+          performance liability. Second, functions it creates are always
+          anonymous. Third, and most surprising: functions created this way
+          do <strong>not</strong> close over the lexical scope where the
+          <code>new Function(...)</code> expression appears — they behave as
+          if defined at the top level, with access only to global variables:
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let scope = "global";
+function makeReader() {
+  let scope = "local";
+  return new Function("return scope;");   // does NOT capture local scope
+}
+makeReader()();   // => "global", not "local"</code></pre>
+      </div>
+      <p>
+        <code>Function()</code> is best thought of as a global-scoped
+        cousin of <code>eval()</code>, useful only for the rare case of
+        compiling genuinely dynamic, string-sourced code at runtime.
+      </p>
+
+      <h2 id="functional-programming">8.8 Functional programming</h2>
+      <p>
+        JavaScript isn't a functional language the way Lisp or Haskell are,
+        but treating functions as ordinary data — combined with array
+        methods like <code>map()</code> and <code>reduce()</code> — makes a
+        functional style perfectly workable, and sometimes strikingly
+        concise.
+      </p>
+
+      <h3 id="processing-arrays-functionally">Processing arrays with functions</h3>
+      <p>
+        Compare an imperative computation of a mean and standard deviation
+        with the same computation expressed functionally:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Imperative style
+let data = [2, 4, 4, 4, 5, 5, 7, 9];
+let total = 0;
+for (let i = 0; i < data.length; i++) total += data[i];
+let mean = total / data.length;                 // => 5
+let sumSquares = 0;
+for (let i = 0; i < data.length; i++) {
+  let d = data[i] - mean;
+  sumSquares += d * d;
+}
+let stddev = Math.sqrt(sumSquares / (data.length - 1));
+
+// Functional style, using map() and reduce() from Array (see §7.8.1)
+const add = (x, y) => x + y;
+const squareOf = x => x * x;
+let mean2 = data.reduce(add) / data.length;
+let deviations = data.map(x => x - mean2);
+let stddev2 = Math.sqrt(deviations.map(squareOf).reduce(add) / (data.length - 1));</code></pre>
+      </div>
+
+      <h3 id="higher-order-functions">Higher-order functions</h3>
+      <p>
+        A <strong>higher-order function</strong> is one that accepts a
+        function as an argument, returns a function as its result, or both.
+        They're the backbone of functional composition:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Takes a predicate, returns its logical negation as a new function.
+function negate(predicate) {
+  return (...args) => !predicate.apply(this, args);
+}
+const isEven = n => n % 2 === 0;
+const isOdd = negate(isEven);
+[1, 3, 5, 7].every(isOdd);        // => true
+
+// Takes two functions, returns their composition f(g(...)).
+function compose(f, g) {
+  return function (...args) {
+    return f.call(this, g.apply(this, args));
+  };
+}
+const double = x => x * 2;
+const increment = x => x + 1;
+compose(double, increment)(5);    // => 12 : double(increment(5))</code></pre>
+      </div>
+
+      <h3 id="partial-application-currying">Partial application and currying</h3>
+      <p>
+        <code>bind()</code>'s partial-application behavior (<a href="#bind-method">§8.7.5</a>)
+        fixes arguments starting from the left. It's straightforward to
+        write variants that fix arguments from the right, or that fill in a
+        template with gaps:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function partialLeft(f, ...boundArgs) {
+  return function (...callArgs) {
+    return f.apply(this, [...boundArgs, ...callArgs]);
+  };
+}
+function partialRight(f, ...boundArgs) {
+  return function (...callArgs) {
+    return f.apply(this, [...callArgs, ...boundArgs]);
+  };
+}
+const divide = (x, y) => x / y;
+partialLeft(divide, 100)(4);    // => 25   : 100 / 4
+partialRight(divide, 4)(100);   // => 25   : 100 / 4
+
+// Curry a 2-argument function into a chain of 1-argument functions:
+function curry2(f) {
+  return x => y => f(x, y);
+}
+const addC = curry2((x, y) => x + y);
+addC(3)(4);   // => 7
+const addThree = addC(3);   // partially applied, reusable
+addThree(10); // => 13</code></pre>
+      </div>
+
+      <h3 id="memoization">Memoization</h3>
+      <p>
+        Memoization wraps a function so that results are computed once per
+        distinct set of arguments and then served from a cache on every
+        repeat call — trading memory for time, and turning naive exponential
+        recursive algorithms into linear ones.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function memoize(f) {
+  const cache = new Map();
+  return function (...args) {
+    let key = JSON.stringify(args);      // works when args stringify uniquely
+    if (!cache.has(key)) {
+      cache.set(key, f.apply(this, args));
+    }
+    return cache.get(key);
+  };
+}
+
+function gcd(a, b) {
+  if (a < b) [a, b] = [b, a];
+  while (b !== 0) [a, b] = [b, a % b];
+  return a;
+}
+const fastGcd = memoize(gcd);
+fastGcd(187, 85);   // => 17, computed and cached
+
+// Recursive functions should recurse through the MEMOIZED name, so that
+// every recursive call — not just the outermost one — benefits from cache.
+const fib = memoize(function (n) {
+  return n <= 1 ? n : fib(n - 1) + fib(n - 2);
+});
+fib(40);   // fast, thanks to caching every intermediate result</code></pre>
+      </div>
+
+      <h2 id="summary">8.9 Summary</h2>
+      <ul>
+        <li>
+          Three syntaxes define functions — declarations (hoisted, named),
+          expressions (not hoisted, name optional), and arrow functions
+          (concise, and lexically inherit <code>this</code>,
+          <code>arguments</code>, <code>super</code>, and
+          <code>new.target</code> rather than binding their own).
+        </li>
+        <li>
+          Five invocation styles exist, and <code>this</code> is determined
+          entirely by which one you use — plain call, method call,
+          constructor call, indirect call via <code>call()</code>/<code>apply()</code>/<code>bind()</code>,
+          and implicit invocation through getters/setters, coercion,
+          iteration, and tagged templates. Arrow functions opt out of this
+          rebinding entirely.
+        </li>
+        <li>
+          Parameters support default values, rest parameters (gathering
+          extra arguments into a real array), and full destructuring
+          patterns; the legacy <code>arguments</code> object still exists
+          but is superseded by rest parameters in new code.
+        </li>
+        <li>
+          Because functions are ordinary objects, they can be stored,
+          passed, aliased, and given their own properties — the foundation
+          of treating behavior as data.
+        </li>
+        <li>
+          A closure is a function bundled with the scope it was defined in;
+          it stays alive and mutable as long as any reference to that
+          function survives, which is what gives JavaScript private state
+          without special syntax — and what causes the classic
+          <code>var</code>-in-a-loop capture bug, fixed by
+          <code>let</code> or by an IIFE.
+        </li>
+        <li>
+          <code>call()</code>, <code>apply()</code>, and <code>bind()</code>
+          let you override or permanently fix <code>this</code> and, for
+          <code>bind()</code>, pre-fill leading arguments (partial
+          application).
+        </li>
+        <li>
+          Combining higher-order functions, partial application, and
+          memoization enables a genuinely functional programming style on
+          top of ordinary JavaScript functions.
+        </li>
+      </ul>
+      <p>
+        Functions become even more capable once you attach them to
+        prototypes and wrap them in class syntax — the subject of
+        <a href="08-classes.html">Classes</a> next — and once they gain the
+        ability to pause and resume, which is where
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>
+        and <a href="14-async-javascript.html">Asynchronous JavaScript</a>
+        pick up the story.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

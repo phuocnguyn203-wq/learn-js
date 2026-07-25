@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Node.js — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="21-nodejs.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 16</span>
+      <h1>Node.js</h1>
+      <p class="lede">
+        Node is JavaScript with bindings to the operating system: it can read
+        and write files, execute other programs, and talk to the network
+        directly, without any of the sandboxing a browser imposes. It is a
+        shell-scripting replacement, a general-purpose language runtime, and —
+        because of a single-threaded, asynchronous-by-default event loop
+        borrowed straight from the browser — a popular way to write highly
+        concurrent servers. This page is long because the API surface is
+        large: every major module (<code>fs</code>, streams, HTTP, child
+        processes, threads) ships with its own set of conventions, and the
+        gotchas hide in the differences between them.
+      </p>
+
+      <h2 id="programming-basics">16.1 Node programming basics</h2>
+      <p>
+        A Node program is, at the top level, just a JavaScript file executed
+        from top to bottom by the <code>node</code> executable. There is no
+        <code>window</code>, no DOM, and no default way to display anything —
+        instead Node hands you a <code>process</code> object and a module
+        system for structuring larger programs.
+      </p>
+
+      <h3 id="console-output">Console output isn't just for debugging</h3>
+      <p>
+        In a browser, <code>console.log()</code> is a developer-tools
+        convenience. In Node it is the ordinary way for a program to produce
+        output: it writes to the <code>stdout</code> stream, the same stream a
+        Unix command line tool writes its normal output to.
+        <code>console.error()</code> is not just a "scarier" version of the
+        same thing — it writes to the separate <code>stderr</code> stream.
+        That distinction matters in practice: if a user redirects your
+        program's stdout to a file (<code>node report.js &gt; out.txt</code>),
+        text printed with <code>console.log()</code> disappears into that
+        file, while anything printed with <code>console.error()</code> still
+        shows up on the terminal. Command-line tools conventionally use
+        <code>console.error()</code> for progress messages and warnings, and
+        reserve <code>console.log()</code> for the actual data the program was
+        asked to produce.
+      </p>
+
+      <h3 id="the-process-object">The <code>process</code> object</h3>
+      <p>
+        <code>process</code> is a global — you never <code>require()</code>
+        it — and it describes the currently running Node instance: its
+        command-line invocation, its environment, and its lifecycle.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">process.argv       // array: [node path, script path, ...user args]
+process.env         // object: environment variable name -> string value
+process.cwd()       // current working directory (a function call, not a property)
+process.chdir(dir)  // change the working directory
+process.exit(code)  // terminate immediately; nonzero code means failure
+process.exitCode    // set this instead of calling exit() to let pending I/O finish
+process.pid         // this process's OS process id
+process.platform    // "linux", "darwin", "win32", etc.
+process.version     // Node's own version string
+process.stdin       // Readable stream connected to standard input
+process.stdout      // Writable stream connected to standard output
+process.stderr      // Writable stream connected to standard error</code></pre>
+      </div>
+      <p>
+        <code>process.argv</code> is the classic gotcha for anyone coming from
+        other languages: index 0 is always the absolute path to the
+        <code>node</code> binary itself, and index 1 is always the absolute
+        path to the script being run — your program's own arguments only
+        start at index 2. Anything you pass to <code>node</code> itself before
+        the script name (like <code>--trace-warnings</code>) is consumed by
+        the Node executable and never appears in <code>argv</code> at all.
+      </p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ node argv.js --verbose input.txt
+# process.argv is:
+# [ "/usr/local/bin/node", "/home/me/argv.js", "--verbose", "input.txt" ]</code></pre>
+      </div>
+      <p>
+        <code>process.env</code> exposes the process's environment variables
+        as an ordinary object of strings — there is no automatic type
+        coercion, so <code>process.env.PORT</code> is always the string
+        <code>"3000"</code>, never the number <code>3000</code>, even if that
+        is obviously what was meant. This is the idiomatic way to pass
+        configuration (API keys, feature flags, the deployment environment
+        name) into a Node program without hardcoding it in source, and most
+        deployment platforms populate it for you.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Two more useful globals: <code>__dirname</code> and <code>__filename</code></div>
+        <p>
+          Inside a CommonJS module (see below), Node quietly defines
+          <code>__filename</code> as the absolute path to the current file and
+          <code>__dirname</code> as the absolute path to the directory
+          containing it. These are indispensable for building paths to other
+          files that ship alongside your code, because they are correct no
+          matter what directory the user happened to be in when they invoked
+          <code>node</code> — unlike <code>process.cwd()</code>, which tracks
+          the shell's working directory, not your script's location.
+        </p>
+      </div>
+
+      <h3 id="program-life-cycle">Program life cycle, signals, and uncaught errors</h3>
+      <p>
+        A Node program does not necessarily exit when it reaches the last
+        line of its main file. Node keeps running as long as there is
+        outstanding asynchronous work — a pending timer, an open server
+        socket, a callback that has not yet fired. A program with no pending
+        work exits automatically; a network server that is still
+        <code>listen()</code>ing will, in principle, run forever, since there
+        is always the possibility of one more connection event. Calling
+        <code>process.exit(code)</code> forces an immediate stop regardless of
+        pending work.
+      </p>
+      <p>
+        Users conventionally stop a running program by typing Ctrl-C in its
+        terminal, which sends the process a <code>SIGINT</code> signal. By
+        default this kills the process, but you can intercept it (for example,
+        to close database connections cleanly before quitting) because
+        <code>process</code> is itself an event emitter for OS signals:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">process.on("SIGINT", () => {
+  console.error("Shutting down gracefully...");
+  server.close(() => process.exit(0));
+});</code></pre>
+      </div>
+      <p>
+        An exception that escapes every <code>catch</code> block normally
+        prints a stack trace and crashes the process — and because so much of
+        Node's API is asynchronous, an exception thrown inside a callback or
+        event handler cannot be caught by a <code>try</code>/<code>catch</code>
+        wrapped around the code that registered it; by the time the callback
+        runs, that surrounding stack frame is long gone. If you want a last
+        line of defense instead of an immediate crash, you can register global
+        handlers for both uncaught synchronous exceptions and unhandled
+        Promise rejections:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  // The process is now in an unknown state — log and exit, don't just carry on.
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled rejection:", reason);
+});</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Global handlers are a safety net, not a strategy</div>
+        <p>
+          Once <code>uncaughtException</code> fires, the process may be in a
+          corrupted state (a half-finished operation, a lock never released),
+          so the conventional advice is to log the error and exit rather than
+          try to keep serving requests. Unhandled promise rejections are
+          non-fatal today but are widely expected to become fatal in future
+          Node versions, so treat every rejected promise as a bug to fix, not
+          a message to suppress.
+        </p>
+      </div>
+
+      <h3 id="commonjs-modules">CommonJS modules: <code>require</code> and <code>module.exports</code></h3>
+      <p>
+        Node predates JavaScript having any standard module system, so it
+        invented its own, now called <strong>CommonJS</strong>. A module
+        exports values by assigning to <code>module.exports</code> (or by
+        adding properties to the shorthand <code>exports</code> object, which
+        starts out as a reference to the same object as
+        <code>module.exports</code>), and another file pulls those values in
+        with the <code>require()</code> function:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// stats.js — exporting
+function mean(data) { return data.reduce((a, b) => a + b) / data.length; }
+function stddev(data) { /* ... */ }
+module.exports = { mean, stddev };
+// equivalently, incrementally:
+// exports.mean = mean;
+// exports.stddev = stddev;
+
+// main.js — importing
+const { mean, stddev } = require("./stats.js");
+const fs = require("fs");            // a built-in module, no path needed
+const express = require("express");  // a package installed into node_modules/</code></pre>
+      </div>
+      <p>
+        The crucial difference from ES <code>import</code> is that
+        <code>require()</code> is an ordinary function call, evaluated at the
+        point it appears — it can be wrapped in an <code>if</code>, called
+        inside a function body, or built from a computed string, none of which
+        is legal with static <code>import</code> declarations. Node resolves
+        the string you pass to <code>require()</code> using a fixed algorithm:
+        a name with no leading <code>./</code>, <code>../</code>, or
+        <code>/</code> (like <code>"fs"</code> or <code>"express"</code>) is
+        looked up first among Node's built-in modules, then in the nearest
+        <code>node_modules/</code> directory, walking up the directory tree
+        until one is found; a path starting with a dot or slash is resolved
+        relative to the requiring file and, if it doesn't already end in
+        <code>.js</code>/<code>.json</code>/<code>.node</code>, Node tries
+        those extensions in turn, and finally tries treating the path as a
+        directory containing an <code>index.js</code>. <code>require()</code>
+        also caches: requiring the same resolved file twice returns the exact
+        same exports object both times, rather than re-running the module.
+      </p>
+      <p>
+        Node 13 and later also support standard ES modules alongside CommonJS,
+        but the two systems don't mix freely — a CommonJS file gets
+        <code>require</code>/<code>module</code>/<code>exports</code>
+        predefined and cannot use <code>import</code>/<code>export</code>
+        syntax, while an ES module file gets <code>import</code>/
+        <code>export</code> enabled and does <em>not</em> get
+        <code>require</code>, <code>module</code>, or <code>exports</code>
+        defined at all. Node decides which mode applies to a given
+        <code>.js</code> file by looking for the nearest
+        <code>package.json</code> and checking its top-level
+        <code>"type"</code> field: <code>"type": "module"</code> means ES
+        modules, <code>"type": "commonjs"</code> (or no <code>type</code>
+        field, or no <code>package.json</code> at all) means CommonJS. You can
+        sidestep the lookup entirely by naming the file explicitly:
+        <code>.mjs</code> is always an ES module, <code>.cjs</code> is always
+        CommonJS, regardless of <code>package.json</code>. An ES module is
+        allowed to <code>import</code> a CommonJS module, but the reverse —
+        <code>require()</code>ing an ES module — is not supported. See
+        <a href="09-modules.html">Modules</a> for the full contrast with
+        <code>import</code>/<code>export</code> syntax and semantics; for new
+        code, ES modules are generally the better default.
+      </p>
+
+      <h3 id="npm-and-package-json">npm and <code>package.json</code></h3>
+      <p>
+        A Node installation bundles <strong>npm</strong>, the Node Package
+        Manager, which downloads third-party libraries and tracks which ones
+        your project depends on inside a <code>package.json</code> file at
+        your project root. Running <code>npm init</code> in an empty project
+        directory interactively creates a starter <code>package.json</code>;
+        running <code>npm install &lt;package&gt;</code> downloads that
+        package and all of its own dependencies into a local
+        <code>node_modules/</code> directory and records the dependency in
+        <code>package.json</code> (with an exact pinned version in the
+        accompanying <code>package-lock.json</code>). Handing your source code
+        and <code>package.json</code> to someone else lets them recreate your
+        exact dependency tree with a single <code>npm install</code> — nobody
+        commits <code>node_modules/</code> to version control.
+      </p>
+      <div class="code-block" data-lang="JSON">
+<pre><code class="language-json">{
+  "name": "my-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}</code></pre>
+      </div>
+      <p>
+        The <code>"type"</code> field is also where a project opts into ES
+        modules for all of its plain <code>.js</code> files, as described
+        above. Beyond dependency management, this chapter otherwise sticks to
+        Node's built-in modules — nothing here requires installing anything
+        with npm.
+      </p>
+
+      <h2 id="asynchronous-by-default">16.2 Node is asynchronous by default</h2>
+      <p>
+        Node's defining architectural choice is to achieve concurrency without
+        threads. Multithreaded programming is notoriously easy to get subtly
+        wrong, and heavyweight besides — a server handling hundreds of
+        concurrent connections with one OS thread each would burn a
+        prohibitive amount of memory just on thread stacks. Node instead
+        keeps a single JavaScript thread (the same model the browser uses) and
+        makes its I/O APIs nonblocking by default, so that thread is never
+        stuck waiting on a disk or a socket.
+      </p>
+      <p>
+        Node takes this further than most environments: not just network I/O,
+        but filesystem operations too default to asynchronous, nonblocking
+        functions. This made more sense when spinning hard drives had
+        millisecond-scale seek latency, and it still makes sense today when
+        the "local" filesystem might actually be network-attached storage. In
+        Node's model, calling a function to read a file doesn't block —
+        instead you register a callback, the underlying OS call is dispatched,
+        and your callback fires later when the data is ready, along with
+        everyone else's registered callbacks, on the single JS thread's
+        <strong>event loop</strong>. The high-level phases of that loop, in
+        rough order each iteration: timers (<code>setTimeout</code>/
+        <code>setInterval</code> callbacks whose time has come), pending I/O
+        callbacks, poll (retrieving new I/O events and running their
+        callbacks), <code>setImmediate()</code> callbacks, and finally close
+        callbacks (like a socket's <code>"close"</code> event) — with
+        microtasks (resolved Promise continuations, <code>process.nextTick()</code>
+        callbacks) drained between every one of those phases. You rarely need
+        the phase names memorized, but the model to hold onto is: nothing runs
+        in parallel, and every callback runs to completion before the next one
+        starts.
+      </p>
+      <p>
+        Because Node predates the <code>Promise</code> class, its
+        asynchronous APIs were designed around plain callbacks, using a
+        specific convention called the <strong>error-first callback</strong>:
+        the callback's first parameter is <code>null</code> on success or an
+        <code>Error</code> (or error-shaped value) on failure, and any actual
+        result is passed as the second parameter. Putting the error argument
+        first is deliberate — it makes it awkward to silently forget to check
+        for one.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const fs = require("fs");
+
+function readConfigFile(path, callback) {
+  fs.readFile(path, "utf8", (err, text) => {
+    if (err) {                 // Always check the first argument first.
+      console.error(err);
+      callback(null);
+      return;
+    }
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error(e);
+    }
+    callback(data);
+  });
+}</code></pre>
+      </div>
+      <p>
+        Because Node is fairly disciplined about the error-first convention,
+        it is straightforward to wrap a callback-based function to return a
+        Promise instead, using the built-in <code>util.promisify()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const util = require("util");
+const fs = require("fs");
+const readFileP = util.promisify(fs.readFile);
+
+async function readConfigFile(path) {
+  let text = await readFileP(path, "utf8");
+  return JSON.parse(text);
+}
+// Node itself already ships a promisified fs — fs.promises.readFile — so
+// in practice you reach for util.promisify() mainly for third-party or
+// older callback-style APIs that don't offer their own Promise variant.</code></pre>
+      </div>
+      <p>
+        See <a href="14-async-javascript.html">asynchronous JavaScript</a>
+        for the general treatment of callbacks, Promises, and
+        <code>async</code>/<code>await</code> — everything there applies
+        directly to Node, which is simply the environment where the
+        callback style originated and still shows up throughout the built-in
+        API.
+      </p>
+
+      <h2 id="buffers">16.3 Buffers</h2>
+      <p>
+        Text has an encoding, but raw bytes — the contents of an image file, a
+        network packet, encrypted data — do not. Node needed a byte-array type
+        for this before JavaScript itself had one, so it defined
+        <code>Buffer</code>. Now that <code>Uint8Array</code> is a standard
+        part of the language (see <a href="10-collections-typed-arrays.html">typed arrays</a>),
+        <code>Buffer</code> is implemented as a subclass of it: every
+        <code>Buffer</code> is a <code>Uint8Array</code>, and every
+        <code>Uint8Array</code> method works on one, but <code>Buffer</code>
+        adds convenient two-way conversion to and from strings via named
+        text encodings.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Encoding</th><th>Notes</th></tr>
+          <tr><td><code>"utf8"</code></td><td>Default when none is specified; general-purpose Unicode</td></tr>
+          <tr><td><code>"utf16le"</code></td><td>Two-byte little-endian Unicode; <code>"ucs2"</code> is an alias</td></tr>
+          <tr><td><code>"latin1"</code></td><td>One byte per character (ISO-8859-1); also called <code>"binary"</code></td></tr>
+          <tr><td><code>"ascii"</code></td><td>7-bit English-only, a strict subset of UTF-8</td></tr>
+          <tr><td><code>"hex"</code></td><td>Each byte becomes two hex digit characters</td></tr>
+          <tr><td><code>"base64"</code></td><td>Each 3 bytes becomes 4 ASCII characters</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let b = Buffer.from([0x41, 0x42, 0x43]);   // &lt;Buffer 41 42 43&gt;
+b.toString();                              // "ABC" — default utf8
+b.toString("hex");                         // "414243"
+
+let computer = Buffer.from("IBM3111", "ascii");
+for (let i = 0; i &lt; computer.length; i++) {
+  computer[i]--;                           // Buffers are mutable byte arrays
+}
+computer.toString("ascii");                // "HAL2000"
+
+// Allocating buffers directly:
+let zeros = Buffer.alloc(1024);            // 1024 zero bytes
+let ones  = Buffer.alloc(128, 1);          // 128 bytes, each equal to 1
+let dead  = Buffer.alloc(1024, "DEADBEEF", "hex"); // repeating byte pattern
+
+// Reading multi-byte numeric values out of a buffer at an offset:
+dead.readUInt32BE(0);       // 0xDEADBEEF, big-endian
+dead.readUInt32LE(1020);    // 0xEFBEADDE, little-endian
+dead.readBigUInt64BE(6);    // 0xBEEFDEADBEEFDEADn</code></pre>
+      </div>
+      <p>
+        Many Node APIs — file reads, socket data, streams in general — can
+        hand you either a <code>Buffer</code> or a decoded string depending on
+        whether you told them which text encoding to use. If you only ever
+        deal with text, specifying the encoding up front (e.g.
+        <code>fs.readFile(path, "utf8", cb)</code>) often means you can avoid
+        touching <code>Buffer</code> directly at all; reach for it explicitly
+        once you're manipulating genuinely binary data.
+      </p>
+
+      <h2 id="events-and-eventemitter">16.4 Events and EventEmitter</h2>
+      <p>
+        Error-first callbacks work well when an operation produces exactly
+        one result exactly once. Many Node objects instead represent ongoing
+        activity that can fire the same kind of notification repeatedly, or
+        several different kinds of notification over their lifetime — a
+        network server accepts many connections, a socket receives many
+        chunks of data. These objects are all instances of
+        <code>EventEmitter</code> (or a subclass of it), the pattern
+        underlying almost every non-trivial Node API.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const EventEmitter = require("events"); // module name != class name
+const net = require("net");
+let server = new net.Server();
+server instanceof EventEmitter;   // true — Servers are EventEmitters
+
+server.on("connection", (socket) => {  // register a listener
+  socket.end("Hello, world!\n", "utf8");
+});
+server.once("close", () => console.log("server closed")); // fires at most once
+// server.off("connection", handler)  removes a previously added listener
+// server.emit("customEvent", 1, 2)   fires listeners yourself (rare in user code)</code></pre>
+      </div>
+      <p>
+        <code>on()</code> (aliased <code>addListener()</code>) registers a
+        handler for a named event type; <code>once()</code> registers one
+        that automatically removes itself after firing a single time;
+        <code>off()</code> (aliased <code>removeListener()</code>) removes a
+        previously registered handler. If several listeners are registered
+        for the same event, they run in registration order.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title"><span class="badge hard">hard</span> Emission is synchronous, and unhandled "error" events crash the process</div>
+        <p>
+          Unlike DOM events, which are dispatched through the browser's own
+          scheduling, <code>emit()</code> is an ordinary synchronous function
+          call: it invokes every registered listener for that event type, one
+          after another, on the current call stack, and does not return until
+          the last one has returned. If one listener is slow — say it calls a
+          blocking function — every other part of your single-threaded
+          program, including other events waiting to be handled, is blocked
+          until it finishes. If a listener throws, the exception propagates
+          out of <code>emit()</code> itself, and any listeners registered
+          after the one that threw never run for that emission.
+        </p>
+        <p>
+          The special case that catches people off guard is the
+          <code>"error"</code> event. Node's event-based APIs use it as the
+          equivalent of the error-first callback's first argument — an
+          <code>EventEmitter</code> that hits a problem emits
+          <code>"error"</code> rather than throwing directly. But if you
+          <code>emit("error", ...)</code> on an emitter that has <em>no</em>
+          listener registered for <code>"error"</code>, Node's default
+          behavior is to throw that error itself, asynchronously, which you
+          cannot catch with a surrounding <code>try</code>/<code>catch</code>
+          — and an uncaught throw crashes the whole process. Every
+          <code>EventEmitter</code> you don't fully control — every socket,
+          every stream, every child process — needs an <code>"error"</code>
+          listener attached, even if all it does is log:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A socket, stream, or server with NO "error" listener is a crash waiting
+// to happen the moment something goes wrong on the network or disk:
+let socket = net.createConnection(80, "example.com");
+socket.on("error", (err) => console.error("connection failed:", err));
+
+// Same idea for a Readable stream used for a file that might not exist:
+let input = fs.createReadStream("maybe-missing.txt");
+input.on("error", (err) => console.error("read failed:", err));</code></pre>
+        </div>
+      </div>
+      <p>
+        For CPU-heavy work that needs to happen in response to an event
+        without blocking the rest of the loop, defer it with
+        <code>setTimeout(fn, 0)</code> or Node's own
+        <code>setImmediate(fn)</code>, which runs <code>fn</code> as soon as
+        the current poll phase's I/O callbacks are done, ahead of any
+        newly-scheduled timers.
+      </p>
+
+      <h2 id="streams">16.5 Streams</h2>
+      <p>
+        The simplest way to process data is to read it all into memory, do
+        something with it, and write it all back out. That falls apart at
+        scale: a naive "read the whole file, then write the whole file" copy
+        function has to hold the entire file in RAM at once, can't start
+        writing until reading is completely finished, and gets worse the more
+        concurrent copies are in flight. Node's <strong>streams</strong> solve
+        this by moving data through your program in small chunks, so the full
+        dataset is never resident in memory at one time.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Type</th><th>Direction</th><th>Examples</th></tr>
+          <tr><td>Readable</td><td>source only</td><td><code>fs.createReadStream()</code>, <code>process.stdin</code>, an HTTP request body on the server</td></tr>
+          <tr><td>Writable</td><td>sink only</td><td><code>fs.createWriteStream()</code>, <code>process.stdout</code>, an HTTP response on the server</td></tr>
+          <tr><td>Duplex</td><td>both, independently</td><td>a <code>net.Socket</code> — reading and writing are unrelated data flows</td></tr>
+          <tr><td>Transform</td><td>writable in, readable out (related)</td><td><code>zlib.createGzip()</code>, <code>crypto.createCipheriv()</code></td></tr>
+        </table>
+      </div>
+      <p>
+        A Transform stream differs from a plain Duplex stream in that what you
+        write to it and what you read from it are the same logical data,
+        passed through some transformation — gzip compression, encryption —
+        rather than two unrelated streams sharing an object. By default,
+        streams read and write raw <code>Buffer</code> chunks; calling
+        <code>setEncoding(name)</code> on a Readable stream makes it hand you
+        decoded strings instead.
+      </p>
+
+      <h3 id="pipe">Pipes: the easy connector</h3>
+      <p>
+        The most common thing to do with a stream is connect its output
+        directly to another stream's input — read a file and send it to a
+        socket, or run data through a compressor on the way to disk. The
+        <code>pipe()</code> method does exactly this and, critically, handles
+        the coordination between the two streams' differing speeds
+        automatically:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const fs = require("fs");
+const zlib = require("zlib");
+
+// Three streams chained into a pipeline: read -> gzip -> write.
+fs.createReadStream("in.txt")
+  .pipe(zlib.createGzip())
+  .pipe(fs.createWriteStream("in.txt.gz"))
+  .on("finish", () => console.log("done"))
+  .on("error", (err) => console.error(err));</code></pre>
+      </div>
+      <p>
+        Remember to attach an <code>"error"</code> listener somewhere in a
+        pipe chain — per the EventEmitter rule above, an unhandled
+        <code>"error"</code> on any stream in the chain will otherwise crash
+        the process. A more involved worked example is a custom Transform
+        stream implementing a Unix-<code>grep</code>-like filter, which
+        overrides <code>_transform()</code> to process each incoming chunk
+        and <code>_flush()</code> to handle any leftover partial data at the
+        very end:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const stream = require("stream");
+
+class GrepStream extends stream.Transform {
+  constructor(pattern) {
+    super({ decodeStrings: false }); // keep strings as strings, don't re-encode
+    this.pattern = pattern;
+    this.incompleteLine = "";        // carries a partial line across chunks
+  }
+  _transform(chunk, encoding, callback) {
+    let lines = (this.incompleteLine + chunk).split("\n");
+    this.incompleteLine = lines.pop();       // last "line" may not be complete yet
+    let output = lines.filter((l) => this.pattern.test(l)).join("\n");
+    if (output) output += "\n";
+    callback(null, output);                  // always call back, even with ""
+  }
+  _flush(callback) {
+    if (this.pattern.test(this.incompleteLine)) {
+      callback(null, this.incompleteLine + "\n");
+    } else {
+      callback();
+    }
+  }
+}
+
+let pattern = new RegExp(process.argv[2]);
+process.stdin
+  .setEncoding("utf8")
+  .pipe(new GrepStream(pattern))
+  .pipe(process.stdout)
+  .on("error", () => process.exit());</code></pre>
+      </div>
+
+      <h3 id="async-iteration">Asynchronous iteration over a Readable stream</h3>
+      <p>
+        Since Node 12, a Readable stream is itself an async iterable, so you
+        can pull chunks out of it with ordinary <code>for await...of</code>
+        syntax inside an <code>async</code> function — no event handlers
+        needed for the common case of "process each chunk in order":
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">async function grep(source, destination, pattern, encoding = "utf8") {
+  source.setEncoding(encoding);
+  destination.on("error", () => process.exit());
+  let incompleteLine = "";
+  for await (let chunk of source) {
+    let lines = (incompleteLine + chunk).split("\n");
+    incompleteLine = lines.pop();
+    for (let line of lines) {
+      if (pattern.test(line)) destination.write(line + "\n", encoding);
+    }
+  }
+  if (pattern.test(incompleteLine)) {
+    destination.write(incompleteLine + "\n", encoding);
+  }
+}
+
+grep(process.stdin, process.stdout, new RegExp(process.argv[2]))
+  .catch((err) => { console.error(err); process.exit(); });</code></pre>
+      </div>
+      <p>
+        <code>for await...of</code> reads more like ordinary synchronous code
+        than the event-based APIs below, which is why it (and
+        <code>pipe()</code>) are the recommended default; reach for raw
+        <code>"data"</code>/<code>"readable"</code> events only when you need
+        finer control that those higher-level APIs don't expose. See
+        <a href="14-async-javascript.html">async iterators and
+        <code>for await</code></a> for the general language feature.
+      </p>
+
+      <h3 id="backpressure">Writing to streams and backpressure <span class="badge hard">hard</span></h3>
+      <div class="admonition warning">
+        <div class="admonition-title">Backpressure: why naive writes balloon memory</div>
+        <p>
+          <code>writable.write(chunk)</code> always accepts and buffers the
+          data you hand it — Node will grow the stream's internal buffer as
+          large as it needs to. But it also returns a boolean:
+          <code>true</code> if the internal buffer still has room,
+          <code>false</code> if the buffer is now full or over capacity. That
+          <code>false</code> return value is <strong>backpressure</strong> — a
+          signal that you are producing data faster than the destination can
+          drain it. The danger is concrete: a tight loop that calls
+          <code>write()</code> repeatedly while ignoring the return value will
+          keep buffering data in memory indefinitely, because nothing is ever
+          slowing the producer down to match the consumer's real throughput.
+          Given a slow destination (a laggy network client, a full disk) and
+          enough data, that buffer growth is unbounded — a classic way for a
+          Node server to balloon its memory usage or fall over outright.
+        </p>
+        <p>
+          Worse, this is externally triggerable: an HTTP client that opens a
+          request for a large file and then simply never reads the response
+          body forces the server's write buffer for that connection to grow
+          without limit if the server doesn't respect backpressure — a
+          realistic denial-of-service vector against a naively written file
+          server.
+        </p>
+        <p>The correct response to a <code>false</code> return is to stop writing until the stream emits a <code>"drain"</code> event:</p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Manually respecting backpressure with a callback:
+function write(stream, chunk, callback) {
+  let hasRoom = stream.write(chunk);
+  if (hasRoom) {
+    setImmediate(callback);          // fine to continue right away
+  } else {
+    stream.once("drain", callback);  // wait for room before writing more
+  }
+}
+
+// The same idea, Promise-based, so it composes with async/await:
+function writeAsync(stream, chunk) {
+  let hasRoom = stream.write(chunk);
+  return hasRoom ? Promise.resolve() : new Promise((resolve) => stream.once("drain", resolve));
+}
+
+async function copy(source, destination) {
+  destination.on("error", () => process.exit());
+  for await (let chunk of source) {
+    await writeAsync(destination, chunk);  // pause here until there's room
+  }
+}
+copy(process.stdin, process.stdout);</code></pre>
+        </div>
+        <p>
+          This is precisely why <code>pipe()</code> (and, when you write your
+          own loop, <code>for await...of</code> combined with an awaited
+          write helper like <code>writeAsync</code> above) are preferred over
+          calling <code>write()</code> in a bare loop: <code>pipe()</code>
+          watches the destination's return value and the <code>"drain"</code>
+          event for you and automatically pauses the source when the
+          destination is full, resuming it once the destination signals it
+          has room again. Handling backpressure by hand — as the flowing-mode
+          example below does explicitly — is instructive, but in real code
+          you almost always want <code>pipe()</code> or an
+          <code>await</code>ed write helper to do it for you rather than
+          re-deriving the coordination logic yourself.
+        </p>
+      </div>
+
+      <h3 id="flowing-and-paused-mode">Reading with events: flowing mode and paused mode</h3>
+      <p>
+        Before <code>pipe()</code> and async iteration existed, Readable
+        streams exposed two distinct event-based reading APIs, and both are
+        still in use in older code (and worth understanding, since they're
+        what <code>pipe()</code> and <code>for await...of</code> are built
+        on top of). You must pick one mode and stick to it — mixing
+        <code>"data"</code> handlers with manual <code>read()</code> calls on
+        the same stream produces confusing results.
+      </p>
+      <p>
+        In <strong>flowing mode</strong>, registering a <code>"data"</code>
+        listener switches the stream into push mode: chunks are emitted to
+        you as soon as they're available, with no explicit
+        <code>read()</code> call needed. A stream is <em>not</em> in flowing
+        mode until you attach that first <code>"data"</code> listener (or call
+        <code>pipe()</code>, or <code>resume()</code>). This full example
+        copies a file using flowing mode while manually implementing
+        backpressure with <code>pause()</code>/<code>resume()</code> — exactly
+        the coordination <code>pipe()</code> would otherwise do for you:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function copyFile(sourceFilename, destinationFilename, callback) {
+  let input = fs.createReadStream(sourceFilename);
+  let output = fs.createWriteStream(destinationFilename);
+
+  input.on("data", (chunk) => {
+    let hasRoom = output.write(chunk);
+    if (!hasRoom) input.pause();      // stop reading until output drains
+  });
+  input.on("end", () => output.end());
+  input.on("error", (err) => { callback(err); process.exit(); });
+  output.on("drain", () => input.resume());  // resume reading once there's room
+  output.on("error", (err) => { callback(err); process.exit(); });
+  output.on("finish", () => callback(null));
+}</code></pre>
+      </div>
+      <p>
+        In <strong>paused mode</strong> — the default when you never attach a
+        <code>"data"</code> handler or call <code>pipe()</code> — the stream
+        never pushes data at you. Instead it emits a <code>"readable"</code>
+        event whenever there's data to consume, and you must call
+        <code>read()</code> in a loop until it returns <code>null</code>,
+        which both drains what's currently available and re-arms the stream
+        to emit another <code>"readable"</code> event later. Forgetting to
+        drain the buffer completely means you simply never get another
+        <code>"readable"</code> event and your program hangs. Here's a
+        SHA-256 file-hashing example using paused mode:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const crypto = require("crypto");
+
+function sha256(filename, callback) {
+  let input = fs.createReadStream(filename);
+  let hasher = crypto.createHash("sha256");
+  input.on("readable", () => {
+    let chunk;
+    while ((chunk = input.read()) !== null) {  // must drain fully each time
+      hasher.update(chunk);
+    }
+  });
+  input.on("end", () => callback(null, hasher.digest("hex")));
+  input.on("error", callback);
+}</code></pre>
+      </div>
+      <p>
+        In practice, prefer <code>pipe()</code> or <code>for await...of</code>
+        for new code; reach for these lower-level event APIs only when
+        maintaining legacy code or when you genuinely need control they don't
+        offer.
+      </p>
+
+      <h2 id="process-cpu-os">16.6 Process, CPU, and operating system details</h2>
+      <p>
+        Beyond the basics already covered, <code>process</code> exposes a
+        grab-bag of lower-level details about the running program:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">process.arch             // CPU architecture, e.g. "x64"
+process.cpuUsage()       // { user, system } microseconds of CPU time consumed
+process.memoryUsage()    // heap size, RSS, and other memory stats
+process.hrtime.bigint()  // nanosecond-resolution timestamp, for precise timing
+process.uptime()         // seconds since this process started
+process.kill(pid, sig)   // send a signal to another process by pid
+process.getuid()         // Unix user id of the current user (POSIX only)
+process.title            // name shown for this process in `ps` listings</code></pre>
+      </div>
+      <p>
+        The separate <code>os</code> module — unlike <code>process</code>, you
+        must <code>require("os")</code> explicitly — describes the machine
+        itself rather than this one Node process:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const os = require("os");
+os.cpus()               // per-core info, including usage times
+os.totalmem() / os.freemem()  // RAM in bytes, total and currently free
+os.platform()           // "linux", "darwin", "win32"
+os.homedir()            // current user's home directory
+os.tmpdir()             // default directory for temporary files
+os.networkInterfaces()  // addresses for each network interface
+os.loadavg()            // [1min, 5min, 15min] load averages (POSIX only)
+os.EOL                  // native line terminator: "\n" or "\r\n"</code></pre>
+      </div>
+      <p>
+        Most application code never touches <code>os</code> directly, but it
+        underpins cross-platform tooling — build scripts that need a scratch
+        directory, monitoring code that reports memory pressure, or anything
+        that has to behave correctly on both Windows and POSIX systems.
+      </p>
+
+      <h2 id="working-with-files">16.7 Working with files</h2>
+      <p>
+        The <code>fs</code> module is Node's comprehensive filesystem API,
+        paired with the <code>path</code> module for manipulating filenames
+        and directory paths as plain strings (with no filesystem access of its
+        own). Some of the lower-level <code>fs</code> function names are
+        blunt, Unix-inherited terminology — deleting a file, for instance, is
+        <code>fs.unlink()</code>, not <code>fs.delete()</code>, because
+        removing a file is really just removing one hard link to its data.
+      </p>
+
+      <h3 id="three-flavors">The three-flavor pattern <span class="badge hard">hard</span></h3>
+      <div class="admonition warning">
+        <div class="admonition-title">Sync, callback, and Promise — and why the sync one is dangerous</div>
+        <p>
+          Nearly every meaningful operation in <code>fs</code> — and this
+          three-way split shows up throughout Node's broader API, not just
+          here — comes in three forms, and picking the right one for the
+          situation matters:
+        </p>
+        <ul>
+          <li><strong>Synchronous</strong>, suffixed <code>Sync</code> (<code>fs.readFileSync()</code>): blocks the entire process until the operation completes, then returns the result directly or throws on failure.</li>
+          <li><strong>Callback-based</strong> (<code>fs.readFile()</code>): Node's original async style — nonblocking, takes an error-first callback as the last argument.</li>
+          <li><strong>Promise-based</strong> (<code>fs.promises.readFile()</code>): nonblocking, returns a Promise, composes naturally with <code>async</code>/<code>await</code>.</li>
+        </ul>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const fs = require("fs");
+
+// 1. Synchronous — simple, but BLOCKS the whole event loop until disk I/O finishes.
+let text1 = fs.readFileSync("data.csv", "utf8");
+
+// 2. Callback-based — nonblocking, original Node style.
+fs.readFile("data.csv", "utf8", (err, text) => {
+  if (err) { console.error(err); return; }
+  console.log(text.length);
+});
+
+// 3. Promise-based — nonblocking, preferred in new code.
+async function load() {
+  let text = await fs.promises.readFile("data.csv", "utf8");
+  console.log(text.length);
+}</code></pre>
+        </div>
+        <p>
+          The reason the synchronous flavor is dangerous in a server is that
+          Node has exactly one JavaScript thread. While
+          <code>fs.readFileSync()</code> is waiting on the disk, that thread
+          can do absolutely nothing else — no other request can be accepted,
+          no other request already in flight can make progress, no timer can
+          fire. A single slow synchronous disk read stalls every concurrent
+          client your server is supposed to be serving, for the full duration
+          of that read. Contrast this with the callback and Promise forms,
+          where the actual I/O happens off the JS thread (handled by Node's
+          internal thread pool or native async OS APIs) and your code only
+          resumes when the result is ready, letting the event loop service
+          everything else in the meantime.
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// DANGEROUS in a running server: blocks every other in-flight request
+// for as long as this file read takes.
+app.get("/report", (req, res) => {
+  let data = fs.readFileSync("huge-report.json", "utf8");  // do not do this
+  res.json(JSON.parse(data));
+});
+
+// Correct: the event loop stays free to handle other requests while
+// this read is in flight.
+app.get("/report", async (req, res) => {
+  let data = await fs.promises.readFile("huge-report.json", "utf8");
+  res.json(JSON.parse(data));
+});</code></pre>
+        </div>
+        <p>
+          The synchronous flavor is genuinely the right tool in a narrow set
+          of cases: one-off CLI scripts where there's no concurrency to
+          protect, and reading configuration during process startup before
+          the server has begun accepting any connections (at that moment
+          there's nothing else for the thread to be doing anyway). It is
+          essentially never the right choice inside a request handler on a
+          server that's already running.
+        </p>
+      </div>
+
+      <h3 id="paths-descriptors-filehandles">Paths, file descriptors, and FileHandles</h3>
+      <p>
+        Before operating on a file you need to name it. A path is either
+        absolute (anchored at the filesystem root) or relative (meaningful
+        only in combination with some base directory, usually the current
+        working directory). Because separator characters, duplicate
+        slashes, and <code>../</code> segments differ across platforms and
+        are easy to mishandle by hand, the <code>path</code> module provides
+        pure string-manipulation helpers with no filesystem access of their
+        own:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const path = require("path");
+let p = "src/pkg/test.js";
+path.basename(p);              // "test.js"
+path.extname(p);                // ".js"
+path.dirname(p);                // "src/pkg"
+path.normalize("a/b/c/../d/");  // "a/b/d/" — resolves ".." segments
+path.join("src", "pkg", "t.js"); // "src/pkg/t.js" — joins and normalizes
+path.resolve("t.js");           // absolute path, resolved against process.cwd()
+
+// __dirname / __filename combined with path.join/resolve is the
+// idiomatic way to locate files that ship alongside your own code:
+let configPath = path.join(__dirname, "config.json");</code></pre>
+      </div>
+      <p>
+        Some lower-level <code>fs</code> functions operate on an open file
+        rather than a path — a <strong>file descriptor</strong>, an integer
+        handle obtained from <code>fs.open()</code>/<code>fs.openSync()</code>,
+        or its Promise-API equivalent, a <code>FileHandle</code> object
+        returned by <code>fs.promises.open()</code>. You only need one of
+        these if you're using the lowest-level <code>fs.read()</code>/
+        <code>fs.write()</code> functions to jump around within a file at
+        specific byte offsets; remember to <code>close()</code> whatever you
+        open, since a process can only have a limited number of files open at
+        once.
+      </p>
+
+      <h3 id="reading-files">Reading files</h3>
+      <p>
+        For small files where memory efficiency doesn't matter, reading the
+        whole thing in one call is simplest, in any of the three flavors
+        above; pass an encoding to get a decoded string instead of a raw
+        <code>Buffer</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let buffer = fs.readFileSync("test.data");        // raw Buffer
+let text = fs.readFileSync("data.csv", "utf8");    // decoded string</code></pre>
+      </div>
+      <p>
+        For large files, stream them instead — see <a href="#streams">Streams</a>
+        above — for example piping a file straight to <code>process.stdout</code>
+        with <code>fs.createReadStream(filename).pipe(process.stdout)</code>.
+        For precise control over exactly which bytes get read and when, open
+        the file and use <code>fs.read()</code>/<code>fs.readSync()</code> with
+        an explicit buffer, length, and file offset — useful for parsing
+        binary file formats with fixed-size headers.
+      </p>
+
+      <h3 id="writing-files">Writing files</h3>
+      <p>
+        Creating a file is simply writing to a path that doesn't exist yet.
+        As with reading, there are three ways to write a complete chunk of
+        data at once:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fs.writeFileSync(path.join(__dirname, "settings.json"), JSON.stringify(settings));
+fs.writeFile("out.txt", "hello", (err) => { if (err) console.error(err); });
+await fs.promises.writeFile("out.txt", "hello");
+
+// Append instead of overwrite:
+fs.appendFileSync("log.txt", "another line\n");</code></pre>
+      </div>
+      <p>
+        For data produced incrementally, use a Writable stream instead of one
+        big call:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let output = fs.createWriteStream("numbers.txt");
+for (let i = 0; i &lt; 100; i++) output.write(`${i}\n`);
+output.end();</code></pre>
+      </div>
+      <p>
+        Passing a <code>flag</code> option controls open semantics precisely
+        — for instance, <code>"wx"</code> fails instead of silently
+        overwriting if the file already exists, which is valuable any time an
+        accidental overwrite would be a real loss:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fs.createWriteStream("messages.log", { flags: "wx" }); // error if it exists</code></pre>
+      </div>
+      <p>
+        Finally, a successful write callback/Promise only guarantees Node has
+        handed the data to the operating system, not that it's physically on
+        disk — data may still sit in an OS buffer. To force a real flush to
+        storage, call <code>fs.fsync()</code>/<code>fs.fsyncSync()</code> on
+        an open file descriptor.
+      </p>
+
+      <h3 id="file-operations">Common whole-file operations</h3>
+      <p>
+        Beyond read and write, <code>fs</code> defines direct equivalents of
+        familiar file-management commands, each with the usual sync/callback/
+        Promise trio:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fs.copyFileSync("ch15.txt", "ch15.bak");
+fs.renameSync("ch15.bak", "backups/ch15.bak");   // move and/or rename
+fs.unlinkSync("backups/ch15.bak");               // delete a file
+fs.mkdirSync("dist/lib", { recursive: true });   // create nested directories
+fs.rmdirSync("dist/lib");                        // remove an EMPTY directory</code></pre>
+      </div>
+
+      <h3 id="file-metadata">File metadata: <code>stat()</code></h3>
+      <p>
+        <code>fs.stat()</code> (and its sync/Promise variants) retrieves
+        metadata about a file or directory without reading its contents —
+        size, type, timestamps, ownership and permission bits:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let stats = fs.statSync("book/ch15.md");
+stats.isFile();          // true
+stats.isDirectory();     // false
+stats.size;              // size in bytes
+stats.mtime;             // Date — last modified
+stats.mode.toString(8);  // permission bits, as an octal string</code></pre>
+      </div>
+      <p>
+        <code>fs.lstat()</code> behaves like <code>fs.stat()</code> except
+        that for a symbolic link it reports on the link itself rather than
+        following it to whatever it points at — the "l"-prefixed variants
+        found throughout <code>fs</code> (like <code>fs.lchmod()</code>)
+        follow this same convention.
+      </p>
+
+      <h3 id="watching-and-listing">Watching files and listing directories</h3>
+      <p>
+        <code>fs.watch(path, callback)</code> notifies you when a file or
+        directory changes on disk — useful for development tooling like
+        auto-reloading servers, though its exact event granularity is
+        notoriously platform-dependent and it's common to debounce the
+        callback rather than trust every individual event. Listing a
+        directory's contents comes in a batch form and a streaming form:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Batch: read the whole directory listing at once.
+let names = fs.readdirSync("/tmp");                     // array of filename strings
+let entries = await fs.promises.readdir("/tmp", { withFileTypes: true });
+entries.filter((e) => e.isDirectory()).forEach((e) => console.log(e.name));
+
+// Streaming: better for directories that might have huge numbers of entries.
+async function listDirectory(dirpath) {
+  let dir = await fs.promises.opendir(dirpath);
+  for await (let entry of dir) {
+    console.log(entry.isDirectory() ? entry.name + "/" : entry.name);
+  }
+}
+
+fs.watch("./config", (eventType, filename) => {
+  console.log(`${filename} changed (${eventType})`);
+});</code></pre>
+      </div>
+
+      <h2 id="http-clients-and-servers">16.8 HTTP clients and servers</h2>
+      <p>
+        The <code>http</code> and <code>https</code> modules are full but
+        low-level implementations of the HTTP protocol — comprehensive, but
+        you build routing, body-parsing, and middleware yourself, which is
+        why real applications almost always sit a framework like Express or
+        Fastify on top rather than working with these modules directly. Both
+        the request you send and the request/response your server handles are
+        ordinary streams, so everything from <a href="#streams">Streams</a>
+        above applies to them directly.
+      </p>
+
+      <h3 id="minimal-http-server">A minimal HTTP server</h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const http = require("http");
+
+const server = http.createServer((request, response) => {
+  // `request` is a Readable stream (the request body); `response` is Writable.
+  response.writeHead(200, { "Content-Type": "text/plain" });
+  response.end("Hello, world!\n");
+});
+server.listen(8080, () => console.log("listening on 8080"));</code></pre>
+      </div>
+      <p>
+        <code>server</code> here is itself an <code>EventEmitter</code>;
+        <code>createServer()</code>'s callback argument is just a shorthand
+        for registering a <code>"request"</code> listener. Because
+        <code>request</code> is a Readable stream, reading a POST body works
+        exactly like reading any other stream — accumulate <code>"data"</code>
+        events, or, more idiomatically, <code>for await</code> over it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const server = http.createServer(async (request, response) => {
+  if (request.method === "POST") {
+    let chunks = [];
+    for await (let chunk of request) chunks.push(chunk);
+    let body = Buffer.concat(chunks).toString("utf8");
+    response.end(`Received ${body.length} bytes\n`);
+  } else {
+    response.writeHead(404);
+    response.end();
+  }
+});</code></pre>
+      </div>
+
+      <h3 id="making-http-requests">Making outbound HTTP requests</h3>
+      <p>
+        <code>http.get()</code>/<code>https.get()</code> issue a simple GET
+        request; the more general <code>http.request()</code>/
+        <code>https.request()</code> support any method and let you write a
+        request body before ending the request. The callback fires as soon as
+        the response headers arrive — the body streams in afterward exactly
+        like a Readable stream anywhere else:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const https = require("https");
+
+function postJSON(host, endpoint, body) {
+  return new Promise((resolve, reject) => {
+    let bodyText = JSON.stringify(body);
+    let request = https.request({
+      method: "POST",
+      host,
+      path: endpoint,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(bodyText),
+      },
+    });
+    request.on("error", reject);
+    request.on("response", (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`HTTP status ${response.statusCode}`));
+        response.resume();  // discard the body so the socket can be released
+        return;
+      }
+      response.setEncoding("utf8");
+      let text = "";
+      response.on("data", (chunk) => { text += chunk; });
+      response.on("end", () => {
+        try { resolve(JSON.parse(text)); } catch (e) { reject(e); }
+      });
+    });
+    request.write(bodyText);
+    request.end();  // the request is not sent until end() is called
+  });
+}</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Modern alternative: <code>fetch()</code></div>
+        <p>
+          Recent Node versions ship a global <code>fetch()</code>, the same
+          Promise-based API browsers expose, which is usually simpler than
+          <code>http.request()</code> for straightforward request/response
+          use. The stream-based API above is still worth understanding
+          because it's what <code>fetch()</code> is built on, and because
+          fine-grained control (custom headers per chunk, streaming a request
+          body, low-level timeout handling) sometimes still requires it.
+        </p>
+      </div>
+
+      <h2 id="non-http-servers">16.9 Non-HTTP network servers and clients</h2>
+      <p>
+        HTTP is so ubiquitous it's easy to forget Node is a general networking
+        environment. The <code>net</code> module works with raw TCP sockets: a
+        <code>net.Server</code> created with <code>net.createServer()</code>
+        emits a <code>"connection"</code> event for each incoming client, and
+        the <code>Socket</code> passed to that event is a Duplex stream —
+        reading from it gets you the client's data, writing to it sends data
+        back:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const net = require("net");
+
+let server = net.createServer();
+server.listen(6789, () => console.log("listening on 6789"));
+server.on("connection", (socket) => {
+  socket.write("Welcome!\r\n");
+  socket.on("data", (chunk) => socket.write(`You said: ${chunk}`));
+  socket.on("error", (err) => console.error(err)); // required, per EventEmitter rules
+});
+
+// A client connects the same way pipes connect any two streams:
+let client = net.createConnection(6789, "localhost");
+client.pipe(process.stdout);
+process.stdin.pipe(client);</code></pre>
+      </div>
+      <p>
+        <code>net</code> also supports Unix domain sockets (identified by a
+        filesystem path instead of a host/port pair) for fast local
+        interprocess communication. For protocols that need UDP instead of
+        TCP — no connection setup, no delivery guarantee, lower overhead — the
+        <code>dgram</code> module provides datagram sockets:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const dgram = require("dgram");
+
+let socket = dgram.createSocket("udp4");
+socket.on("message", (msg, rinfo) => {
+  console.log(`Got ${msg.length} bytes from ${rinfo.address}:${rinfo.port}`);
+});
+socket.bind(41234);
+
+// Sending a datagram from elsewhere:
+let sender = dgram.createSocket("udp4");
+sender.send(Buffer.from("hello"), 41234, "localhost");</code></pre>
+      </div>
+      <p>
+        And <code>tls</code> is to <code>net</code> what <code>https</code> is
+        to <code>http</code> — the same raw-socket model, wrapped in TLS
+        encryption. In practice, reach for <code>net</code>/<code>dgram</code>
+        only when you're implementing a genuinely custom protocol; nearly
+        everything web-facing is better served by <code>http</code>/
+        <code>https</code>.
+      </p>
+
+      <h2 id="child-processes">16.10 Working with child processes</h2>
+      <p>
+        The <code>child_process</code> module runs other programs — shell
+        commands, other executables, or even other Node scripts — as separate
+        OS processes and lets you capture their output or communicate with
+        them while they run. It offers several functions, trading off
+        simplicity, streaming ability, and whether a shell gets involved.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Function</th><th>Blocking?</th><th>Shell?</th><th>Use when</th></tr>
+          <tr><td><code>execSync(cmd)</code></td><td>yes</td><td>yes</td><td>quick script, need shell features (pipes, wildcards), blocking is fine</td></tr>
+          <tr><td><code>execFileSync(file, args)</code></td><td>yes</td><td>no</td><td>same, but no shell parsing overhead/risk</td></tr>
+          <tr><td><code>exec(cmd, cb)</code></td><td>no</td><td>yes</td><td>need shell features, output arrives all at once when the process exits</td></tr>
+          <tr><td><code>execFile(file, args, cb)</code></td><td>no</td><td>no</td><td>same, without invoking a shell</td></tr>
+          <tr><td><code>spawn(file, args)</code></td><td>no</td><td>no (optional)</td><td>need streaming access to output while the child is still running, or need to write to its stdin interactively</td></tr>
+          <tr><td><code>fork(modulePath)</code></td><td>no</td><td>no</td><td>the child is itself a Node script and you want an easy structured-message channel to it</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const child_process = require("child_process");
+
+// execSync(): simplest, but blocks and runs through a shell.
+let listing = child_process.execSync("ls -l web/*.html", { encoding: "utf8" });
+
+// execFileSync(): same idea, no shell — safer if any argument is untrusted.
+let listing2 = child_process.execFileSync("ls", ["-l", "web/"], { encoding: "utf8" });</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Shell commands and untrusted input don't mix</div>
+        <p>
+          Because <code>exec()</code>/<code>execSync()</code> run your string
+          through an actual shell, they support pipes, wildcards, and
+          semicolon-separated commands — and for that exact reason, you must
+          never build that command string out of user-supplied input. An
+          attacker who controls even a fragment of the command can break out
+          of your intended command entirely and run arbitrary shell syntax.
+          If you don't need shell features, prefer <code>execFile()</code>/
+          <code>spawn()</code>, which take the executable and its arguments
+          as separate values and never invoke a shell to parse them.
+        </p>
+      </div>
+      <p>
+        <code>spawn()</code> is the function to reach for when you need
+        streaming access to a long-running child's output, or need to
+        interactively send it input based on what it's already printed. It
+        returns a <code>ChildProcess</code> — itself an <code>EventEmitter</code>
+        — exposing <code>stdout</code>/<code>stderr</code> as Readable
+        streams and <code>stdin</code> as a Writable stream (note the
+        inversion: what the child treats as its output stream, the parent
+        reads as an input stream):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let child = child_process.spawn("grep", ["error", "-r", "./logs"]);
+child.stdout.on("data", (chunk) => process.stdout.write(chunk));
+child.stderr.on("data", (chunk) => process.stderr.write(chunk));
+child.on("exit", (code) => console.log(`grep exited with code ${code}`));</code></pre>
+      </div>
+      <p>
+        <code>fork()</code> is a specialized <code>spawn()</code> for running
+        another Node script as a child, and it adds a convenient structured
+        message channel on top of the plain stdio streams: the parent calls
+        <code>child.send(value)</code> and listens for
+        <code>child.on("message", ...)</code>, while the child calls
+        <code>process.send(value)</code> and listens for
+        <code>process.on("message", ...)</code>. Values passed through
+        <code>send()</code> are JSON-serialized under the hood, so only
+        JSON-compatible data survives the trip:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// parent.js
+let child = child_process.fork(`${__dirname}/child.js`);
+child.send({ x: 4, y: 3 });
+child.on("message", (message) => {
+  console.log(message.hypotenuse); // 5
+  child.disconnect();
+});
+
+// child.js
+process.on("message", (message) => {
+  process.send({ hypotenuse: Math.hypot(message.x, message.y) });
+});</code></pre>
+      </div>
+      <p>
+        Starting a child process is relatively expensive, so
+        <code>fork()</code>-based interprocess communication only pays off
+        when the child is doing substantially more work than the overhead of
+        starting it — for lighter CPU-bound work within the same process, a
+        worker thread (next section) is usually the better fit.
+      </p>
+
+      <h2 id="worker-threads">16.11 Worker threads</h2>
+      <p>
+        Node's core concurrency model is single-threaded, but
+        <code>worker_threads</code> (since Node 10) provides genuine
+        multithreading within one process, deliberately modeled on the
+        browser's <a href="20-storage-workers.html#workers">Web Workers</a>
+        API. Like Web Workers, Node's worker threads do not share memory by
+        default — communication happens exclusively via
+        <code>postMessage()</code>, avoiding the classic hazards of
+        shared-memory threading (races, locks, deadlocks) almost entirely.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th></th><th><code>child_process</code></th><th><code>worker_threads</code></th></tr>
+          <tr><td>Isolation</td><td>Separate OS process — a crash can't take down the parent</td><td>Same process, separate thread — a bad crash can affect the process</td></tr>
+          <tr><td>Startup cost</td><td>Relatively expensive</td><td>Lighter, but still not free — don't spin one up for trivial work</td></tr>
+          <tr><td>Best for</td><td>Running a separate program, isolating untrusted or crash-prone code</td><td>CPU-bound JavaScript computation that would otherwise block the event loop</td></tr>
+          <tr><td>Communication</td><td>stdio streams, or JSON messages via <code>fork()</code>'s <code>send()</code>/<code>"message"</code></td><td><code>postMessage()</code> using the structured clone algorithm, plus optional shared memory</td></tr>
+        </table>
+      </div>
+      <p>
+        There are three situations where reaching for a worker thread makes
+        sense: genuinely CPU-bound work (image processing, hashing, parsing)
+        that needs more than one core; keeping the main thread responsive
+        when occasional requests require a burst of blocking computation, so
+        other requests aren't stalled behind it; and wrapping unavoidably
+        synchronous legacy code so the rest of the program can treat it as
+        asynchronous. If your program isn't CPU-bound and isn't struggling
+        with responsiveness, you very likely don't need worker threads at
+        all — most Node servers are I/O-bound and never touch this module.
+      </p>
+
+      <h3 id="creating-workers">Creating workers and passing messages</h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const threads = require("worker_threads");
+
+// A common trick: one file serves as both the main-thread entry point
+// and the worker's code, branching on threads.isMainThread.
+if (threads.isMainThread) {
+  module.exports = function reticulateSplines(splines) {
+    return new Promise((resolve, reject) => {
+      let worker = new threads.Worker(__filename);
+      worker.postMessage(splines);
+      worker.on("message", resolve);
+      worker.on("error", reject);
+    });
+  };
+} else {
+  threads.parentPort.once("message", (splines) => {
+    for (let spline of splines) spline.reticulate();
+    threads.parentPort.postMessage(splines); // send the result back
+  });
+}</code></pre>
+      </div>
+      <p>
+        A second, self-contained example — offloading a CPU-heavy prime
+        check so it doesn't stall a server's event loop:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// prime-worker.js
+const { parentPort, workerData } = require("worker_threads");
+function isPrime(n) {
+  for (let i = 2; i * i &lt;= n; i++) if (n % i === 0) return false;
+  return n &gt; 1;
+}
+parentPort.postMessage(isPrime(workerData));
+
+// server.js
+const { Worker } = require("worker_threads");
+function checkPrimeInWorker(n) {
+  return new Promise((resolve, reject) => {
+    let worker = new Worker("./prime-worker.js", { workerData: n });
+    worker.on("message", resolve);
+    worker.on("error", reject);
+  });
+}</code></pre>
+      </div>
+      <p>
+        Whatever you pass to <code>postMessage()</code> is copied via the
+        same structured clone algorithm used by <code>window.postMessage()</code>
+        in browsers (see <a href="20-storage-workers.html#workers">Web
+        Workers</a>) — the worker receives an independent copy, not a live
+        reference, and types like <code>Map</code>, <code>Set</code>,
+        <code>Date</code>, and typed arrays survive the trip, but
+        host-specific objects like sockets and streams do not. A
+        <code>Buffer</code> specifically arrives on the other side as a plain
+        <code>Uint8Array</code>; wrap it back in <code>Buffer.from()</code> if
+        you need <code>Buffer</code>-specific methods again.
+      </p>
+
+      <h3 id="worker-execution-environment">The worker execution environment</h3>
+      <p>
+        Code inside a worker thread mostly behaves like ordinary Node code,
+        with a handful of differences worth knowing:
+      </p>
+      <ul>
+        <li><code>threads.isMainThread</code> is <code>false</code> inside any worker, <code>true</code> in the main thread.</li>
+        <li><code>threads.parentPort</code> (a <code>MessagePort</code>) is how a worker sends/receives messages with its parent; it is <code>null</code> in the main thread.</li>
+        <li><code>threads.workerData</code> carries the value passed as the <code>workerData</code> option to the <code>Worker</code> constructor — a way to hand the worker its initial input before it has to wait for a first <code>"message"</code> event.</li>
+        <li>By default a worker's <code>process.stdout</code>/<code>stderr</code> are piped straight to the parent's, so <code>console.log()</code> "just works" the same in a worker; passing <code>stdout: true</code>/<code>stderr: true</code> instead exposes them as readable streams on the <code>Worker</code> object.</li>
+        <li>Calling <code>process.exit()</code> inside a worker only ends that thread, not the whole process.</li>
+        <li>OS signals (like <code>SIGINT</code>) are only ever delivered to the main thread, never to a worker.</li>
+        <li>A worker cannot call process-wide mutators like <code>process.chdir()</code> — they throw if called from a worker.</li>
+      </ul>
+
+      <h3 id="sharing-typed-arrays">Transferring and sharing typed arrays</h3>
+      <p>
+        Copying large binary payloads on every message is wasteful, so
+        <code>postMessage()</code> accepts an optional second argument, a
+        list of objects to <em>transfer</em> instead of copy — after a
+        transfer, the sending side can no longer use that object at all, which
+        is what makes it safe without locking:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let pixels = new Uint32Array(1024 * 1024); // 4 MB
+worker.postMessage(pixels, [pixels.buffer]); // moved, not copied; unusable here now</code></pre>
+      </div>
+      <p>
+        Going further, a <code>SharedArrayBuffer</code>-backed typed array is
+        genuinely shared, readable and writable by both threads at once — the
+        one case in JavaScript where real shared-memory concurrency exists,
+        and correspondingly the one case where classic race conditions become
+        possible again. Incrementing a shared counter from two threads without
+        synchronization loses updates, because <code>++</code> is not atomic
+        (read, then increment, then write, as three separate steps); the
+        <code>Atomics</code> object (<code>Atomics.add()</code>,
+        <code>Atomics.load()</code>, etc.) provides real atomic operations on
+        shared array elements, at a real performance cost, and is the only
+        safe way to mutate shared memory from more than one thread. This is a
+        genuinely niche corner of Node — reach for a
+        <code>SharedArrayBuffer</code> only when threads operate on disjoint
+        regions of memory (a parallel merge sort splitting an array in half is
+        the classic case) or when <code>Atomics</code> is providing the actual
+        synchronization.
+      </p>
+
+      <h3 id="message-channels">Custom MessageChannels</h3>
+      <p>
+        Beyond the default parent/worker connection, <code>worker_threads</code>
+        supports the same <code>MessageChannel</code>/<code>MessagePort</code>
+        API browsers use: <code>new threads.MessageChannel()</code> produces
+        a connected pair, <code>port1</code> and <code>port2</code>, where
+        posting on one delivers a <code>"message"</code> event on the other.
+        This is useful when two independently created workers need to talk
+        directly to each other rather than relaying every message through the
+        main thread — one port gets transferred to each worker via their
+        normal default channel, and afterward they can communicate
+        peer-to-peer.
+      </p>
+
+      <h2 id="summary">16.12 Summary</h2>
+      <p>
+        Node turns JavaScript into a general-purpose systems language by
+        pairing it with OS bindings, and holds onto the browser's
+        single-threaded, asynchronous-by-default model to do it without the
+        usual perils of multithreaded programming. The load-bearing ideas from
+        this chapter: <code>process</code> and CommonJS
+        <code>require()</code>/<code>module.exports</code> as the basics of
+        any Node program; an event loop and error-first callbacks (with
+        Promise wrappers layered on top) as the concurrency model;
+        <code>Buffer</code> as the binary counterpart to strings;
+        <code>EventEmitter</code> as the pattern behind nearly every stateful
+        API, complete with its synchronous-emission and crash-on-unhandled-
+        <code>"error"</code> behavior; streams — and specifically
+        backpressure — as the mechanism for processing data without
+        exhausting memory; the recurring sync/callback/Promise three-way
+        split found throughout <code>fs</code> and beyond, and why the sync
+        variant is a server-side liability; <code>http</code>/
+        <code>https</code> for web traffic and <code>net</code>/
+        <code>dgram</code> for everything else; and, for real parallelism,
+        <code>child_process</code> for running separate programs versus
+        <code>worker_threads</code> for CPU-bound work inside the same
+        process.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

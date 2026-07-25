@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JavaScript: The Definitive Guide — Interactive Edition</title>
+<meta name="description" content="An interactive, dark-themed learning guide covering JavaScript: The Definitive Guide, 7th Edition." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body data-loc="root" data-file="">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" href="index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a href="chapters/01-introduction.html">Start Learning</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content" style="max-width: none; padding: 0;">
+
+      <section class="hero">
+        <span class="eyebrow">Based on David Flanagan's O'Reilly book, 7th Edition</span>
+        <h1>JavaScript: The<br/>Definitive Guide</h1>
+        <p class="lede">
+          A complete, interactive rewrite of the book for learning by doing. Every chapter keeps
+          the full depth of the original — no watered-down summaries — with syntax-highlighted,
+          runnable-looking examples and clear explanations of the parts of JavaScript that
+          actually trip people up: closures, <code>this</code>, prototypes, async/await, generators,
+          and metaprogramming.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="chapters/01-introduction.html">Start Reading &rarr;</a>
+          <a class="btn btn-secondary" href="chapters/14-async-javascript.html">Jump to Async JS</a>
+        </div>
+      </section>
+
+      <div class="home-section-title">What's inside</div>
+      <div class="card-grid">
+        <a class="card" href="chapters/01-introduction.html">
+          <span class="card-icon">🚀</span>
+          <h3>Getting Started</h3>
+          <p>A fast tour of the language, then a deep look at JavaScript's type system, coercion rules, and variable semantics.</p>
+        </a>
+        <a class="card" href="chapters/07-functions.html">
+          <span class="card-icon">🧠</span>
+          <h3>Core Language</h3>
+          <p>Expressions, statements, objects, arrays, functions & closures, classes, and the ES module system.</p>
+        </a>
+        <a class="card" href="chapters/11-regular-expressions.html">
+          <span class="card-icon">📦</span>
+          <h3>Standard Library</h3>
+          <p>Sets, Maps, typed arrays, regular expressions, dates, JSON, and internationalization — the built-ins you use every day.</p>
+        </a>
+        <a class="card" href="chapters/14-async-javascript.html">
+          <span class="card-icon">⚡</span>
+          <h3>Advanced Concepts</h3>
+          <p>Iterators & generators, the event loop, promises, async/await, and metaprogramming with Proxy and Reflect.</p>
+        </a>
+        <a class="card" href="chapters/16-web-basics-events.html">
+          <span class="card-icon">🌐</span>
+          <h3>JavaScript in the Browser</h3>
+          <p>The DOM, events, CSSOM, canvas & SVG, fetch and networking, client-side storage, and web workers.</p>
+        </a>
+        <a class="card" href="chapters/21-nodejs.html">
+          <span class="card-icon">🖥️</span>
+          <h3>Server-Side & Tooling</h3>
+          <p>Node.js fundamentals, plus the modern build-tool ecosystem: bundlers, transpilers, linters, and type checkers.</p>
+        </a>
+      </div>
+
+      <div class="home-section-title">Why this exists</div>
+      <div style="padding: 0 3rem 5rem; max-width: 800px;">
+        <p style="color: var(--text-muted);">
+          This guide restructures the book into small, focused pages — the same way FastAPI's
+          documentation breaks its tutorial into bite-sized, cross-linked sections. Easy
+          material (the absolute basics of syntax) is kept brief; hard material (scope and
+          closures, prototypal inheritance, the event loop, generators, proxies) gets full
+          explanations, diagrams-in-text, and multiple worked examples so the concepts actually
+          stick.
+        </p>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

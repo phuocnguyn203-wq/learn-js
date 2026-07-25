@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Iterators & Generators — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="13-iterators-generators.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 12</span>
+      <h1>Iterators &amp; Generators</h1>
+      <p class="lede">
+        Every <code>for...of</code> loop, every use of <code>...</code> to spread
+        something into an array, and every destructuring assignment that pulls
+        values out of a <code>Map</code> or a <code>Set</code> is leaning on the
+        same small, formal contract: the iteration protocol. This chapter takes
+        that protocol apart piece by piece, shows you how to implement it by hand
+        so your own classes become "loopable," and then introduces generators —
+        an ES6 language feature that gives you almost all of that power for a
+        fraction of the ceremony. The second half of the chapter is about the part
+        of generators that trips up almost everyone the first time: they are not
+        just a one-way stream of yielded values, they are a genuine two-way
+        communication channel between the code driving the generator and the code
+        inside it.
+      </p>
+
+      <h2 id="how-iterators-work">12.1 How iterators work <span class="badge hard">Core concept</span></h2>
+      <p>
+        It is entirely possible to use <code>for...of</code>, spread, and
+        destructuring for years without knowing what actually happens underneath
+        them. But every one of those features is implemented in terms of three
+        cooperating, separately-defined types, and understanding all three is
+        what lets you build your own iterable data structures instead of only
+        consuming the built-in ones.
+      </p>
+
+      <h3 id="the-three-types">The three types: iterable, iterator, iteration result</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Role</th><th>What it is</th><th>The contract</th></tr>
+          <tr>
+            <td><strong>Iterable object</strong></td>
+            <td>Any type you can loop over: <code>Array</code>, <code>String</code>,
+              <code>Set</code>, <code>Map</code>, typed arrays, or your own class</td>
+            <td>Has a method named with the symbol <code>Symbol.iterator</code> that,
+              when called with no arguments, returns an iterator object</td>
+          </tr>
+          <tr>
+            <td><strong>Iterator object</strong></td>
+            <td>A one-shot cursor over the iterable's values, created fresh each
+              time you start iterating</td>
+            <td>Has a <code>next()</code> method that, when called with no
+              arguments, returns an iteration result object</td>
+          </tr>
+          <tr>
+            <td><strong>Iteration result</strong></td>
+            <td>A plain object describing "one step" of the iteration</td>
+            <td>Has a <code>value</code> property (the yielded value) and/or a
+              boolean <code>done</code> property (<code>true</code> once
+              iteration has finished)</td>
+          </tr>
+        </table>
+      </div>
+      <p>
+        Note the oddity right away: the method that makes something iterable is
+        not named <code>iterator()</code> or anything else you'd guess as a
+        string — it is keyed by the well-known symbol <code>Symbol.iterator</code>.
+        That's deliberate. A regular string-named method like
+        <code>"iterator"</code> could collide with an unrelated property some
+        other library or user code already defined; a symbol key can't collide
+        with anything. To iterate an iterable "by hand," you call its
+        <code>Symbol.iterator</code> method once to obtain an iterator, and then
+        call that iterator's <code>next()</code> repeatedly until you get back a
+        result whose <code>done</code> is <code>true</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let iterable = [99];
+let iterator = iterable[Symbol.iterator]();  // step 1: get an iterator
+for (let result = iterator.next();           // step 2: pump next() until done
+     !result.done;
+     result = iterator.next()) {
+  console.log(result.value);                 // result.value == 99
+}
+
+// This hand-rolled loop is EXACTLY what the engine does for you when you write:
+for (let x of iterable) { console.log(x); }</code></pre>
+      </div>
+      <p>
+        <code>for...of</code> is nothing more than syntax sugar over that
+        get-iterator-then-pump-next loop. Once you can see that, a lot of
+        JavaScript's iteration-related behavior stops being magic.
+      </p>
+
+      <h3 id="for-of-spread-destructuring">Everything that consumes the protocol</h3>
+      <p>
+        A surprising number of separate-looking language features all bottom out
+        in the same call to <code>[Symbol.iterator]()</code> followed by repeated
+        <code>next()</code> calls:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// for/of — loop once per iterated value
+let sum = 0;
+for (let i of [1, 2, 3]) { sum += i; }
+sum   // =&gt; 6
+
+// spread (...) — expand an iterable into an array literal or argument list
+let chars = [..."abcd"];       // ["a", "b", "c", "d"]
+let data = [1, 2, 3, 4, 5];
+Math.max(...data)              // =&gt; 5
+
+// destructuring assignment — pulls values out positionally via next()
+let purpleHaze = Uint8Array.of(255, 0, 255, 128);
+let [r, g, b, a] = purpleHaze; // a == 128
+
+// Array.from() — also iterates rather than requiring an array-like object
+Array.from("hello")            // =&gt; ["h", "e", "l", "l", "o"]</code></pre>
+      </div>
+      <p>
+        None of these features know or care what kind of object they're given —
+        an <code>Array</code>, a <code>Set</code>, a string, or a class you wrote
+        yourself last week. As long as the object honors the protocol, all of
+        these "just work."
+      </p>
+
+      <h3 id="iterating-maps">Iterating Map: key/value pairs by default</h3>
+      <p>
+        <code>Map</code> is worth calling out specifically because its default
+        iteration yields two-element <code>[key, value]</code> arrays rather than
+        keys or values alone — which reads very naturally when combined with
+        destructuring in a <code>for...of</code> loop:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let m = new Map([["one", 1], ["two", 2]]);
+for (let [k, v] of m) console.log(k, v);   // logs "one 1" then "two 2"
+
+[...m]            // =&gt; [["one", 1], ["two", 2]]  — default iteration
+[...m.entries()]  // =&gt; [["one", 1], ["two", 2]]  — entries() is the same thing
+[...m.keys()]     // =&gt; ["one", "two"]             — keys() iterates keys only
+[...m.values()]   // =&gt; [1, 2]                     — values() iterates values only</code></pre>
+      </div>
+      <p>
+        <code>Set</code> works the same way you'd expect (iterating its elements
+        in insertion order); see <a href="10-collections-typed-arrays.html#set">Set</a>
+        and <a href="10-collections-typed-arrays.html#map">Map</a> for the full API.
+      </p>
+
+      <h3 id="iterators-are-iterable">A convention: iterators are iterable too</h3>
+      <p>
+        The built-in iterator objects returned by arrays, strings, <code>Map</code>,
+        and <code>Set</code> are themselves iterable — each has a
+        <code>Symbol.iterator</code> method that simply returns <code>this</code>.
+        That sounds redundant, but it means an iterator can be dropped anywhere an
+        iterable is expected, including into another <code>for...of</code> loop or
+        a spread. This is genuinely useful when you want to consume part of a
+        sequence and hand off "the rest" to something else:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let list = [1, 2, 3, 4, 5];
+let iter = list[Symbol.iterator]();
+let head = iter.next().value;   // head == 1  (consume just the first value)
+let tail = [...iter];           // tail == [2, 3, 4, 5]  (spread consumes the rest)</code></pre>
+      </div>
+      <p>
+        This only works because the iterator remembers where it left off — a
+        fresh call to <code>list[Symbol.iterator]()</code> would have started
+        over from the beginning.
+      </p>
+
+      <h3 id="iterables-as-apis">Built-ins that accept any iterable, not just arrays</h3>
+      <p>
+        Since ES6, many constructors and functions that historically expected an
+        array will happily accept <em>any</em> iterable object instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Strings are iterable, so these two Sets are identical:
+new Set("abc")        // =&gt; Set(3) {"a", "b", "c"}
+new Set(["a", "b", "c"])
+
+// Array.from also accepts iterables (and array-likes) as its source:
+Array.from(new Set([1, 2, 2, 3]))   // =&gt; [1, 2, 3]</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Design implication</div>
+        <p>
+          When you write your own APIs, prefer accepting "an iterable" over
+          specifically requiring "an array" wherever that's practical. It costs
+          you nothing and lets callers pass a <code>Set</code>, a generator, or a
+          custom class instead of forcing them to materialize an array first.
+        </p>
+      </div>
+
+      <h2 id="implementing-iterable-objects">12.2 Implementing iterable objects <span class="badge hard">Hand-rolled vs. generator</span></h2>
+      <p>
+        Once your own class represents something that can sensibly be walked
+        through one value at a time — a range of numbers, a linked list, the
+        nodes of a tree — making it iterable is what lets it plug into
+        <code>for...of</code>, spread, destructuring, and every API in the
+        previous section for free. To do that you implement a method named
+        <code>[Symbol.iterator]()</code> that returns an iterator object with a
+        <code>next()</code> method, and that <code>next()</code> method returns
+        iteration result objects with <code>value</code> and/or <code>done</code>.
+      </p>
+
+      <h3 id="hand-rolled-range">Worked example: an iterable Range class, by hand</h3>
+      <p>
+        Here is a <code>Range</code> class that represents the set of numbers
+        between <code>from</code> and <code>to</code> inclusive. It supports
+        membership testing with <code>has()</code>, a readable string form, and —
+        the part we care about — iteration over every integer in the range:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Range {
+  constructor(from, to) {
+    this.from = from;
+    this.to = to;
+  }
+
+  // Make a Range act like a Set of numbers.
+  has(x) { return typeof x === "number" &amp;&amp; this.from &lt;= x &amp;&amp; x &lt;= this.to; }
+
+  // Return a string representation using set-builder notation.
+  toString() { return `{ x | ${this.from} &lt;= x &lt;= ${this.to} }`; }
+
+  // Make a Range iterable by returning an iterator object.
+  // The method name is a symbol, NOT the string "Symbol.iterator" — this
+  // detail is exactly the thing that's easy to get wrong when typing it out.
+  [Symbol.iterator]() {
+    // Each call to [Symbol.iterator]() must produce an INDEPENDENT iterator,
+    // so all mutable "where am I" state lives in local variables captured
+    // by this closure, not on `this`. Two simultaneous for/of loops over the
+    // same Range must not interfere with each other.
+    let next = Math.ceil(this.from);  // next value this iterator will return
+    let last = this.to;               // never return anything greater than this
+
+    return {                          // the iterator object
+      next() {                        // must return an iteration result
+        return (next &lt;= last)
+          ? { value: next++ }         // more to give: hand it out, advance
+          : { done: true };           // exhausted
+      },
+      // Convention: make the iterator itself iterable, by returning `this`.
+      [Symbol.iterator]() { return this; },
+    };
+  }
+}
+
+for (let x of new Range(1, 10)) console.log(x);  // logs 1 through 10
+[...new Range(-2, 2)]                            // =&gt; [-2, -1, 0, 1, 2]</code></pre>
+      </div>
+      <p>
+        Walk through what happens on each <code>next()</code> call: the closure
+        variable <code>next</code> is the mutable cursor, <code>last</code> is
+        the fixed upper bound captured once. Every call either returns the
+        current cursor value and increments it, or — once the cursor has passed
+        <code>last</code> — returns <code>{ done: true }</code> forever after
+        (calling <code>next()</code> again after exhaustion should keep
+        returning a done result, not throw or restart).
+      </p>
+
+      <h3 id="generator-range-side-by-side">The same class, rewritten with a generator</h3>
+      <p>
+        Section 12.3 below covers generator syntax in full, but it's worth
+        seeing the payoff immediately, side by side with the hand-rolled version
+        above, so the motivation for generators is concrete rather than
+        abstract. Here is <code>Range</code> again, with its
+        <code>[Symbol.iterator]()</code> method replaced by a generator method
+        (note the added <code>*</code>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Range {
+  constructor(from, to) {
+    this.from = from;
+    this.to = to;
+  }
+  has(x) { return typeof x === "number" &amp;&amp; this.from &lt;= x &amp;&amp; x &lt;= this.to; }
+  toString() { return `{ x | ${this.from} &lt;= x &lt;= ${this.to} }`; }
+
+  // A generator method: the * marks it as a generator, and calling it
+  // automatically produces an object with a working next() AND a
+  // [Symbol.iterator]() that returns itself — both for free.
+  *[Symbol.iterator]() {
+    for (let x = Math.ceil(this.from); x &lt;= this.to; x++) {
+      yield x;
+    }
+  }
+}
+
+for (let x of new Range(1, 10)) console.log(x);  // identical behavior
+[...new Range(-2, 2)]                            // =&gt; [-2, -1, 0, 1, 2]</code></pre>
+      </div>
+      <p>
+        Compare the two <code>[Symbol.iterator]()</code> bodies directly. The
+        hand-rolled version needed: an object literal to represent the iterator,
+        two closure variables to track state that used to just be loop
+        variables, an explicit <code>done: true</code> branch, and a manual
+        "make me iterable too" convention line. The generator version is a
+        single <code>for</code> loop with a <code>yield</code> in it — the
+        <code>next</code>/<code>last</code>/<code>done</code> bookkeeping is
+        handled entirely by the language runtime. This is the whole reason
+        generators exist: <strong>they are not a different feature from
+        iterators, they are an easier way to implement the exact same iterator
+        protocol.</strong> Every generator object already satisfies the iterable
+        contract (it has a working <code>Symbol.iterator</code> that returns
+        itself) and the iterator contract (it has a working <code>next()</code>)
+        without you writing either by hand.
+      </p>
+
+      <h3 id="iterable-returning-functions">Functions that return iterables, not just classes</h3>
+      <p>
+        Making a class iterable is one pattern; another equally useful one is
+        writing plain functions that accept an iterable and return a new
+        iterable, lazily, without ever materializing an intermediate array. Here
+        are iterator-based reimplementations of <code>map()</code> and
+        <code>filter()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Return an iterable object that lazily applies f() to each value of iterable.
+function map(iterable, f) {
+  let iterator = iterable[Symbol.iterator]();
+  return {                                  // this object is both iterator AND iterable
+    [Symbol.iterator]() { return this; },
+    next() {
+      let v = iterator.next();
+      return v.done ? v : { value: f(v.value) };
+    },
+  };
+}
+[...map(new Range(1, 4), x =&gt; x * x)]   // =&gt; [1, 4, 9, 16]
+
+// Return an iterable object that yields only the elements of `iterable`
+// for which predicate(element) is true.
+function filter(iterable, predicate) {
+  let iterator = iterable[Symbol.iterator]();
+  return {
+    [Symbol.iterator]() { return this; },
+    next() {
+      for (;;) {
+        let v = iterator.next();
+        if (v.done || predicate(v.value)) return v;
+      }
+    },
+  };
+}
+[...filter(new Range(1, 10), x =&gt; x % 2 === 0)]   // =&gt; [2, 4, 6, 8, 10]</code></pre>
+      </div>
+      <p>
+        These read a lot like <code>Array.prototype.map</code>/<code>filter</code>
+        (see <a href="06-arrays.html#iterator-methods">the array functional toolbox</a>),
+        but they never allocate a full result array — each value is computed
+        exactly when something asks the returned object's <code>next()</code>
+        for it.
+      </p>
+
+      <h3 id="lazy-iteration">Laziness: the whole point of doing this at all</h3>
+      <p>
+        That "compute only when asked" property is the single biggest practical
+        payoff of the iterator protocol. Consider tokenizing a long string into
+        words. <code>String.prototype.split()</code> would work, but it forces
+        the entire string to be scanned and an entire array of substrings to be
+        allocated before you can even look at the first word. An iterator-based
+        tokenizer can hand back one word at a time, computed on demand:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function words(s) {
+  let r = /\s+|$/g;                       // match runs of whitespace, or end-of-string
+  r.lastIndex = s.match(/[^ ]/).index;    // start at the first non-space character
+  return {                                // an object that is both iterable and iterator
+    [Symbol.iterator]() { return this; },
+    next() {
+      let start = r.lastIndex;            // resume where the last match left off
+      if (start &lt; s.length) {
+        let match = r.exec(s);
+        if (match) return { value: s.substring(start, match.index) };
+      }
+      return { done: true };
+    },
+  };
+}
+[...words(" abc def  ghi! ")]   // =&gt; ["abc", "def", "ghi!"]</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">A simpler way to get the same laziness today</div>
+        <p>
+          Since ES2020, <code>String.prototype.matchAll()</code> already returns
+          a lazy iterator of match objects with the <code>g</code> flag, which
+          makes hand-writing a tokenizer like the one above rarely necessary in
+          modern code. See
+          <a href="11-regular-expressions.html#string-methods">using regex patterns: the string methods</a>.
+        </p>
+      </div>
+
+      <h3 id="closing-an-iterator">12.2.1 "Closing" an iterator: the <code>return()</code> method</h3>
+      <p>
+        Not every iteration runs to completion. A <code>for...of</code> loop can
+        exit early via <code>break</code>, <code>return</code>, or a thrown
+        exception; destructuring assignment only calls <code>next()</code> as
+        many times as there are variables to fill, and simply abandons the
+        iterator after that, even if it had more values left to give.
+      </p>
+      <p>
+        That matters when an iterator is holding a resource that needs cleanup —
+        picture a hypothetical iterator that reads words out of a file: it opens
+        a file handle up front and needs to close it, but if the consuming loop
+        breaks out early, the iterator's <code>next()</code> will simply never
+        be called again, and nothing will tell it to close the file.
+      </p>
+      <p>
+        The protocol's answer is an optional <code>return()</code> method on the
+        iterator object. If iteration stops before a result with
+        <code>done: true</code> was produced, the interpreter checks whether the
+        iterator has a <code>return()</code> method and, if so, calls it with no
+        arguments — giving the iterator one last chance to release memory, close
+        a file, or cancel a subscription. <code>return()</code> must itself
+        return an iteration result object (its properties are ignored, but
+        returning a non-object is an error).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function readLines(iterable) {
+  let iterator = iterable[Symbol.iterator]();
+  return {
+    [Symbol.iterator]() { return this; },
+    next() { return iterator.next(); },
+    return(value) {
+      console.log("cleaning up: closing the resource now");
+      // ... release a file handle, socket, etc. here ...
+      return iterator.return ? iterator.return(value) : { done: true };
+    },
+  };
+}
+
+for (let line of readLines(["a", "b", "c", "d"])) {
+  if (line === "b") break;   // triggers an automatic call to return() above
+}
+// logs: "cleaning up: closing the resource now"</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">You don't get this for free</div>
+        <p>
+          <code>return()</code> is entirely opt-in — nothing forces you to
+          implement it, and plenty of iterators (including the plain
+          object-literal ones shown earlier in this section) don't. If your
+          iterator holds no resources, skip it. If it does, this is the only
+          reliable hook the protocol gives you for early-exit cleanup.
+        </p>
+      </div>
+      <p>
+        Writing this triad of iterable object, iterator object, and iteration
+        result by hand every time is exactly the ceremony generators exist to
+        eliminate — which brings us to the rest of the chapter.
+      </p>
+
+      <h2 id="generators">12.3 Generators</h2>
+      <p>
+        A generator is a special kind of iterator, produced by a special kind of
+        function, that is defined with new ES6 syntax rather than assembled from
+        object literals by hand. Generators are most valuable when the values
+        you're iterating are the result of an ongoing computation (the next
+        Fibonacci number, the next node of a traversal) rather than simply the
+        existing elements of some data structure.
+      </p>
+
+      <h3 id="generator-syntax">Generator syntax: three ways to write one</h3>
+      <p>
+        A generator function looks like a regular function but is marked with an
+        asterisk after the <code>function</code> keyword. Calling a generator
+        function does <em>not</em> run its body — it immediately returns a
+        generator object (which is an iterator). The body only actually executes,
+        incrementally, as that generator object's <code>next()</code> is called:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* f() {}                    // generator function declaration
+
+const g = function*() {};           // generator function expression
+
+const obj = {
+  *m() { /* ... */ },                // shorthand generator method
+};
+
+class C {
+  *m() { /* ... */ }                 // generator method in a class
+  *[Symbol.iterator]() { /* ... */ } // generator as the well-known iterator method
+}
+
+// There is NO arrow-function form of a generator — this is a syntax error:
+// const bad = *() =&gt; {};</code></pre>
+      </div>
+
+      <h3 id="generator-basics">How <code>next()</code> drives a generator forward</h3>
+      <p>
+        Calling <code>next()</code> on a generator object runs the function body
+        from wherever it last left off, up to the next <code>yield</code>
+        expression, and hands back <code>yield</code>'s operand as the
+        <code>value</code> of the iteration result:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* oneDigitPrimes() {
+  yield 2;
+  yield 3;
+  yield 5;
+  yield 7;
+}
+
+let primes = oneDigitPrimes();   // nothing has run yet — just a generator object
+primes.next().value               // =&gt; 2
+primes.next().value               // =&gt; 3
+primes.next().value               // =&gt; 5
+primes.next().value               // =&gt; 7
+primes.next().done                // =&gt; true
+
+// Generators are iterable — their Symbol.iterator method returns themselves:
+primes[Symbol.iterator]() === primes   // =&gt; true (once you have a fresh one)
+
+// Which means all the usual consumers just work:
+[...oneDigitPrimes()]             // =&gt; [2, 3, 5, 7]
+let sum = 0;
+for (let prime of oneDigitPrimes()) sum += prime;
+sum                                // =&gt; 17</code></pre>
+      </div>
+      <p>
+        Because generator objects satisfy the iterator/iterable contract
+        automatically, using a generator as a class's
+        <code>[Symbol.iterator]()</code> method — as in the
+        <a href="#generator-range-side-by-side">Range rewrite above</a> — is by
+        far the most common way custom classes are made iterable in modern
+        JavaScript code; hand-rolling the object-literal iterator from
+        <a href="#hand-rolled-range">12.2</a> is mostly useful for understanding
+        what a generator is doing for you under the hood.
+      </p>
+
+      <h3 id="infinite-generators-and-take">Generators as ongoing computation: Fibonacci, take(), and zip()</h3>
+      <p>
+        Generators get more interesting once <code>yield</code> is producing
+        values from a real computation rather than a fixed list. A generator's
+        loop can even run forever, because nothing forces it to finish — the
+        loop only advances one step per <code>next()</code> call:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* fibonacciSequence() {
+  let x = 0, y = 1;
+  for (;;) {                    // infinite loop — this generator never finishes
+    yield y;
+    [x, y] = [y, x + y];        // destructuring assignment, computed as a pair
+  }
+}
+
+// Safe: a for/of loop can stop consuming an infinite generator whenever it wants.
+function fibonacci(n) {
+  for (let f of fibonacciSequence()) {
+    if (n-- &lt;= 0) return f;
+  }
+}
+fibonacci(20)   // =&gt; 10946
+
+// UNSAFE: spreading an infinite generator directly runs until memory is exhausted.
+// [...fibonacciSequence()]   // don't do this</code></pre>
+      </div>
+      <p>
+        A small reusable <code>take()</code> generator turns "safe consumption of
+        an infinite source" into a one-liner, by delegating to the source
+        iterable's own <code>next()</code> and stopping itself after
+        <code>n</code> values:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Yield only the first n elements of the given iterable, then stop.
+function* take(n, iterable) {
+  let it = iterable[Symbol.iterator]();
+  while (n-- &gt; 0) {
+    let next = it.next();
+    if (next.done) return;    // source ran out early — stop cleanly
+    else yield next.value;
+  }
+}
+[...take(5, fibonacciSequence())]   // =&gt; [1, 1, 2, 3, 5]</code></pre>
+      </div>
+      <p>
+        And a <code>zip()</code> generator shows how several independent
+        iterators can be driven side by side, round-robin, entirely from inside
+        one generator function:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Given multiple iterables, yield their elements interleaved.
+function* zip(...iterables) {
+  let iterators = iterables.map(i =&gt; i[Symbol.iterator]());
+  let index = 0;
+  while (iterators.length &gt; 0) {
+    if (index &gt;= iterators.length) index = 0;         // wrap back to the first
+    let item = iterators[index].next();
+    if (item.done) {
+      iterators.splice(index, 1);                      // that source is exhausted
+    } else {
+      yield item.value;
+      index++;
+    }
+  }
+}
+[...zip(oneDigitPrimes(), "ab", [0])]   // =&gt; [2, "a", 0, 3, "b", 5, 7]</code></pre>
+      </div>
+
+      <h3 id="yield-star-delegation">12.3.2 <code>yield*</code>: delegating to another iterable</h3>
+      <p>
+        A common shape in generator code is looping over some other iterable and
+        yielding each of its elements one by one:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* sequence(...iterables) {
+  for (let iterable of iterables) {
+    for (let item of iterable) {
+      yield item;
+    }
+  }
+}
+[...sequence("abc", oneDigitPrimes())]   // =&gt; ["a", "b", "c", 2, 3, 5, 7]</code></pre>
+      </div>
+      <p>
+        This pattern is common enough that ES6 gives it dedicated syntax:
+        <code>yield*</code> takes an iterable and yields each of its values in
+        turn, so the inner loop above collapses to one line:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* sequence(...iterables) {
+  for (let iterable of iterables) {
+    yield* iterable;     // yield EVERY value that `iterable` would yield
+  }
+}
+[...sequence("abc", oneDigitPrimes())]   // =&gt; ["a", "b", "c", 2, 3, 5, 7]</code></pre>
+      </div>
+      <p>
+        Because <code>yield*</code> accepts any iterable — including another
+        generator — it's the tool that makes <strong>recursive generators</strong>
+        practical, for example walking a tree structure non-recursively from the
+        caller's point of view while the generator itself recurses internally:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* flatten(tree) {
+  for (let node of tree) {
+    if (Array.isArray(node)) {
+      yield* flatten(node);   // recurse into the nested array via yield*
+    } else {
+      yield node;
+    }
+  }
+}
+[...flatten([1, [2, 3, [4, [5]], 6]])]   // =&gt; [1, 2, 3, 4, 5, 6]</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Gotcha: <code>yield</code> only works inside a real generator function</div>
+        <p>
+          It's tempting to reach for <code>Array.prototype.forEach()</code> to
+          replace a loop, but this does not work:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* sequence(...iterables) {
+  iterables.forEach(iterable =&gt; yield* iterable);   // SyntaxError
+}</code></pre>
+        </div>
+        <p>
+          <code>yield</code> and <code>yield*</code> are only legal directly
+          inside a <code>function*</code> body. The callback passed to
+          <code>forEach()</code> is an ordinary (arrow) function — and since
+          arrow functions can never be generators in the first place — the
+          <code>yield*</code> inside it has no enclosing generator to belong to.
+          Stick with an explicit <code>for...of</code> loop, as in the working
+          version above.
+        </p>
+      </div>
+
+      <h2 id="advanced-generator-features">12.4 Advanced generator features <span class="badge hard">Where it gets counterintuitive</span></h2>
+      <p>
+        Everything so far treats a generator as a fancy read-only stream:
+        something pulls values out with <code>next()</code> and the generator
+        never hears back. That's the common case, but it undersells what a
+        generator actually is. The fundamental capability a generator gives you
+        is the ability to <strong>pause a running computation, hand control back
+        to the caller, and later resume exactly where it left off</strong> — with
+        the caller able to feed a value, or an exception, into that resumption.
+        That makes a generator less like an iterator and more like a suspendable
+        thread of execution living inside your single-threaded program.
+      </p>
+
+      <h3 id="generator-return-values">12.4.1 The return value of a generator function</h3>
+      <p>
+        A generator function can <code>return</code> a value just like any other
+        function. Doing so produces one final iteration result whose
+        <code>done</code> is <code>true</code> <em>and</em> whose
+        <code>value</code> is the returned value — the one case where
+        <code>value</code> and <code>done: true</code> appear together. Both
+        <code>for...of</code> and the spread operator silently ignore this final
+        value (they stop as soon as they see <code>done: true</code> and never
+        look at its accompanying <code>value</code>), but code that calls
+        <code>next()</code> manually can retrieve it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* oneAndDone() {
+  yield 1;
+  return "done";     // a real return value, not just an early exit
+}
+
+[...oneAndDone()]           // =&gt; [1]  — the return value never shows up here
+
+let generator = oneAndDone();
+generator.next()            // =&gt; { value: 1, done: false }
+generator.next()            // =&gt; { value: "done", done: true }
+generator.next()            // =&gt; { value: undefined, done: true } — asks again, gets nothing</code></pre>
+      </div>
+      <p>
+        That last call matters: once a generator has reported <code>done: true</code>,
+        every subsequent <code>next()</code> keeps returning
+        <code>{ value: undefined, done: true }</code> rather than re-running or
+        throwing. A finished generator stays finished.
+      </p>
+
+      <h3 id="two-way-communication">12.4.2 Two-way communication: what <code>.next(value)</code> actually sends where <span class="badge hard">The counterintuitive part</span></h3>
+      <p>
+        Here is the detail that catches almost everyone the first time:
+        <code>yield</code> is not a statement, it's an <em>expression</em>, and
+        expressions have values. Specifically:
+      </p>
+      <ul>
+        <li>
+          Calling <code>next()</code> resumes the generator and runs it forward
+          until the next <code>yield</code> is reached. Whatever follows that
+          <code>yield</code> keyword is evaluated and becomes the
+          <code>value</code> returned by <em>this</em> call to <code>next()</code>.
+        </li>
+        <li>
+          The generator is then frozen in the middle of evaluating that
+          <code>yield</code> expression — it has produced an output value, but
+          it hasn't yet decided what the <code>yield</code> expression itself
+          is worth as an input.
+        </li>
+        <li>
+          The <em>next</em> time <code>next(someArgument)</code> is called,
+          <code>someArgument</code> becomes the value that the <em>paused</em>
+          <code>yield</code> expression evaluates to, and execution continues
+          from there.
+        </li>
+      </ul>
+      <p>
+        In other words, a generator and its caller are two independent streams
+        of execution, passing values back and forth in both directions: values
+        flow <em>out</em> to the caller via each <code>yield</code>'s operand,
+        and values flow <em>in</em> to the generator via each subsequent
+        <code>next()</code>'s argument. The tricky asymmetry: the very first
+        <code>next()</code> call only <em>starts</em> the generator running — it
+        can't deliver a value anywhere, because execution hasn't reached any
+        <code>yield</code> expression yet to receive it. Any argument passed to
+        that first <code>next()</code> call is silently discarded.
+      </p>
+      <p>
+        Worked example, with the mapping between each <code>next()</code> call
+        and the <code>yield</code> expression it "answers" made explicit:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* smallNumbers() {
+  console.log("started; the first next()'s argument is discarded");
+  let y1 = yield 1;    // this yield's VALUE (to y1) comes from the *second* next()
+  console.log("resumed; y1 =", y1);
+  let y2 = yield 2;    // comes from the *third* next()
+  console.log("resumed; y2 =", y2);
+  let y3 = yield 3;    // comes from the *fourth* next()
+  console.log("resumed; y3 =", y3);
+  return 4;
+}
+
+let g = smallNumbers();
+console.log("generator object created; no generator code has run yet");
+
+let n1 = g.next("a");   // "a" is discarded (nothing was paused at a yield yet)
+console.log("got", n1.value);   // n1.value == 1
+
+let n2 = g.next("b");   // "b" becomes the value of the FIRST yield -&gt; y1
+console.log("got", n2.value);   // n2.value == 2
+
+let n3 = g.next("c");   // "c" becomes the value of the SECOND yield -&gt; y2
+console.log("got", n3.value);   // n3.value == 3
+
+let n4 = g.next("d");   // "d" becomes the value of the THIRD yield -&gt; y3
+console.log("got", n4.value, n4.done);   // n4.value == 4, n4.done == true</code></pre>
+      </div>
+      <p>Running that code prints, in order:</p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">generator object created; no generator code has run yet
+started; the first next()'s argument is discarded
+got 1
+resumed; y1 = b
+got 2
+resumed; y2 = c
+got 3
+resumed; y3 = d
+got 4</code></pre>
+      </div>
+      <p>
+        Notice the one-call offset: the value logged as "got 1" was produced by
+        <code>g.next("a")</code>, but the argument <code>"a"</code> itself never
+        appears anywhere in the output — it's the second call,
+        <code>g.next("b")</code>, whose argument <code>"b"</code> shows up (as
+        <code>y1</code>), even though that call's <em>return</em> value is
+        <code>2</code>, from the yield <em>after</em> the one <code>"b"</code>
+        filled in. Every <code>next(arg)</code> call does two jobs at once: it
+        delivers <code>arg</code> as the result of the yield the generator is
+        currently paused at, and it runs the generator forward to the
+        <em>next</em> yield (or to a <code>return</code>) to determine what
+        value comes back out.
+      </p>
+      <p>
+        A second, more practical example: a generator-based running accumulator,
+        where each call to <code>next()</code> both retrieves a running total
+        and supplies the next number to add to it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* runningTotal() {
+  let total = 0;
+  while (true) {
+    // the value received here becomes `addend`; the value sent out
+    // is the *previous* total, since yield evaluates before we add.
+    let addend = yield total;
+    total += (addend || 0);
+  }
+}
+
+let acc = runningTotal();
+acc.next();          // =&gt; { value: 0, ... }   prime the generator (no addend yet)
+acc.next(10)          // =&gt; { value: 10, ... }  0 + 10
+acc.next(5)           // =&gt; { value: 15, ... }  10 + 5
+acc.next(20)          // =&gt; { value: 35, ... }  15 + 20</code></pre>
+      </div>
+      <p>
+        That "prime with an argument-less <code>next()</code> first" step is
+        unavoidable for any generator that wants to receive input via
+        <code>yield</code>: the first <code>next()</code> call can only ever
+        start the generator, never deliver a value, precisely because nothing
+        is paused at a <code>yield</code> yet.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Why this used to matter for asynchronous code</div>
+        <p>
+          Because <code>next(value)</code> can resume a paused generator with
+          any value — including the result of some asynchronous operation that
+          finished after the <code>yield</code> — this mechanism is powerful
+          enough to make asynchronous code <em>read</em> as if it were
+          synchronous: pause at a <code>yield</code> until a network response
+          arrives, then call <code>next(response)</code> to feed it back in.
+          Libraries did exactly this before ES2017. That's precisely the problem
+          <code>async</code>/<code>await</code> was added to solve natively —
+          see <a href="14-async-javascript.html#async-await">async/await: Promises without the ceremony</a>
+          — so there's no longer a good reason to hand-roll it with raw
+          generators.
+        </p>
+      </div>
+
+      <h3 id="return-and-throw">12.4.3 <code>return()</code> and <code>throw()</code>: controlling a generator from outside</h3>
+      <p>
+        Beyond feeding values in through <code>next()</code>, calling code can
+        also redirect a generator's control flow from the outside using two more
+        methods every generator object has:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Effect inside the paused generator</th></tr>
+          <tr><td><code>gen.return(value)</code></td><td>Acts as though the currently-paused <code>yield</code> were replaced by <code>return value</code> — the generator finishes immediately with that value</td></tr>
+          <tr><td><code>gen.throw(error)</code></td><td>Acts as though the currently-paused <code>yield</code> were replaced by <code>throw error</code> — the generator can catch it, or let it propagate and end</td></tr>
+        </table>
+      </div>
+      <p>
+        <code>return()</code> is exactly what makes generator-based iterators
+        play nicely with the <code>return()</code> cleanup convention from
+        <a href="#closing-an-iterator">12.2.1</a>: when a <code>for...of</code>
+        loop over a generator exits early (<code>break</code>, a thrown
+        exception, an early function <code>return</code>), the interpreter
+        automatically calls the generator's built-in <code>return()</code> for
+        you. You can't override that method's identity, but you can make it
+        meaningful by wrapping cleanup-sensitive code in
+        <code>try/finally</code> — the <code>finally</code> block runs even when
+        the generator is terminated from outside this way:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* withResource() {
+  console.log("resource acquired");
+  try {
+    yield 1;
+    yield 2;
+    yield 3;
+  } finally {
+    console.log("resource released");   // guaranteed to run, even on early exit
+  }
+}
+
+for (let v of withResource()) {
+  console.log("got", v);
+  if (v === 2) break;   // triggers the generator's implicit return()
+}
+// logs: resource acquired / got 1 / got 2 / resource released</code></pre>
+      </div>
+      <p>
+        <code>throw()</code> gives you a way to send arbitrary "signals," in the
+        form of exceptions, into a running generator — not necessarily fatal
+        ones, if the generator is written to catch and handle them:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* resettableCounter() {
+  let count = 0;
+  while (true) {
+    try {
+      yield count;
+      count++;
+    } catch (e) {
+      if (e === "reset") {
+        console.log("counter reset to 0");
+        count = 0;             // handled: keep going instead of dying
+      } else {
+        throw e;               // unrecognized signal: let it propagate and end the generator
+      }
+    }
+  }
+}
+
+let counter = resettableCounter();
+counter.next().value    // =&gt; 0
+counter.next().value    // =&gt; 1
+counter.next().value    // =&gt; 2
+counter.throw("reset")  // logs "counter reset to 0", =&gt; { value: 0, done: false }
+counter.next().value    // =&gt; 1</code></pre>
+      </div>
+      <p>
+        One more wrinkle worth knowing: when a generator uses <code>yield*</code>
+        to delegate to another iterable, calling <code>return()</code> or
+        <code>throw()</code> on the outer generator forwards that call to the
+        delegated-to iterator's own <code>return()</code>/<code>throw()</code>,
+        if it defines them — delegation applies to all three of
+        <code>next()</code>, <code>return()</code>, and <code>throw()</code>,
+        not just to <code>next()</code>.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Which methods are required vs. optional</div>
+        <p>
+          Every iterator must have <code>next()</code>. An iterator that holds a
+          resource needing cleanup should define <code>return()</code>. Any
+          iterator <em>may</em> define <code>throw()</code>, but there's rarely a
+          practical reason for a plain (non-generator) iterator to bother — it's
+          mainly generators, with their <code>try/catch</code> bodies, that make
+          <code>throw()</code> genuinely useful.
+        </p>
+      </div>
+
+      <h3 id="generators-as-coroutines">12.4.4 Generators as coroutines and state machines</h3>
+      <p>
+        Pulling the two-way-communication features together: a generator is a
+        general-purpose control structure that can pause with <code>yield</code>
+        and resume later with an arbitrary input value supplied by whoever calls
+        <code>next()</code>. That's powerful enough to build a form of
+        cooperative multithreading inside single-threaded JavaScript — a
+        generator can represent a state machine where each <code>yield</code>
+        marks a state boundary, and the value sent in via <code>next()</code> or
+        <code>throw()</code> decides which state comes next. This same mechanism
+        is also, historically, how people simulated <code>async</code>/<code>await</code>
+        before that syntax existed: a "runner" function would drive a generator
+        forward, treating each yielded value as a promise to wait on and
+        resuming the generator with the resolved result.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Prefer async/await for asynchronous code</div>
+        <p>
+          Using generators to fake synchronous-looking asynchronous control flow
+          works, but the resulting code is genuinely difficult to read and
+          reason about — you're manually reimplementing a scheduler. Modern
+          JavaScript has <code>async</code> functions and
+          <code>await</code> for exactly this purpose, and — for async
+          iteration — <code>for await...of</code> and async generators. There is
+          no longer a good reason to hand-roll either with plain generators; see
+          <a href="14-async-javascript.html#async-await">async/await</a> and
+          <a href="14-async-javascript.html#async-iteration">for await...of: async iteration</a>
+          on the next page. State-machine-style uses of synchronous generators
+          (parsers, game loops, undo/redo systems) remain a legitimate and
+          idiomatic use of the coroutine-like behavior described in this
+          section.
+        </p>
+      </div>
+
+      <h2 id="summary">12.5 Summary</h2>
+      <ul>
+        <li>
+          <code>for...of</code> and the <code>...</code> spread operator both
+          work by calling an iterable's <code>[Symbol.iterator]()</code> method
+          to get an iterator, then calling that iterator's <code>next()</code>
+          repeatedly until a result comes back with <code>done: true</code>.
+        </li>
+        <li>
+          An object is <strong>iterable</strong> if it has a
+          <code>[Symbol.iterator]()</code> method returning an iterator; an
+          <strong>iterator</strong> is any object with a <code>next()</code>
+          returning <strong>iteration result</strong> objects shaped
+          <code>{ value, done }</code>.
+        </li>
+        <li>
+          You can implement iterables by hand — writing
+          <code>[Symbol.iterator]()</code> to return a fresh object with its own
+          <code>next()</code> — and, when the iteration might end early, an
+          optional <code>return()</code> for cleanup.
+        </li>
+        <li>
+          <strong>Generator functions</strong> (<code>function*</code>) are a
+          vastly easier way to write the same iterator/iterable pair: calling
+          one returns a generator object immediately, without running the
+          function body; each call to its <code>next()</code> runs the body
+          forward to the next <code>yield</code>, whose operand becomes that
+          call's returned value.
+        </li>
+        <li>
+          <code>yield*</code> delegates to another iterable's values (including
+          another generator's), which is what makes recursive generators
+          practical.
+        </li>
+        <li>
+          Generators are two-way channels, not one-way streams: the argument
+          passed to a <code>next(value)</code> call becomes the value of the
+          <em>previously paused</em> <code>yield</code> expression, offset by
+          one call from the value that same <code>yield</code> handed out.
+        </li>
+        <li>
+          <code>gen.return(value)</code> and <code>gen.throw(error)</code> let
+          outside code force a paused generator to finish or to raise an
+          exception at its current <code>yield</code> — the same mechanism
+          <code>for...of</code> relies on to run a generator's
+          <code>finally</code> blocks after an early <code>break</code>.
+        </li>
+        <li>
+          A generator function itself can <code>return</code> a value, which
+          shows up as the <code>value</code> on the one iteration result where
+          <code>done</code> is also <code>true</code> — ignored by
+          <code>for...of</code> and spread, but visible to manual
+          <code>next()</code> calls.
+        </li>
+      </ul>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

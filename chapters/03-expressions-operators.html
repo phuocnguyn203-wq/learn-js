@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Expressions & Operators — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="03-expressions-operators.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 4</span>
+      <h1>Expressions &amp; Operators</h1>
+      <p class="lede">
+        An expression is any phrase of JavaScript that can be evaluated to produce
+        a value. Every program you write is, underneath its statements and control
+        flow, a tree of expressions: literals, variable references, property
+        lookups, function calls, and the operators that glue them together. This
+        chapter works through the full catalog — the primary expressions that
+        stand alone, the compound expressions built from object/array initializers,
+        property access, invocation and object creation, and then the complete
+        operator set: arithmetic, relational, logical, assignment, and a handful of
+        miscellaneous operators that don't fit any other category. Along the way
+        we cover the exact rules JavaScript uses for precedence, associativity,
+        order of evaluation, and the type coercions that make operators like
+        <code>+</code> and <code>==</code> behave in ways that surprise newcomers.
+      </p>
+
+      <h2 id="primary-expressions">4.1 Primary expressions</h2>
+      <p>
+        A <strong>primary expression</strong> is the simplest kind there is: it
+        doesn't contain any smaller expressions inside it. Everything more complex
+        in this chapter is built by combining primary expressions with operators or
+        with the compound-expression syntaxes (initializers, property access,
+        invocation) described below. JavaScript has three kinds of primary
+        expression.
+      </p>
+      <p>
+        The first is a <strong>literal</strong> — a constant value spelled out
+        directly in your source code:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">1.23        // A number literal
+"hello"     // A string literal
+/pattern/g  // A regular expression literal</code></pre>
+      </div>
+      <p>
+        Number and string literal syntax is covered in
+        <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>;
+        regular expression literals get their own full treatment in
+        <a href="11-regular-expressions.html">Regular Expressions</a>. All three
+        forms produce a value the instant the parser sees them — no lookup, no
+        computation, just a value baked into the program text.
+      </p>
+      <p>
+        The second kind is a small set of reserved <strong>keywords</strong> that
+        evaluate to a fixed value or, in one case, a context-dependent one:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">true    // The boolean true value
+false   // The boolean false value
+null    // The null value — "no object"
+this    // The "current" object — changes depending on where it appears</code></pre>
+      </div>
+      <p>
+        <code>this</code> is the odd one out: it isn't a constant at all. Inside a
+        method it evaluates to the object the method was called on; at the top
+        level of a script it refers to the global object (or is
+        <code>undefined</code> in a module or in strict-mode function code). Its
+        full behavior — including how arrow functions deliberately opt out of
+        having their own <code>this</code> — is covered in
+        <a href="07-functions.html">Functions</a> and
+        <a href="08-classes.html">Classes</a>.
+      </p>
+      <p>
+        The third kind of primary expression is a bare
+        <strong>identifier reference</strong> — a variable, constant, or global
+        name written by itself:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">i           // Evaluates to whatever value the variable i currently holds
+sum         // Same, for the variable sum
+undefined   // The "undefined" property of the global object — also a keyword-like value</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Undeclared identifiers throw, they don't return <code>undefined</code></div>
+        <p>
+          When JavaScript sees a bare identifier, it looks it up as a variable,
+          constant, function, or global-object property. If no binding with that
+          name exists anywhere in scope, evaluating it throws a
+          <code>ReferenceError</code> — it does not silently evaluate to
+          <code>undefined</code>. That only happens for a variable that
+          <em>exists</em> but hasn't been assigned a value yet.
+        </p>
+      </div>
+
+      <h2 id="object-and-array-initializers">4.2 Object and array initializers</h2>
+      <p>
+        Object and array initializers — often called object and array
+        <strong>literals</strong> — are expressions that create a brand-new object
+        or array every time they're evaluated. They aren't primary expressions in
+        the strict sense, because their contents are themselves subexpressions
+        that compute the property or element values, but they behave like literals
+        in everyday use. Full coverage of both data structures lives in
+        <a href="05-objects.html">Objects</a> and
+        <a href="06-arrays.html">Arrays</a>; this section is about their
+        expression syntax.
+      </p>
+      <p>
+        An array initializer is a comma-separated list of expressions inside
+        square brackets:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">[]              // An empty array: zero elements
+[1 + 2, 3 + 4]  // A 2-element array: [3, 7]
+
+let matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]; // Nested arrays
+
+// Omitting a value between commas leaves a "hole" — an undefined element,
+// but NOT the same as an element explicitly set to undefined:
+let sparse = [1, , , , 5]; // 5 elements; indices 1-3 are holes
+
+// A single trailing comma is harmless and does NOT add a hole:
+let three = [1, 2, 3,]; // still just 3 elements</code></pre>
+      </div>
+      <p>
+        Because the element expressions are re-evaluated every time the
+        initializer itself runs (e.g., each time a function containing it is
+        called), an array literal can produce a different array — with different
+        contents — on every evaluation.
+      </p>
+      <p>
+        Object initializers use curly braces instead of square brackets, and each
+        subexpression is prefixed with a property name and a colon:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let p = { x: 2.3, y: -1.2 };  // An object with two properties
+let q = {};                   // An empty object
+q.x = 2.3;
+q.y = -1.2;                   // q now has the same properties as p
+
+let rectangle = {             // Object literals can nest
+  upperLeft: { x: 2, y: 2 },
+  lowerRight: { x: 4, y: 5 },
+};</code></pre>
+      </div>
+      <p>
+        Modern (ES6+) object-literal syntax adds several shortcuts that are worth
+        knowing well because they show up constantly in real code:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x = 1, y = 2;
+
+// Shorthand properties: { x } is shorthand for { x: x }
+let point = { x, y };            // => { x: 1, y: 2 }
+
+// Computed property names: the bracketed expression is evaluated to
+// produce the property NAME, not the value
+let propName = "z";
+let point3d = { ...point, [propName]: 3 };  // => { x: 1, y: 2, z: 3 }
+
+// Spread in an object literal: copies another object's own enumerable
+// properties into the new one (later keys override earlier ones)
+let defaults = { timeout: 1000, retries: 3 };
+let config = { ...defaults, retries: 5 };   // => { timeout: 1000, retries: 5 }
+
+// Spread in an array literal: expands any iterable in place
+let a = [1, 2, 3];
+let b = [0, ...a, 4];             // => [0, 1, 2, 3, 4]
+let letters = [..."abc"];         // => ["a", "b", "c"] — strings are iterable too</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Spread copies shallowly</div>
+        <p>
+          Both object-spread and array-spread copy top-level properties or
+          elements only. If a property's value is itself an object or array, the
+          copy shares a reference to that same nested value — mutating it through
+          the copy mutates the original too. Spread is not a deep clone.
+        </p>
+      </div>
+      <p>
+        Because array spread works on any iterable, not just arrays, it composes
+        naturally with the generator and iterator machinery covered in
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>.
+      </p>
+
+      <h2 id="function-definition-expressions">4.3 Function definition expressions</h2>
+      <p>
+        A function definition expression defines a function and evaluates to that
+        newly created function value — in the same sense that an object
+        initializer is an "object literal," a function expression is a "function
+        literal." The classic form uses the <code>function</code> keyword, a
+        parenthesized, comma-separated parameter list, and a body in curly braces:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// An anonymous function expression assigned to a variable
+let square = function(x) { return x * x; };
+
+// Function expressions can optionally carry their own name, useful
+// for stack traces and for recursive references from inside the body
+let factorial = function fact(n) { return n &lt;= 1 ? 1 : n * fact(n - 1); };
+
+// ES6 arrow function syntax — more compact, and with different `this` binding
+let cube = x => x * x * x;</code></pre>
+      </div>
+      <p>
+        A function can also be defined with a <code>function</code>
+        <em>statement</em> rather than an expression — the difference matters for
+        hoisting and is covered alongside arrow functions, default parameters,
+        rest parameters, and closures in full in
+        <a href="07-functions.html">Functions</a>.
+      </p>
+
+      <h2 id="property-access-expressions">4.4 Property access expressions</h2>
+      <p>
+        A property access expression evaluates to the value of an object property
+        or an array element. JavaScript has two syntaxes for it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">expression.identifier
+expression[expression]</code></pre>
+      </div>
+      <p>
+        The dot form requires a literal identifier — it can't have spaces,
+        punctuation, or start with a digit, and you must know the name when you
+        write the code. The bracket form takes any expression, converts it to a
+        string, and looks up the property with that name; it's required whenever
+        the name is computed at runtime or isn't a legal identifier (numeric array
+        indices, keys with spaces, etc.):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: { z: 3 } };
+let a = [o, 4, [5, 6]];
+
+o.x         // => 1
+o.y.z       // => 3
+o["x"]      // => 1   (same as o.x)
+a[1]        // => 4
+a[2]["1"]   // => 6   (bracket index is converted to a string internally)
+a[0].x      // => 1</code></pre>
+      </div>
+      <p>
+        In both forms, the expression before the <code>.</code> or <code>[</code>
+        is evaluated first. If it evaluates to <code>null</code> or
+        <code>undefined</code> — the only two JavaScript values that cannot have
+        properties — the whole expression throws a <code>TypeError</code>. If the
+        named property simply doesn't exist on an object that <em>is</em> valid,
+        the result is <code>undefined</code>, not an error.
+      </p>
+
+      <h3 id="optional-chaining">4.4.1 Conditional property access <span class="badge hard">ES2020</span></h3>
+      <p>
+        Optional chaining — <code>?.</code> for a named property and
+        <code>?.[</code>&hellip;<code>]</code> for a computed one — guards
+        against exactly the <code>null</code>/<code>undefined</code> TypeError
+        described above. If the expression to the left of <code>?.</code> is
+        nullish, the whole property access evaluates to <code>undefined</code>
+        instead of throwing, and the right-hand side is never even looked at.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a = { b: null };
+
+a.b.c    // TypeError: Cannot read properties of null (reading 'c')
+a.b?.c   // => undefined — short-circuits cleanly, no error</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">The part everyone gets wrong: it short-circuits the WHOLE chain, not just one link</div>
+        <p>
+          <code>?.</code> isn't a local "null-safe dot" that only protects the one
+          access it's attached to. The instant evaluation hits a nullish value at
+          a <code>?.</code>, the <em>entire remaining expression</em> —
+          everything chained after it, including subsequent
+          <code>.</code>/<code>[]</code>/<code>()</code> that have no
+          <code>?</code> of their own — is abandoned and the whole thing
+          evaluates to <code>undefined</code>. Wrapping part of the chain in
+          parentheses defeats this, because the parenthesized subexpression is
+          forced to fully resolve (to <code>undefined</code>) before the outer
+          access is attempted on it — and accessing a property of
+          <code>undefined</code> throws.
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let a1 = { b: null };
+a1.b?.c.d     // => undefined — a1.b is null, so ?.c short-circuits the ENTIRE
+              //    rest of the chain; .d is never attempted
+(a1.b?.c).d   // TypeError! The parens force a1.b?.c to resolve to undefined
+              //    FIRST, and now .d is a plain (non-optional) access on it
+
+// Short-circuiting also skips side effects further down the chain — including
+// computed keys and function arguments — not just further property reads:
+let a2;                 // undefined
+let calls = 0;
+function next() { calls++; return calls; }
+
+a2?.[next()].method(next())  // => undefined
+calls                         // => 0 — neither next() call ever ran
+
+// Compare to what happens without the guard:
+let index = 0;
+try { a2[index++]; } catch (e) { /* TypeError */ }
+index                          // => 1 — the increment DID happen before the throw
+a2?.[index++];                 // => undefined, and...
+index                          // => 1 — this time it did NOT increment; ?.[ ] never evaluated it</code></pre>
+      </div>
+      <p>
+        Optional chaining also composes with itself for chains where more than one
+        link might be missing:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let b = { b: {} };
+b.b?.c?.d   // => undefined — b.b exists, but .c doesn't, so the second
+            //    ?. is what catches it and stops further evaluation</code></pre>
+      </div>
+
+      <h2 id="invocation-expressions">4.5 Invocation expressions</h2>
+      <p>
+        An invocation expression calls (executes) a function or method. It's a
+        function expression, followed by an open parenthesis, zero or more
+        comma-separated argument expressions, and a close parenthesis:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">f(0)             // f is the function expression; 0 is the argument
+Math.max(x, y, z) // Math.max is the function; x, y, z are the arguments
+a.sort()         // a.sort is the function; no arguments</code></pre>
+      </div>
+      <p>
+        Evaluation order: the function expression is evaluated first, then each
+        argument expression left-to-right, then — if the function expression's
+        value isn't callable — a <code>TypeError</code> is thrown before any
+        function body runs. Otherwise the arguments are bound to parameters and
+        the body executes; a <code>return</code> statement's value becomes the
+        expression's value, and with no explicit <code>return</code> the value is
+        <code>undefined</code>. What happens when argument count and parameter
+        count don't match is covered in <a href="07-functions.html">Functions</a>.
+      </p>
+      <p>
+        When the expression before the parentheses is itself a property access —
+        <code>a.sort()</code> — the call is a <strong>method invocation</strong>,
+        and the object on the left of the dot becomes the value of
+        <code>this</code> for the duration of the call. That's the mechanism
+        behind essentially all of JavaScript's object-oriented style; see
+        <a href="08-classes.html">Classes</a> for the full picture.
+      </p>
+
+      <h3 id="optional-call">4.5.1 Conditional invocation <span class="badge new">ES2020</span></h3>
+      <p>
+        <code>?.()</code> pairs with optional chaining: if the expression to the
+        left of the <code>?.</code> is <code>null</code> or <code>undefined</code>,
+        the entire invocation evaluates to <code>undefined</code> instead of
+        throwing — and, crucially, none of the argument expressions inside the
+        parentheses are evaluated either, so any side effects in them are skipped
+        along with the call:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Before ES2020, an optional callback parameter needed an explicit guard:
+function square(x, log) {
+  if (log) log(x);
+  return x * x;
+}
+
+// With ?.(), the guard collapses into the call itself:
+function square2(x, log) {
+  log?.(x);          // calls log(x) only if log is not null/undefined
+  return x * x;
+}
+
+let f = null, x = 0;
+f?.(x++);   // => undefined; f is null so the call (and x++) never happens
+x           // => 0 — the argument expression was never evaluated</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title"><code>?.()</code> only checks for nullish, not "is this even a function"</div>
+        <p>
+          <code>?.()</code> guards solely against <code>null</code>/<code>undefined</code>
+          on the left. If that value is defined but isn't callable — a number, a
+          plain object — the call still throws a <code>TypeError</code>. It's a
+          null guard, not a type guard. It's also worth keeping the three related
+          forms straight: <code>o.m()</code> requires both <code>o</code> and
+          <code>o.m</code> to exist; <code>o?.m()</code> tolerates a missing/nullish
+          <code>o</code> but still requires <code>m</code> to exist and be callable
+          if <code>o</code> is present; <code>o.m?.()</code> requires
+          <code>o</code> to exist but tolerates a missing/nullish <code>m</code>.
+        </p>
+      </div>
+
+      <h2 id="object-creation-expressions">4.6 Object creation expressions</h2>
+      <p>
+        An object creation expression — <code>new</code> plus an invocation —
+        creates a new object and runs a constructor function to initialize it.
+        With no arguments, the empty parentheses can be omitted entirely:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">new Object()
+new Point(2, 3)
+
+new Object   // Same as new Object() — parens optional with zero arguments
+new Date     // Same as new Date()</code></pre>
+      </div>
+      <p>
+        The value of the whole expression is the newly created object. Everything
+        about how constructors initialize instances and set up the prototype
+        chain is covered in <a href="08-classes.html">Classes</a>.
+      </p>
+
+      <h2 id="operator-overview">4.7 Operator overview</h2>
+      <p>
+        Operators combine one or more operand expressions into a new, larger
+        expression. Most are written with punctuation (<code>+</code>,
+        <code>=</code>), and a few are written as keywords (<code>delete</code>,
+        <code>instanceof</code>, <code>typeof</code>, <code>in</code>,
+        <code>void</code>) — keyword operators behave exactly like punctuation
+        operators, just spelled with letters. Every operator has three defining
+        properties, covered in the subsections below: how many operands it takes
+        (<strong>arity</strong>), in what order operators of different precedence
+        combine (<strong>precedence</strong>), and in what order operators of the
+        <em>same</em> precedence combine (<strong>associativity</strong>).
+      </p>
+
+      <h3 id="operator-arity">4.7.1 Number of operands</h3>
+      <p>
+        Most operators — <code>*</code>, <code>+</code>, <code>&amp;&amp;</code>,
+        <code>==</code>, and so on — are <strong>binary</strong>: they take two
+        operands and combine them. JavaScript also has a good number of
+        <strong>unary</strong> operators that act on a single operand —
+        <code>-x</code>, <code>typeof x</code>, <code>!x</code>, <code>delete
+        x.y</code> — and exactly one <strong>ternary</strong> operator that takes
+        three: the conditional operator <code>?:</code>.
+      </p>
+
+      <h3 id="operand-and-result-types">4.7.2 Operand and result types</h3>
+      <p>
+        Some operators are polymorphic — they accept operands of any type
+        (<code>==</code>, <code>&amp;&amp;</code>) — but most expect a specific
+        type and will coerce their operands to it as needed. <code>*</code>
+        expects numbers, so <code>"3" * "5"</code> is legal and evaluates to the
+        <em>number</em> <code>15</code>, because both string operands convert to
+        numbers first. Since every JavaScript value is either truthy or falsy, any
+        operator that "expects" a boolean — like the test in <code>?:</code> —
+        actually accepts an operand of any type at all. Several operators in the
+        reference table below are documented as expecting an
+        <strong>lvalue</strong> — a historical term for "an expression legal on
+        the left side of an assignment": a variable, an object property, or an
+        array element. <code>=</code>, <code>++</code>, <code>--</code>, and
+        <code>delete</code> all require one.
+      </p>
+
+      <h3 id="operator-side-effects">4.7.3 Operator side effects</h3>
+      <p>
+        Evaluating an expression like <code>2 * 3</code> never changes any state —
+        run it a thousand times and every future computation is unaffected. A
+        handful of operators are different: assignment (plain and compound),
+        <code>++</code>/<code>--</code> (which are implicit assignments), and
+        <code>delete</code> (which removes a property, similar to — but distinct
+        from — assigning it <code>undefined</code>) all mutate the program's
+        state as a side effect of evaluation. No other operators have side
+        effects directly, though a function call or <code>new</code> expression
+        can obviously have arbitrary side effects buried inside the function body
+        it runs.
+      </p>
+
+      <h3 id="operator-precedence">4.7.4 Operator precedence</h3>
+      <p>
+        Precedence determines which operator "grabs" its operands first when two
+        different operators compete for the same value. In <code>w = x +
+        y*z</code>, <code>*</code> binds tighter than <code>+</code>, so
+        <code>y*z</code> is computed before the addition — and <code>=</code>,
+        sitting at the very bottom of the precedence table, always runs last.
+        Parentheses override precedence explicitly: <code>w = (x + y) * z</code>
+        forces the addition first. Note also that property access, computed
+        access, and invocation — <code>.</code>, <code>[]</code>, <code>()</code>
+        — bind tighter than every operator in the table below, which is why
+        <code>typeof my.functions[x](y)</code> applies <code>typeof</code> to the
+        <em>result</em> of the property lookup, indexing, and call, not to
+        <code>my</code> alone.
+      </p>
+      <p>The full table, ordered from highest precedence to lowest:</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Operator</th><th>Operation</th><th>Assoc.</th><th>Arity</th></tr>
+          <tr><td><code>++</code> <code>--</code></td><td>Pre/post increment, decrement</td><td>R</td><td>1</td></tr>
+          <tr><td><code>-</code></td><td>Unary negate</td><td>R</td><td>1</td></tr>
+          <tr><td><code>+</code></td><td>Unary convert to number</td><td>R</td><td>1</td></tr>
+          <tr><td><code>~</code></td><td>Invert bits</td><td>R</td><td>1</td></tr>
+          <tr><td><code>!</code></td><td>Invert boolean</td><td>R</td><td>1</td></tr>
+          <tr><td><code>delete</code></td><td>Remove a property</td><td>R</td><td>1</td></tr>
+          <tr><td><code>typeof</code></td><td>Determine type of operand</td><td>R</td><td>1</td></tr>
+          <tr><td><code>void</code></td><td>Discard value, return undefined</td><td>R</td><td>1</td></tr>
+          <tr><td><code>**</code></td><td>Exponentiate</td><td>R</td><td>2</td></tr>
+          <tr><td><code>*</code> <code>/</code> <code>%</code></td><td>Multiply, divide, remainder</td><td>L</td><td>2</td></tr>
+          <tr><td><code>+</code> <code>-</code></td><td>Add/concatenate, subtract</td><td>L</td><td>2</td></tr>
+          <tr><td><code>&lt;&lt;</code> <code>&gt;&gt;</code> <code>&gt;&gt;&gt;</code></td><td>Bit shifts</td><td>L</td><td>2</td></tr>
+          <tr><td><code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>instanceof</code> <code>in</code></td><td>Relational comparisons</td><td>L</td><td>2</td></tr>
+          <tr><td><code>==</code> <code>!=</code> <code>===</code> <code>!==</code></td><td>Equality tests</td><td>L</td><td>2</td></tr>
+          <tr><td><code>&amp;</code></td><td>Bitwise AND</td><td>L</td><td>2</td></tr>
+          <tr><td><code>^</code></td><td>Bitwise XOR</td><td>L</td><td>2</td></tr>
+          <tr><td><code>|</code></td><td>Bitwise OR</td><td>L</td><td>2</td></tr>
+          <tr><td><code>&amp;&amp;</code></td><td>Logical AND</td><td>L</td><td>2</td></tr>
+          <tr><td><code>||</code></td><td>Logical OR</td><td>L</td><td>2</td></tr>
+          <tr><td><code>??</code></td><td>Nullish coalescing</td><td>L</td><td>2</td></tr>
+          <tr><td><code>?:</code></td><td>Conditional (ternary)</td><td>R</td><td>3</td></tr>
+          <tr><td><code>=</code> <code>**=</code> <code>*=</code> <code>/=</code> <code>%=</code> <code>+=</code> <code>-=</code> <code>&lt;&lt;=</code> <code>&gt;&gt;=</code> <code>&gt;&gt;&gt;=</code> <code>&amp;=</code> <code>^=</code> <code>|=</code></td><td>Assignment (plain and compound)</td><td>R</td><td>2</td></tr>
+          <tr><td><code>,</code></td><td>Comma</td><td>L</td><td>2</td></tr>
+        </table>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Two operators that refuse to have a defined relative precedence</div>
+        <p>
+          <code>??</code>'s precedence relative to <code>&amp;&amp;</code> and
+          <code>||</code> is deliberately left unspecified — mixing them without
+          parentheses is a <code>SyntaxError</code>, forcing you to disambiguate.
+          Likewise, <code>**</code>'s precedence relative to unary
+          <code>-</code>/<code>+</code> is unspecified: <code>-3 ** 2</code> is a
+          <code>SyntaxError</code> rather than a silent guess at
+          <code>(-3) ** 2</code> versus <code>-(3 ** 2)</code>.
+        </p>
+      </div>
+
+      <h3 id="operator-associativity">4.7.5 Operator associativity</h3>
+      <p>
+        Associativity governs the order in which operators of the <em>same</em>
+        precedence combine. Left-to-right ("L" above) means the leftmost
+        operation happens first: <code>w = x - y - z</code> means
+        <code>w = ((x - y) - z)</code>. Right-to-left ("R") means the opposite —
+        and it applies to exponentiation, the unary operators, assignment, and
+        the conditional operator:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let y = a ** b ** c;   // same as a ** (b ** c) — right-to-left
+let xx = ~-y;           // same as ~(-y)
+let w = x = y = z;      // same as x = (y = z) — chained assignment, right-to-left
+let q = a ? b : c ? d : e ? f : g; // same as a ? b : (c ? d : (e ? f : g))</code></pre>
+      </div>
+
+      <h3 id="order-of-evaluation">4.7.6 Order of evaluation</h3>
+      <p>
+        Precedence and associativity decide which operations combine with which
+        — they say nothing about the order subexpressions are actually
+        <em>evaluated</em> in. That order is always strictly left to right,
+        regardless of how parentheses or precedence reshape which values get
+        combined with which operator. In <code>w = x + y * z</code>,
+        <code>w</code> is evaluated first (to determine where to assign), then
+        <code>x</code>, then <code>y</code>, then <code>z</code> — parentheses
+        can change which operations happen on those values, but never the
+        left-to-right order in which the subexpressions themselves are visited.
+        This only matters when a subexpression has a side effect that a later
+        subexpression depends on — e.g., if evaluating <code>x</code> increments
+        a variable that <code>z</code> also reads.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Deep dive: precedence and associativity gotchas <span class="badge hard">Hard</span></div>
+        <p>
+          Two mistakes account for most real-world precedence bugs.
+        </p>
+        <p>
+          <strong>1. <code>typeof</code> binds tighter than you'd expect, but
+          member access binds tighter still.</strong> Because <code>typeof</code>
+          is a unary operator sitting near the top of the table, it grabs only the
+          expression immediately next to it under normal precedence rules — but
+          property access, computed access, and calls outrank <em>everything</em>
+          in the operator table, so they're resolved first regardless:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let obj = { getValue: () => 42 };
+typeof obj.getValue()     // => "number" — the call and property access happen
+                           //    FIRST, then typeof inspects the *result*, 42
+
+typeof obj.getValue       // => "function" — no call here, so typeof inspects
+                           //    the function itself instead
+
+// Where typeof genuinely binds "too tight" is against operators BELOW it:
+typeof 2 + 3               // => "number3"! Parsed as (typeof 2) + 3
+                            //    ("number" + 3, string concatenation), NOT
+                            //    typeof (2 + 3)
+typeof (2 + 3)              // => "number" — parentheses fix it</code></pre>
+        </div>
+        <p>
+          <strong>2. Chained assignment silently reads right-to-left, which bites
+          when the left-hand targets aren't independent.</strong>
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Safe: three independent variables, right-to-left is invisible
+let i, j, k;
+i = j = k = 0;     // k = 0, then j = (that result), then i = (that result)
+
+// Subtle: when a later target's evaluation depends on an earlier assignment
+let arr = [0, 0];
+let n = 0;
+arr[n] = n = 1;    // Is arr[0] or arr[1] set? The LEFT-HAND target "arr[n]" is
+                   // evaluated (index resolved to 0) before the right side
+                   // runs, so this sets arr[0] = 1, THEN n becomes 1 —
+                   // arr is now [1, 0], not [0, 1]. Rewrite as two statements
+                   // if this is ever load-bearing for readability.</code></pre>
+        </div>
+      </div>
+
+      <h2 id="arithmetic-expressions">4.8 Arithmetic expressions</h2>
+      <p>
+        The core arithmetic operators are <code>**</code> (exponentiate),
+        <code>*</code>, <code>/</code>, <code>%</code> (remainder),
+        <code>+</code>, and <code>-</code>. All but <code>+</code> (covered in
+        its own subsection below because of its string behavior) simply convert
+        both operands to numbers and compute the obvious result; anything that
+        can't convert to a number becomes <code>NaN</code>, and a
+        <code>NaN</code> operand almost always makes the whole result
+        <code>NaN</code>. Most of these operators also accept <code>BigInt</code>
+        operands, but never a mix of <code>BigInt</code> and regular number in the
+        same expression — that throws a <code>TypeError</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">5 / 2         // => 2.5 — JS has one numeric type, so division is never truncated
+5 / 0         // => Infinity — not an error
+0 / 0         // => NaN     — not an error
+5 % 2         // => 1
+-5 % 2        // => -1     — result takes the sign of the FIRST operand
+6.5 % 2.1     // => 0.2    — % works on floats too, not just integers
+
+2 ** 2 ** 3   // => 256 (2 ** 8), NOT 64 (4 ** 3) — ** is right-associative
+// -3 ** 2    // SyntaxError — write (-3) ** 2 or -(3 ** 2) instead</code></pre>
+      </div>
+      <p>
+        <code>Math.pow()</code> has existed since the earliest versions of
+        JavaScript and computes exactly what <code>**</code> does; <code>**</code>
+        itself is a much newer (ES2016) addition to the language.
+      </p>
+
+      <h3 id="the-plus-operator">4.8.1 The <code>+</code> operator <span class="badge hard">Hard</span></h3>
+      <p>
+        <code>+</code> is the one arithmetic operator with two entirely different
+        jobs: numeric addition and string concatenation. Which one happens is
+        decided by a fixed, three-step algorithm that runs every single time
+        <code>+</code> is evaluated — it is not "guess the intent," it's a strict
+        procedure:
+      </p>
+      <ol>
+        <li>
+          If either operand is an object, convert it to a primitive first, using
+          the object-to-primitive algorithm from
+          <a href="02-types-values-variables.html#type-conversions">Types, Values &amp; Variables</a>.
+          <code>Date</code> objects convert via their <code>toString()</code>
+          method; every other built-in object tries <code>valueOf()</code> first
+          and falls back to <code>toString()</code> only if <code>valueOf()</code>
+          doesn't return a primitive (which, for most plain objects, it never
+          does — so most objects effectively convert via
+          <code>toString()</code>, yielding <code>"[object Object]"</code>).
+        </li>
+        <li>
+          <em>After</em> that conversion, if either operand is now a string, the
+          other operand is converted to a string too, and the result is
+          concatenation.
+        </li>
+        <li>
+          Otherwise — neither operand is or became a string — both convert to
+          numbers (or to <code>NaN</code>) and the result is numeric addition.
+        </li>
+      </ol>
+      <p>
+        The critical detail is the ordering: object-to-primitive conversion
+        <em>always</em> happens first, before the string-vs-number decision is
+        even made. This matters because a custom <code>valueOf()</code> can
+        redirect an object that "looks stringy" into numeric addition instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">1 + 2          // => 3         both already numbers: add
+"1" + "2"      // => "12"      both already strings: concatenate
+"1" + 2        // => "12"      one string: 2 converts to "2", concatenate
+1 + {}         // => "1[object Object]"   {} has no useful valueOf(), so it
+               //                          falls back to toString()
+true + true    // => 2         booleans convert to numbers: 1 + 1
+2 + null       // => 2         null converts to the number 0
+2 + undefined  // => NaN       undefined converts to NaN, and NaN poisons +
+
+// Object-to-primitive conversion runs BEFORE the string check — an object
+// with a numeric valueOf() takes the addition path even next to nothing
+// stringy:
+let money = {
+  valueOf()  { return 100; },
+  toString() { return "$100"; },
+};
+money + 1        // => 101        valueOf() wins: numeric addition
+`${money}`       // => "$100"     template literals force toString() instead
+
+// Date is the deliberate exception: it prefers toString() over valueOf()
+let d = new Date(2024, 0, 1);
+d + 1            // => "Mon Jan 01 2024...1" — concatenation, not epoch-ms + 1
++d               // => a number (unary + forces numeric conversion, calling valueOf())</code></pre>
+      </div>
+      <p>
+        One more consequence worth internalizing: because <code>+</code> is
+        left-associative, grouping visibly changes the result once strings and
+        numbers are mixed in the same chain:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">1 + 2 + " blind mice"    // => "3 blind mice"   — 1+2 (numbers) first, THEN concatenate
+1 + (2 + " blind mice")  // => "12 blind mice"  — 2 + string concatenates first,
+                          //                       then 1 concatenates with that</code></pre>
+      </div>
+
+      <h3 id="unary-arithmetic-operators">4.8.2 Unary arithmetic operators</h3>
+      <p>
+        Unary <code>+</code>, unary <code>-</code>, <code>++</code>, and
+        <code>--</code> all convert their single operand to a number (they never
+        do string concatenation, unlike binary <code>+</code>), and all are
+        high-precedence and right-associative.
+      </p>
+      <ul>
+        <li><strong>Unary plus (<code>+x</code>)</strong> converts its operand to a number and returns it — a quick numeric-coercion idiom. It cannot be used on a <code>BigInt</code>.</li>
+        <li><strong>Unary minus (<code>-x</code>)</strong> converts to a number, then flips its sign.</li>
+        <li>
+          <strong>Increment (<code>++</code>)</strong> requires an lvalue operand.
+          <em>Pre</em>-increment (<code>++x</code>) increments first and evaluates
+          to the new value; <em>post</em>-increment (<code>x++</code>) evaluates
+          to the <em>old</em> value and increments as a side effect afterward:
+          <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let i = 1, j = ++i;   // i is 2, j is 2 (pre: increments THEN returns)
+let n = 1, m = n++;   // n is 2, m is 1 (post: returns THEN increments)
+
+// x++ is NOT the same as x = x + 1: ++ always numerically increments,
+// even on a string that + would have concatenated:
+let s = "1";
+++s        // => 2 (number)
+s + 1      // => "11" (string concatenation, since s is still "1" here)</code></pre>
+          </div>
+        </li>
+        <li><strong>Decrement (<code>--</code>)</strong> is the mirror image of <code>++</code>, with the same pre/post distinction.</li>
+      </ul>
+      <div class="admonition note">
+        <div class="admonition-title">Automatic semicolon insertion trap</div>
+        <p>
+          You cannot put a line break between a postfix <code>++</code>/<code>--</code>
+          and the operand before it — JavaScript's automatic semicolon insertion
+          will treat the operand as a complete statement and silently insert a
+          semicolon before the operator, changing your program's meaning.
+        </p>
+      </div>
+
+      <h3 id="bitwise-operators">4.8.3 Bitwise operators</h3>
+      <p>
+        The bitwise operators treat their numeric operands as 32-bit integers and
+        operate bit by bit, rather than on the number as a whole. They convert
+        each operand to a number, then to a 32-bit integer (dropping any
+        fractional part and any bits beyond the 32nd); the shift operators
+        additionally require their right-hand operand to be between 0 and 31,
+        achieved by dropping all but its lowest 5 bits. <code>NaN</code>,
+        <code>Infinity</code>, and <code>-Infinity</code> all convert to
+        <code>0</code> under this process — none of them throw. Most of these
+        operators (all except <code>&gt;&gt;&gt;</code>) also accept
+        <code>BigInt</code> operands.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">0x1234 &amp; 0x00FF   // => 0x0034  AND: bit set only if set in BOTH operands
+0x1234 | 0x00FF   // => 0x12FF  OR: bit set if set in EITHER operand
+0xFF00 ^ 0xF0F0   // => 0x0FF0  XOR: bit set if set in EXACTLY ONE operand
+~0x0F             // => -16     NOT: flips every bit (equivalent to -x - 1)
+
+7 << 2            // => 28      shift left = multiply by 2 per position
+7 >> 1            // => 3       shift right, sign-preserving = divide by 2
+-7 >> 1           // => -4      sign bit is preserved on the way in
+-1 >>> 4          // => 0x0FFFFFFF   zero-fill shift ignores sign entirely
+-1 >> 4           // => -1      (contrast with >>> above)</code></pre>
+      </div>
+      <p>
+        These are rarely needed in application code and mostly show up in
+        low-level bit-flag manipulation, hashing, or binary protocol work; if
+        you're not already comfortable with two's-complement integers, it's safe
+        to treat this subsection as reference material rather than something to
+        memorize up front.
+      </p>
+
+      <h2 id="relational-expressions">4.9 Relational expressions</h2>
+      <p>
+        Relational operators test a relationship between two values and always
+        produce a boolean — they're the operators that drive <code>if</code>,
+        <code>while</code>, and the rest of the control-flow statements covered in
+        <a href="04-statements.html">Statements</a>.
+      </p>
+
+      <h3 id="equality-and-inequality">4.9.1 Equality and inequality operators</h3>
+      <p>
+        <code>===</code> (strict equality) and <code>==</code> (loose equality)
+        both test "sameness," using different definitions; <code>!==</code> and
+        <code>!=</code> are their exact negations. <code>===</code> never
+        converts types — if the operands aren't already the same type, they're
+        simply unequal. Its rules:
+      </p>
+      <ul>
+        <li>Different types → never equal.</li>
+        <li><code>null === null</code> and <code>undefined === undefined</code> → equal (to themselves only — <code>null === undefined</code> is <code>false</code>).</li>
+        <li>Same boolean value → equal.</li>
+        <li><code>NaN</code> is never equal to anything, <em>including itself</em>. Test for it with <code>Number.isNaN(x)</code> or <code>x !== x</code>, never <code>x === NaN</code>.</li>
+        <li>Same number and same value → equal; <code>0 === -0</code> is <code>true</code> (the one exception where "same value" is generous).</li>
+        <li>Same sequence of UTF-16 code units → equal. No Unicode normalization is performed, so two visually identical strings built from different code-unit sequences are <em>not</em> equal.</li>
+        <li>Objects, arrays, and functions compare by reference: only identical to themselves, never to a different object with identical contents.</li>
+      </ul>
+      <p>
+        <code>==</code> runs the same strict comparison when the types already
+        match; when they don't, it performs <em>at most one round</em> of type
+        conversion and retries — it's a fixed lookup table, not a fuzzy or
+        recursive process:
+      </p>
+      <ul>
+        <li><code>null == undefined</code> is <code>true</code> (and each equals only the other, plus itself, under <code>==</code>).</li>
+        <li>number vs. string → the string converts to a number.</li>
+        <li>boolean vs. anything → the boolean converts to <code>0</code>/<code>1</code> first, then the comparison is retried from scratch.</li>
+        <li>object vs. number-or-string → the object converts to a primitive (same object-to-primitive algorithm as <code>+</code>: <code>valueOf()</code> preferred, <code>toString()</code> for <code>Date</code>), then retried.</li>
+        <li>anything else → not equal.</li>
+      </ul>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"1" == true   // => true — true becomes 1, "1" becomes 1, 1 === 1
+null == undefined  // => true
+null === undefined // => false — different types under strict equality
+NaN === NaN   // => false
+0 === -0      // => true</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Default to <code>===</code></div>
+        <p>
+          <code>==</code>'s implicit conversions are a well-documented source of
+          bugs. Use <code>===</code>/<code>!==</code> by default and reach for
+          <code>==</code>/<code>!=</code> only for the one genuinely useful case:
+          treating <code>null</code> and <code>undefined</code> as
+          interchangeable with <code>x == null</code>.
+        </p>
+      </div>
+
+      <h3 id="comparison-operators">4.9.2 Comparison operators</h3>
+      <p>
+        <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, and
+        <code>&gt;=</code> compare order. Any operand that's an object first
+        converts to a primitive (same algorithm as above); after that, if
+        <em>both</em> operands are strings, they're compared alphabetically by
+        UTF-16 code unit value — otherwise both convert to numbers and compare
+        numerically. If either operand is or becomes <code>NaN</code>, every one
+        of the four comparison operators returns <code>false</code>, with no
+        exception.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">11 < 3       // => false  both numbers: numeric compare
+"11" < "3"   // => true   both strings: "1" &lt; "3" alphabetically (code-unit order!)
+"11" < 3     // => false  mixed: "11" converts to 11, numeric compare
+"one" < 3    // => false  "one" converts to NaN, and NaN comparisons are always false
+
+"Zoo" < "aardvark"  // => true! Capital letters sort BEFORE all lowercase
+                     //    letters in UTF-16/ASCII code-unit order</code></pre>
+      </div>
+      <p>
+        For real natural-language sorting, use
+        <code>String.prototype.localeCompare()</code> or the
+        <code>Intl.Collator</code> class (see
+        <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; Utilities</a>),
+        or normalize case first with <code>toLowerCase()</code>/<code>toUpperCase()</code>.
+        Note also that <code>&lt;=</code> and <code>&gt;=</code> aren't literally
+        defined in terms of <code>==</code> — <code>&lt;=</code> means "not
+        greater than" and <code>&gt;=</code> means "not less than," which only
+        differs from the intuitive reading when <code>NaN</code> is involved (all
+        four operators return <code>false</code> for it, rather than <code>&lt;=</code>
+        somehow being "more true" than <code>&lt;</code>).
+      </p>
+
+      <h3 id="the-in-operator">4.9.3 The <code>in</code> operator</h3>
+      <p>
+        <code>in</code> expects a property name (string or symbol) on the left
+        and an object on the right; it's <code>true</code> if that object has a
+        property with that name, <strong>own or inherited</strong>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let point = { x: 1, y: 1 };
+"x" in point         // => true
+"z" in point         // => false
+"toString" in point  // => true — inherited from Object.prototype!
+
+let data = [7, 8, 9];
+"0" in data          // => true — array indices are property names, as strings
+1 in data            // => true — numbers are converted to strings
+3 in data            // => false — no element at index 3</code></pre>
+      </div>
+      <p>
+        This is a different question from <code>obj.key !== undefined</code>:
+        <code>in</code> also returns <code>true</code> for a property that
+        genuinely exists but whose value literally is <code>undefined</code>.
+      </p>
+
+      <h3 id="the-instanceof-operator">4.9.4 The <code>instanceof</code> operator</h3>
+      <p>
+        <code>instanceof</code> expects an object on the left and a constructor
+        function on the right; it walks the object's prototype chain (see
+        <a href="05-objects.html">Objects</a>) looking for
+        <code>right.prototype</code>, returning <code>true</code> if found —
+        which also makes it "superclass-aware":
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let d = new Date();
+d instanceof Date    // => true
+d instanceof Object  // => true — every object is an instance of Object
+d instanceof Number  // => false
+
+let arr = [1, 2, 3];
+arr instanceof Array  // => true
+arr instanceof Object  // => true
+arr instanceof RegExp  // => false</code></pre>
+      </div>
+      <p>
+        If the left operand isn't an object, <code>instanceof</code> simply
+        returns <code>false</code>; if the right operand isn't a function-like
+        object with a <code>prototype</code>, it throws a <code>TypeError</code>.
+      </p>
+
+      <h2 id="logical-expressions">4.10 Logical expressions</h2>
+      <p>
+        <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> perform
+        Boolean algebra, usually combining relational expressions into larger
+        conditions. Understanding them fully requires the truthy/falsy rules from
+        <a href="02-types-values-variables.html">Types, Values &amp; Variables</a>
+        — the falsy values are exactly <code>false</code>, <code>null</code>,
+        <code>undefined</code>, <code>0</code>, <code>-0</code>, <code>NaN</code>,
+        and <code>""</code>; everything else, including every object, is truthy.
+      </p>
+
+      <h3 id="logical-and-or">4.10.1 <code>&amp;&amp;</code> and <code>||</code> return operand values, not just booleans <span class="badge hard">Hard</span></h3>
+      <p>
+        At the simplest level, with boolean operands, <code>&amp;&amp;</code> and
+        <code>||</code> behave exactly like every other C-family language's AND
+        and OR. But their real behavior — the one worth understanding deeply — is
+        this: <strong>neither operator ever actually computes a fresh boolean.
+        Each evaluates its left operand first, and depending on whether that
+        value is truthy or falsy, either short-circuits and returns that exact
+        left-hand value untouched, or evaluates and returns the exact right-hand
+        value.</strong> No conversion to <code>true</code>/<code>false</code>
+        happens at any point.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// && : if the left side is falsy, return it AS-IS, without touching the right.
+// If the left side is truthy, evaluate and return the right side.
+let o = { x: 1 };
+let p = null;
+o &amp;&amp; o.x   // => 1     o is truthy, so the expression becomes o.x
+p &amp;&amp; p.x   // => null  p is falsy — p.x is NEVER evaluated, avoiding a TypeError
+
+// || : if the left side is truthy, return it AS-IS. Otherwise evaluate and
+// return the right side.
+let max = maxWidth || preferences.maxWidth || 500;  // first truthy value wins
+
+// Short-circuiting is often used purely for its control-flow effect:
+if (a === b) stop();       // equivalent, idiomatic JS:
+(a === b) &amp;&amp; stop();      // stop() only runs if a === b is truthy</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Careful with side effects on the right-hand side</div>
+        <p>
+          Because the right operand of <code>&amp;&amp;</code>/<code>||</code>
+          may or may not run, any assignment, increment, or function call placed
+          there executes conditionally — which is exactly the short-circuiting
+          idiom above when done on purpose, and a subtle bug when done by
+          accident.
+        </p>
+      </div>
+      <p>
+        <code>!</code> is different from both: it's unary, and it <em>does</em>
+        convert its operand to boolean before inverting — so <code>!</code>
+        always yields a genuine <code>true</code>/<code>false</code>, and
+        <code>!!x</code> is the standard idiom for "coerce anything to its
+        boolean equivalent." As a high-precedence unary operator, inverting a
+        compound expression like <code>p &amp;&amp; q</code> requires explicit
+        parens: <code>!(p &amp;&amp; q)</code>. Two useful identities (De
+        Morgan's laws), true for every <code>p</code> and <code>q</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">!(p &amp;&amp; q) === (!p || !q)   // => true, always
+!(p || q) === (!p &amp;&amp; !q)   // => true, always</code></pre>
+      </div>
+
+      <h3 id="nullish-coalescing">4.13.2 <code>??</code> vs. <code>||</code>: nullish, not falsy <span class="badge hard">ES2020</span></h3>
+      <p>
+        <code>||</code>'s "pick the first truthy operand" idiom has a well-known
+        flaw: <code>0</code>, <code>""</code>, and <code>false</code> are all
+        falsy, so <code>||</code> discards them even when they're legitimate,
+        intentional values rather than "nothing was provided." The nullish
+        coalescing operator <code>??</code> fixes exactly this: it only falls
+        through to its right operand when the left is <code>null</code> or
+        <code>undefined</code> — every other falsy value is treated as defined
+        and returned as-is. Like <code>&amp;&amp;</code>/<code>||</code>, it
+        short-circuits: the right operand is evaluated only when needed.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let options = { timeout: 0, title: "", verbose: false, n: null };
+
+options.timeout ?? 1000      // => 0      — 0 is a real, intentional value
+options.timeout || 1000      // => 1000   — WRONG: || can't distinguish 0 from "unset"
+
+options.title ?? "Untitled"  // => ""     — empty string is respected as-is
+options.verbose ?? true      // => false  — false is respected as-is
+options.n ?? 10              // => 10     — n IS null, so ?? falls through here
+options.missing ?? "default" // => "default" — undefined also falls through
+
+// The classic default-parameter bug this fixes:
+function setVolume(level) {
+  level = level || 50;   // BUG: setVolume(0) silently becomes 50
+}
+function setVolumeFixed(level) {
+  level = level ?? 50;   // correct: only null/undefined trigger the default
+}
+setVolumeFixed(0);   // level stays 0, as intended</code></pre>
+      </div>
+      <p>
+        If <code>a</code> has no side effects, <code>a ?? b</code> is exactly
+        equivalent to <code>(a !== null &amp;&amp; a !== undefined) ? a : b</code>.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Mixing <code>??</code> with <code>&amp;&amp;</code>/<code>||</code> requires parentheses</div>
+        <p>
+          <code>a ?? b || c</code> is a flat-out <code>SyntaxError</code> — the
+          spec deliberately leaves <code>??</code>'s precedence relative to
+          <code>&amp;&amp;</code>/<code>||</code> undefined, so you must write
+          <code>(a ?? b) || c</code> or <code>a ?? (b || c)</code> and mean it.
+        </p>
+      </div>
+
+      <h2 id="assignment-expressions">4.11 Assignment expressions</h2>
+      <p>
+        <code>=</code> assigns a value to a variable or property. Its left
+        operand must be an lvalue; its right operand may be any value. The
+        expression's <em>value</em> is the right-hand value, and as a side
+        effect that value is also stored into the lvalue:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">i = 0;      // Set i to 0 — and the expression "i = 0" itself evaluates to 0
+o.x = 1;    // Set property x of o to 1
+
+// Because assignment IS an expression with a value, it can be embedded in a
+// larger expression — usually with parentheses, since = binds so loosely:
+(a = b) === 0    // assign b to a, then compare the result to 0
+
+// = is right-associative, enabling chained assignment:
+i = j = k = 0;   // k = 0 first, then j = 0, then i = 0</code></pre>
+      </div>
+
+      <h3 id="compound-assignment">4.11.1 Assignment with operation</h3>
+      <p>
+        Every binary arithmetic and bitwise operator has a compound "operate and
+        assign" form: <code>total += salesTax</code> means
+        <code>total = total + salesTax</code> — including <code>+=</code>'s
+        string-concatenation behavior when the operands are strings. The full
+        set: <code>**=</code>, <code>*=</code>, <code>/=</code>, <code>%=</code>,
+        <code>+=</code>, <code>-=</code>, <code>&lt;&lt;=</code>,
+        <code>&gt;&gt;=</code>, <code>&gt;&gt;&gt;=</code>, <code>&amp;=</code>,
+        <code>^=</code>, <code>|=</code>.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title"><code>a op= b</code> isn't always exactly <code>a = a op b</code></div>
+        <p>
+          They differ when <code>a</code> has a side effect, because the
+          compound form evaluates <code>a</code> only <em>once</em>, while the
+          expanded form evaluates it twice:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let data = [1, 2, 3], i = 0;
+data[i++] *= 2;                     // i becomes 1; data[0] becomes 2
+// vs.
+let data2 = [1, 2, 3], i2 = 0;
+data2[i2++] = data2[i2++] * 2;      // i2 becomes 2 (incremented TWICE);
+                                     // reads data2[0] but writes to data2[1]!</code></pre>
+        </div>
+      </div>
+
+      <h3 id="destructuring-assignment">4.11.2 Destructuring assignment as an expression</h3>
+      <p>
+        Array and object patterns can appear on the left of <code>=</code> to
+        unpack multiple values at once — and because it's still an assignment
+        expression, the whole thing still evaluates to the assigned (right-hand)
+        value:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let [a, b] = [1, 2];              // a = 1, b = 2
+[a, b] = [b, a];                   // swap, no temporary variable needed
+let { x, y: renamed, ...rest } = { x: 1, y: 2, z: 3, w: 4 };
+// x = 1, renamed = 2, rest = { z: 3, w: 4 }
+
+let result = ([a, b] = [10, 20]);  // result is [10, 20] — the whole
+                                    // assignment expression's value</code></pre>
+      </div>
+      <p>
+        Destructuring targets, defaults, and nested patterns are covered fully in
+        <a href="05-objects.html">Objects</a> and
+        <a href="06-arrays.html">Arrays</a>; the point to take from this chapter
+        is that destructuring is still fundamentally an <em>assignment
+        expression</em> with the usual semantics — it has a value, not just a
+        side effect.
+      </p>
+
+      <h2 id="evaluation-expressions">4.12 Evaluation expressions</h2>
+      <p>
+        <code>eval()</code> parses and executes a string as JavaScript source,
+        returning the value of the last expression or statement it evaluated:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">eval("3 + 2")   // => 5</code></pre>
+      </div>
+      <p>
+        <code>eval</code> is technically a function, but it's documented here as
+        an honorary operator, because the language spec treats it as one:
+        modern engines cannot safely optimize any function that calls
+        <code>eval()</code>, since the evaluated string might read or write that
+        function's local variables. To limit the damage, the spec distinguishes
+        a <strong>direct eval</strong> — a call written literally as
+        <code>eval(...)</code> — from an <strong>indirect eval</strong>, any call
+        reached through another reference to the same function (e.g., assigning
+        <code>let f = eval;</code> and calling <code>f(...)</code>). Only a
+        direct eval runs in the caller's local variable scope; an indirect eval
+        always runs as if it were independent, top-level global code, and cannot
+        read or write local variables at all:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const geval = eval;                // an indirect reference to eval
+let x = "global", y = "global";
+
+function f() {
+  let x = "local";
+  eval("x += 'changed';");         // DIRECT eval: sees and mutates local x
+  return x;
+}
+function g() {
+  let y = "local";
+  geval("y += 'changed';");        // INDIRECT eval: runs against globals only
+  return y;                        // local y is untouched
+}
+
+f(); x   // => "localchanged", "global"    (local x mutated, global x untouched)
+g(); y   // => "local", "globalchanged"    (opposite: global y mutated)</code></pre>
+      </div>
+      <p>
+        Variables declared with <code>var</code> inside an evaluated string leak
+        into whichever scope the eval runs in (local for direct, global for
+        indirect); <code>let</code> and <code>const</code> declarations inside
+        the string are always scoped to the eval itself and never escape it. In
+        strict-mode code — or when the evaluated string itself starts with
+        <code>"use strict"</code> — <code>eval()</code> always gets its own
+        private variable environment, even when called directly: it can read and
+        modify the caller's existing locals, but it can no longer <em>declare</em>
+        new ones into the caller's scope. Strict mode goes further still,
+        effectively reserving the identifier <code>eval</code>: you cannot
+        reassign it, and you cannot name a variable, parameter, or function
+        <code>eval</code>.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Avoid <code>eval()</code> in real code</div>
+        <p>
+          It defeats engine optimizations for any function that uses it, and it's
+          a serious security liability the moment any part of the evaluated
+          string can be influenced by user input — there's no reliable way to
+          sanitize arbitrary JavaScript source. Many sites disable it outright
+          via a Content-Security-Policy header. Almost every legitimate use case
+          has a safer alternative (dynamic property access, <code>Function</code>
+          constructors used with fully trusted input, JSON parsing for data).
+        </p>
+      </div>
+
+      <h2 id="miscellaneous-operators">4.13 Miscellaneous operators</h2>
+
+      <h3 id="conditional-operator">4.13.1 The conditional operator (<code>?:</code>)</h3>
+      <p>
+        JavaScript's only ternary operator: <code>cond ? ifTrue : ifFalse</code>.
+        The first operand is evaluated and treated as a boolean; depending on its
+        truthiness, exactly <em>one</em> of the remaining two operands is
+        evaluated and becomes the result — never both:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let abs = x > 0 ? x : -x;
+
+greeting = "hello " + (username ? username : "there");
+// equivalent to:
+// if (username) { greeting = "hello " + username; }
+// else           { greeting = "hello there"; }</code></pre>
+      </div>
+      <p>
+        It's right-associative, which is what lets chained ternaries read as an
+        if/else-if/else ladder (see the associativity example earlier in this
+        chapter).
+      </p>
+
+      <h3 id="typeof-operator">4.13.3 The <code>typeof</code> operator</h3>
+      <p>
+        <code>typeof</code> is unary and returns a string naming its operand's
+        type:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Operand</th><th><code>typeof</code> result</th></tr>
+          <tr><td><code>undefined</code></td><td><code>"undefined"</code></td></tr>
+          <tr><td><code>null</code></td><td><code>"object"</code> (a 25+ year-old bug, frozen into the spec forever)</td></tr>
+          <tr><td><code>true</code>/<code>false</code></td><td><code>"boolean"</code></td></tr>
+          <tr><td>any number, including <code>NaN</code></td><td><code>"number"</code></td></tr>
+          <tr><td>any <code>BigInt</code></td><td><code>"bigint"</code></td></tr>
+          <tr><td>any string</td><td><code>"string"</code></td></tr>
+          <tr><td>any symbol</td><td><code>"symbol"</code></td></tr>
+          <tr><td>any function</td><td><code>"function"</code></td></tr>
+          <tr><td>any other object/array</td><td><code>"object"</code></td></tr>
+        </table>
+      </div>
+      <p>
+        Because every non-function object collapses to the single result
+        <code>"object"</code>, <code>typeof</code> is only useful for
+        distinguishing primitives from objects and from each other — not for
+        telling object <em>classes</em> apart. For that, reach for
+        <code>instanceof</code> (§4.9.4 above) or a constructor check, both
+        covered further in <a href="08-classes.html">Classes</a>. See the
+        <a href="#operator-precedence">precedence deep dive</a> above for the
+        classic <code>typeof 2 + 3</code> parsing surprise.
+      </p>
+
+      <h3 id="delete-operator">4.13.4 The <code>delete</code> operator</h3>
+      <p>
+        <code>delete</code> removes a property from an object (or an element
+        from an array) entirely — it does not merely set the value to
+        <code>undefined</code>. Its operand must be an lvalue; on anything else
+        it's a no-op that returns <code>true</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: 2 };
+delete o.x;     // => true
+"x" in o;       // => false — the property is genuinely gone
+typeof o.x;     // => "undefined" — but so is any nonexistent property
+delete o.x;     // => true again — deleting a nonexistent property still "succeeds"
+
+let a = [1, 2, 3];
+delete a[2];    // => true — removes the element...
+a.length;       // => 3   — ...but length is unchanged; a is now SPARSE
+                //           (a "hole" at index 2 — see the Arrays chapter)
+
+delete Object.prototype;  // => false (non-strict) — non-configurable properties
+                           //    can't be deleted; throws TypeError in strict mode
+
+// delete o;  // => false, or SyntaxError in strict mode — bare variable/function
+              //    identifiers were never deletable; only property access
+              //    expressions are valid delete targets</code></pre>
+      </div>
+
+      <h3 id="void-operator">4.13.6 The <code>void</code> operator</h3>
+      <p>
+        <code>void expr</code> evaluates its operand, discards the value, and
+        always yields <code>undefined</code>. It only makes sense on an operand
+        with a side effect, since the value itself is thrown away. It's rare in
+        hand-written code, occasionally showing up to force an
+        expression-bodied arrow function to return nothing on purpose:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let counter = 0;
+const increment = () => void counter++;  // discards counter++'s value
+increment();   // => undefined
+counter;       // => 1 — the side effect still happened</code></pre>
+      </div>
+
+      <h3 id="comma-operator">4.13.7 The comma operator (<code>,</code>)</h3>
+      <p>
+        The comma operator evaluates its left operand, discards that value,
+        evaluates its right operand, and returns <em>that</em>. It's essentially
+        useless unless the left side has a side effect, and the one place it
+        shows up idiomatically is squeezing multiple update expressions into a
+        single <code>for</code>-loop header (the commas separating multiple
+        <code>let</code> declarations are ordinary declaration syntax, not this
+        operator — only the one in the update clause below is the comma
+        operator):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">for (let i = 0, j = 10; i < j; i++, j--) {
+  console.log(i + j);  // always 10 — i and j move toward each other in lockstep
+}</code></pre>
+      </div>
+
+      <h3 id="spread-in-calls">Spread in function calls</h3>
+      <p>
+        The same <code>...</code> spread syntax used in array literals (§4.2
+        above) also works directly inside a function call's argument list,
+        expanding any iterable into individual positional arguments at call
+        time:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function sum3(a, b, c) { return a + b + c; }
+let nums = [1, 2, 3];
+sum3(...nums);            // => 6, same as sum3(1, 2, 3)
+Math.max(...[3, 1, 4, 1, 5]); // => 5
+
+// It composes with ordinary arguments and multiple spreads freely:
+function log(label, ...values) { console.log(label, values); }
+log("scores:", ...[10, 20], 30, ...[40]);  // "scores:" [10, 20, 30, 40]</code></pre>
+      </div>
+      <p>
+        This is the modern replacement for the old
+        <code>fn.apply(thisArg, argsArray)</code> idiom, and it pairs naturally
+        with the rest-parameter syntax on the receiving side, covered in
+        <a href="07-functions.html">Functions</a>.
+      </p>
+
+      <h3 id="await-operator">4.13.5 The <code>await</code> operator</h3>
+      <p>
+        <code>await</code> takes a <code>Promise</code> operand and makes code
+        behave as though it paused until that promise settles, without actually
+        blocking the thread or preventing other work from proceeding — its value
+        is the promise's fulfillment value, and it's legal only inside functions
+        declared <code>async</code>. It's foundational enough to asynchronous
+        JavaScript that it gets full treatment of its own in
+        <a href="14-async-javascript.html">Asynchronous JavaScript</a> rather
+        than here.
+      </p>
+
+      <h2 id="summary">4.14 Summary</h2>
+      <p>
+        Expressions are the phrases JavaScript programs are built from, and every
+        expression evaluates to a value — sometimes alongside a side effect like
+        a variable assignment. Primary expressions (literals, keywords, bare
+        identifiers) combine via property access, invocation, object creation,
+        and the full operator set into arbitrarily complex expressions, governed
+        by strict, fully specified rules for precedence, associativity, and
+        left-to-right evaluation order. A few points are worth carrying forward
+        as you move on to <a href="04-statements.html">Statements</a>: the
+        <code>+</code> operator's dual add/concatenate identity depends on an
+        object-to-primitive conversion that runs before the string-vs-number
+        decision is even made; <code>&amp;&amp;</code>, <code>||</code>, and
+        <code>??</code> all return one of their actual operand values rather than
+        a fresh boolean, and all three short-circuit — skipping evaluation (and
+        any side effects) of whatever they don't need; and optional chaining
+        (<code>?.</code>, <code>?.[]</code>, <code>?.()</code>) short-circuits an
+        entire expression chain the instant it hits a nullish value, not just the
+        one access it's attached to.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

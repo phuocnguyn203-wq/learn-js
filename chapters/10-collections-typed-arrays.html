@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Collections & Typed Arrays — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="10-collections-typed-arrays.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 11, &sect;11.1&ndash;11.2</span>
+      <h1>Collections &amp; Typed Arrays</h1>
+      <p class="lede">
+        Plain objects and arrays cover a lot of ground, but two problems keep
+        recurring: you need a collection of unique values with fast membership
+        tests, or a dictionary whose keys aren't necessarily strings and don't
+        collide with inherited properties like <code>toString</code>. ES6's
+        <code>Set</code> and <code>Map</code> (and their "weak" siblings) solve
+        exactly that. Separately, and for a completely different reason —
+        working with raw binary data efficiently — ES6 also introduced typed
+        arrays: fixed-length, fixed-type views over raw memory that behave
+        like arrays on the surface but are architecturally closer to a C
+        array than to a JavaScript <code>Array</code>. This page covers both:
+        <a href="#set">&sect;11.1 Sets and Maps</a> and
+        <a href="#typed-arrays">&sect;11.2 Typed Arrays and Binary Data</a>.
+        Regular expressions (&sect;11.3) live on the
+        <a href="11-regular-expressions.html">Regular Expressions</a> page, and
+        dates, errors, JSON, <code>Intl</code>, <code>console</code>, URLs, and
+        timers (&sect;11.4&ndash;11.11) live on
+        <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; Utilities</a>.
+      </p>
+
+      <h2 id="set">The Set class <span class="badge new">ES6</span></h2>
+      <p>
+        A <code>Set</code> is a collection of values, like an array — except
+        sets are unordered and unindexed, and they cannot contain duplicates.
+        A value either is or isn't a member; there's no concept of "how many
+        times" a value appears, and (unlike an array) you can't ask for
+        "element number 2" of a set.
+      </p>
+
+      <h3 id="creating-sets">Creating a Set</h3>
+      <p>
+        The <code>Set()</code> constructor's argument is optional, and if
+        supplied it can be <em>any</em> iterable object &mdash; not just an
+        array. Strings are iterable, so passing a string iterates its
+        characters (with surrogate-pair-aware code points), and passing
+        another <code>Set</code> effectively copies it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let s = new Set();          // A new, empty set
+let t = new Set([1, s]);    // A new set with two members: 1 and the set s
+
+let copy = new Set(t);                // Copies the elements of t
+let unique = new Set("Mississippi");  // 4 elements: "M", "i", "s", "p"
+unique.size                            // =&gt; 4</code></pre>
+      </div>
+      <p>
+        <code>size</code> is the set equivalent of an array's <code>length</code>
+        &mdash; it tells you the current member count, and it's read-only.
+      </p>
+
+      <h3 id="set-methods">Adding, removing, and testing membership</h3>
+      <p>
+        Sets don't need to be fully populated at construction time. Add and
+        remove members at any point with <code>add()</code>, <code>delete()</code>,
+        and <code>clear()</code>. Because duplicates are disallowed, adding a
+        value that's already present is simply a no-op:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let s = new Set();   // Start empty
+s.size               // =&gt; 0
+s.add(1);            // Add the number 1
+s.size               // =&gt; 1
+s.add(1);             // Add the same number again
+s.size               // =&gt; 1; no change — duplicates are silently ignored
+s.add(true);          // Mixing types is fine
+s.size               // =&gt; 2
+s.add([1, 2, 3]);     // Adds the ARRAY as a single member, not its 3 elements
+s.size               // =&gt; 3
+
+s.delete(1)          // =&gt; true: 1 was a member, and deletion succeeded
+s.size               // =&gt; 2
+s.delete("nope")     // =&gt; false: wasn't a member, so nothing to delete
+s.delete([1, 2, 3])  // =&gt; false! see the identity-semantics section below
+s.clear();           // Remove every member
+s.size               // =&gt; 0</code></pre>
+      </div>
+      <p>
+        <code>add()</code> always takes exactly one argument &mdash; passing an
+        array adds that array as a single element, it does not spread the
+        array's contents into the set. <code>add()</code> returns the set
+        itself, so calls chain: <code>s.add("a").add("b").add("c")</code>.
+        <code>delete()</code>, by contrast, returns a boolean indicating
+        whether the value was actually present and removed.
+      </p>
+      <p>
+        Membership testing is what sets are actually for, day to day, and
+        it's what <code>has()</code> is optimized for:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let oneDigitPrimes = new Set([2, 3, 5, 7]);
+oneDigitPrimes.has(2)     // =&gt; true
+oneDigitPrimes.has(4)     // =&gt; false: 4 isn't prime
+oneDigitPrimes.has("5")   // =&gt; false: the string "5" is not the number 5</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">has() stays fast no matter how big the set gets</div>
+        <p>
+          Array's <code>includes()</code> also tests membership, but its cost
+          is proportional to array length &mdash; it has to scan. A
+          <code>Set</code>'s <code>has()</code> is effectively O(1) regardless
+          of how many members it holds. Reaching for a <code>Set</code>
+          instead of an array purely for repeated membership checks can be a
+          large, easy performance win. And converting an array to a
+          <code>Set</code> is also the idiomatic way to deduplicate it:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let deduped = [...new Set(arrayWithDuplicates)];</code></pre>
+        </div>
+      </div>
+
+      <h3 id="iterating-sets">Iterating a Set</h3>
+      <p>
+        <code>Set</code> is iterable, so <code>for/of</code>, the spread
+        operator, and destructuring all work on it directly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let sum = 0;
+for (let p of oneDigitPrimes) { sum += p; }
+sum                          // =&gt; 17: 2 + 3 + 5 + 7
+
+[...oneDigitPrimes]          // =&gt; [2, 3, 5, 7]
+Math.max(...oneDigitPrimes)  // =&gt; 7: set members passed as separate arguments</code></pre>
+      </div>
+      <p>
+        Sets are often called "unordered collections," which is a little
+        misleading for JavaScript's <code>Set</code>: it's <em>unindexed</em>
+        (there's no "3rd element"), but it always remembers insertion order,
+        and iteration always visits members in that order &mdash; the
+        earliest-added member first, the most recently added member last.
+        (This is one more surprise for programmers coming from Python, where
+        set iteration order is unspecified and sets can only hold immutable
+        values &mdash; JavaScript's tradeoff is the opposite: any value is
+        allowed, but membership is by identity rather than structural
+        equality, covered below.)
+      </p>
+      <p>
+        <code>Set</code> also implements <code>forEach()</code>, modeled on
+        the array method of the same name. Since a set has no indexes, its
+        <code>forEach()</code> callback simply receives the element as
+        <em>both</em> the first and second argument:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let product = 1;
+oneDigitPrimes.forEach(n =&gt; { product *= n; });
+product   // =&gt; 210 (2 * 3 * 5 * 7)</code></pre>
+      </div>
+
+      <h2 id="map">The Map class <span class="badge new">ES6</span></h2>
+      <p>
+        A <code>Map</code> represents a set of keys, each associated with
+        (mapped to) a value. Conceptually it's an array generalized so that
+        the "index" can be any value at all, not just a sequential integer.
+        Like array indexing, map lookups are fast &mdash; not quite as fast as
+        indexing an array, but effectively independent of how large the map
+        gets.
+      </p>
+
+      <h3 id="creating-maps">Creating a Map</h3>
+      <p>
+        The optional constructor argument must be an iterable object that
+        yields two-element <code>[key, value]</code> arrays &mdash; typically
+        written as a literal array of arrays, but it can also be another
+        <code>Map</code> (to copy it) or the result of
+        <code>Object.entries()</code> (to import a plain object's own
+        properties):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let m = new Map();                  // A new, empty map
+let n = new Map([                   // A map initialized from an array of pairs
+  ["one", 1],
+  ["two", 2]
+]);
+
+let copy = new Map(n);              // Same keys/values as n
+let o = { x: 1, y: 2 };
+let p = new Map(Object.entries(o)); // Same as new Map([["x", 1], ["y", 2]])</code></pre>
+      </div>
+
+      <h3 id="map-methods">get, set, has, delete, clear, size</h3>
+      <p>
+        A map is fundamentally a set of keys where each key carries one
+        associated value &mdash; not quite the same framing as "a set of
+        pairs." Calling <code>set()</code> with a key that's already present
+        <em>overwrites</em> that key's value; it does not create a second
+        entry.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let m = new Map();
+m.size               // =&gt; 0
+m.set("one", 1);
+m.set("two", 2);
+m.size               // =&gt; 2
+m.get("two")         // =&gt; 2
+m.get("three")       // =&gt; undefined: no such key
+m.set("one", true);  // Overwrites the value for an existing key
+m.size               // =&gt; 2: still 2 keys, not 3
+m.has("one")         // =&gt; true
+m.has(true)          // =&gt; false: true is a VALUE here, not a key
+m.delete("one")      // =&gt; true: removed
+m.size               // =&gt; 1
+m.delete("three")    // =&gt; false: nothing to remove
+m.clear();           // Remove every entry</code></pre>
+      </div>
+      <p>
+        Like <code>Set.add()</code>, <code>Map.set()</code> returns the map
+        itself, so calls chain &mdash; a convenient way to build a map without
+        writing out an array of arrays:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let colors = new Map().set("red", "#f00").set("green", "#0f0").set("blue", "#00f");
+colors.size          // =&gt; 3
+colors.get("green")  // =&gt; "#0f0"</code></pre>
+      </div>
+      <p>
+        Any JavaScript value &mdash; including <code>null</code>,
+        <code>undefined</code>, <code>NaN</code>, functions, and objects
+        &mdash; can be a <code>Map</code> key or value. A map can even hold
+        itself as a key. See the deep dive below for exactly how key
+        comparison works.
+      </p>
+
+      <h3 id="iterating-maps">Iterating a Map</h3>
+      <p>
+        <code>Map</code> is iterable, and each iterated item is a two-element
+        <code>[key, value]</code> array &mdash; the same shape the constructor
+        accepts, so spreading a map and feeding the result back into
+        <code>new Map(...)</code> round-trips. With <code>for/of</code>, it's
+        idiomatic to destructure the pair directly in the loop head:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let m = new Map([["x", 1], ["y", 2]]);
+[...m]   // =&gt; [["x", 1], ["y", 2]]
+
+for (let [key, value] of m) {
+  // first iteration: key = "x", value = 1
+  // second iteration: key = "y", value = 2
+}</code></pre>
+      </div>
+      <p>
+        As with <code>Set</code>, iteration order is always insertion order
+        &mdash; the least-recently-added entry comes first, the
+        most-recently-added comes last. If you only want keys or only want
+        values, skip the destructuring and use <code>keys()</code> or
+        <code>values()</code>; <code>entries()</code> also exists but is
+        identical to iterating the map directly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">[...m.keys()]     // =&gt; ["x", "y"]
+[...m.values()]   // =&gt; [1, 2]
+[...m.entries()]  // =&gt; [["x", 1], ["y", 2]] — same as [...m]</code></pre>
+      </div>
+      <p>
+        <code>Map</code> also implements <code>forEach()</code>, borrowed
+        from <code>Array</code> &mdash; but note the argument order carefully:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">m.forEach((value, key) =&gt; {   // value FIRST, key SECOND — not key, value!
+  console.log(key, value);
+});</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Why forEach() puts the value first</div>
+        <p>
+          It looks backward next to <code>for/of</code> destructuring (which
+          puts the key first), but it's consistent with
+          <a href="06-arrays.html">Array's</a> <code>forEach((element, index)
+          =&gt;&hellip;)</code>: the map's "index" is the key, and its "element"
+          is the value, so the callback receives value-then-key by analogy
+          with element-then-index.
+        </p>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Map vs. a plain object as a dictionary</div>
+        <p>
+          Reach for <code>Map</code> over a plain object whenever keys aren't
+          known in advance, could collide with inherited names like
+          <code>toString</code> or <code>constructor</code>, or aren't
+          strings/symbols at all. A <code>Map</code> has no prototype-pollution
+          risk, its <code>size</code> is O(1) instead of requiring
+          <code>Object.keys(o).length</code>, and its iteration order is
+          guaranteed to be insertion order. One thing a <code>Map</code> does
+          <em>not</em> get for free: <code>JSON.stringify()</code> doesn't
+          know how to serialize one (it produces <code>"{}"</code>). See
+          <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; Utilities</a>
+          for JSON serialization details.
+        </p>
+      </div>
+
+      <h3 id="identity-semantics">Deep dive: how Set and Map compare values <span class="badge hard">Hard part</span></h3>
+      <p>
+        Both classes need an internal rule for deciding whether two keys (or
+        two set members) "are the same value." That rule is <strong>not</strong>
+        deep/structural equality, and it's <strong>not quite</strong>
+        <code>===</code> either &mdash; it's the algorithm the spec calls
+        SameValueZero, which behaves exactly like <code>===</code> with a
+        single, deliberate carve-out for <code>NaN</code>.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">NaN is equal to itself in a Set/Map — even though NaN === NaN is false everywhere else</div>
+        <p>
+          Ordinary <code>===</code> comparison famously says <code>NaN ===
+          NaN</code> is <code>false</code> (see
+          <a href="03-expressions-operators.html">Expressions &amp; Operators</a>).
+          If <code>Set</code>/<code>Map</code> used plain <code>===</code>,
+          you could never <code>has()</code>-test for <code>NaN</code>, and
+          every <code>NaN</code> you added would create a distinct,
+          undeletable "duplicate." SameValueZero special-cases exactly this,
+          so a set treats every <code>NaN</code> as identical to every other
+          <code>NaN</code>.
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 1: NaN collapses to a single member, unlike in a plain array
+let weird = new Set([NaN, NaN, NaN]);
+weird.size        // =&gt; 1, not 3 — every NaN is "the same" NaN here
+
+let nums = [NaN];
+nums.includes(NaN)     // =&gt; true (includes() also uses SameValueZero)
+nums.indexOf(NaN)      // =&gt; -1  (indexOf() uses ===, so this one FAILS on NaN)
+
+weird.has(NaN)    // =&gt; true — has() works correctly and consistently</code></pre>
+      </div>
+      <p>
+        Outside of the <code>NaN</code> special case, comparison is exactly
+        <code>===</code>: it's identity for objects/arrays/functions, not
+        structural equality. Two object literals with identical contents are
+        two different values as far as a <code>Set</code> or <code>Map</code>
+        is concerned, because they're different references.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 2: distinct object references never collide, even with identical shape
+let m = new Map();
+m.set({}, "first");   // key: one empty-object reference
+m.set({}, "second");  // key: a DIFFERENT empty-object reference
+m.size                // =&gt; 2 — two distinct keys, not one overwritten
+
+m.get({})             // =&gt; undefined! this {} is a THIRD reference, matching neither key
+
+// The classic bug: building a "key" fresh every time you look something up
+let cache = new Map();
+function memoize(key, compute) {
+  if (cache.has(key)) return cache.get(key);
+  let value = compute();
+  cache.set(key, value);
+  return value;
+}
+memoize({ id: 1 }, () =&gt; expensiveCompute());  // stores under object-ref #1
+memoize({ id: 1 }, () =&gt; expensiveCompute());  // cache MISS — different object,
+                                                 // even though "id: 1" looks identical,
+                                                 // so expensiveCompute() runs AGAIN</code></pre>
+      </div>
+      <p>
+        The same rule governs <code>Set</code> membership and explains the
+        <code>delete()</code> failure shown earlier: adding
+        <code>[1, 2, 3]</code> to a set and then calling
+        <code>s.delete([1, 2, 3])</code> with a freshly written array literal
+        fails, because that literal is a different array object from the one
+        actually stored &mdash; only a reference to the exact same array would
+        work. To fix the memoization bug above, key by something with stable
+        identity or equality &mdash; a primitive (like <code>obj.id</code>
+        itself, or a string you build from it), or the exact same object
+        reference every time, or a <code>WeakMap</code> keyed by the object
+        reference you already hold elsewhere (next section).
+      </p>
+
+      <h2 id="weak-collections">WeakMap and WeakSet</h2>
+      <p>
+        A regular <code>Map</code> holds a <strong>strong</strong> reference
+        to every key it contains: as long as the map exists, none of its keys
+        can ever be garbage collected, even if the rest of the program has
+        completely forgotten about them. That's exactly the wrong behavior
+        for a cache or a side-table that's supposed to be attached to objects
+        someone else owns and controls the lifetime of &mdash; it would leak
+        memory for as long as the cache itself is alive. <code>WeakMap</code>
+        (and <code>WeakSet</code>) exist to fix that: they hold their entries
+        <strong>weakly</strong>, meaning an object used as a key remains
+        eligible for garbage collection once nothing <em>else</em> in the
+        program references it, at which point it &mdash; and its entry &mdash;
+        silently vanish from the collection.
+      </p>
+      <h3 id="weakmap">WeakMap</h3>
+      <p>
+        <code>WeakMap</code> is a variant of <code>Map</code> (not an actual
+        subclass) with the same constructor shape, but several deliberate
+        restrictions:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Restriction</th><th>Why</th></tr>
+          <tr><td>Keys must be objects or arrays — never primitives</td><td>Primitives aren't reclaimed the way objects are, so "weak reference to a primitive" is meaningless</td></tr>
+          <tr><td>Only <code>get()</code>, <code>set()</code>, <code>has()</code>, <code>delete()</code> exist</td><td>No <code>keys()</code>, <code>values()</code>, <code>forEach()</code>, and it isn't iterable — if you could list the keys, they'd be reachable through that list, and the map wouldn't be weak anymore</td></tr>
+          <tr><td>No <code>size</code> property</td><td>The count could change at any moment as the garbage collector runs in the background</td></tr>
+        </table>
+      </div>
+      <p>
+        The textbook use case is attaching computed or auxiliary data to an
+        object you don't own, without keeping that object alive forever:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const cache = new WeakMap();
+
+function computeExpensive(obj) {
+  if (cache.has(obj)) return cache.get(obj);
+  let result = /* ... some slow computation based on obj ... */ obj;
+  cache.set(obj, result);
+  return result;
+}
+// Once `obj` has no other references anywhere in the program, it — and its
+// entry in `cache` — become eligible for garbage collection automatically.
+// A regular Map here would keep every object passed to computeExpensive()
+// alive forever, which is a slow, silent memory leak.</code></pre>
+      </div>
+      <p>
+        An alternative to a <code>WeakMap</code>-based cache is stashing the
+        computed value directly on the object under a private
+        <code>Symbol</code> key, described in
+        <a href="05-objects.html">Objects</a>; which approach fits better
+        depends on whether you're allowed to modify the object at all.
+      </p>
+      <h3 id="weakset">WeakSet</h3>
+      <p>
+        <code>WeakSet</code> relates to <code>Set</code> the same way
+        <code>WeakMap</code> relates to <code>Map</code>: members must be
+        objects (no primitives), only <code>add()</code>, <code>has()</code>,
+        and <code>delete()</code> exist, it isn't iterable, and it has no
+        <code>size</code>. It's used far less often than <code>WeakMap</code>
+        &mdash; the main scenario is "branding" or "marking" an object as
+        having some property or having passed through some process, without
+        preventing it from being collected later:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const alreadyProcessed = new WeakSet();
+
+function process(item) {
+  if (alreadyProcessed.has(item)) return;   // Skip duplicates
+  alreadyProcessed.add(item);
+  // ... do the actual processing ...
+}</code></pre>
+      </div>
+      <p>
+        A regular <code>Set</code> used the same way would keep every marked
+        object alive indefinitely; <code>WeakSet</code> avoids that.
+      </p>
+
+      <h2 id="typed-arrays">Typed Arrays and Binary Data <span class="badge new">ES6</span></h2>
+      <p>
+        Regular JavaScript arrays hold values of any type and resize
+        dynamically, and engines optimize typical usage heavily &mdash; but
+        they're still nothing like the arrays of a lower-level language such
+        as C or Java. Typed arrays are: they're <em>not</em> actual arrays
+        (<code>Array.isArray()</code> returns <code>false</code> for every
+        one of them), but they implement essentially every method described
+        in <a href="06-arrays.html">Arrays</a> plus a handful of their own.
+        Three properties set them apart from regular arrays:
+      </p>
+      <ul>
+        <li>Every element is a number, but you choose the exact numeric
+          <em>type</em> (signed/unsigned integer, or IEEE-754 float) and
+          <em>width</em> (8 to 64 bits) that gets stored.</li>
+        <li>The length is fixed at creation time and can never change
+          afterward.</li>
+        <li>Elements are always zero-initialized (<code>0</code>,
+          <code>0n</code>, or <code>0.0</code> depending on type) when the
+          array is created.</li>
+      </ul>
+
+      <h3 id="typed-array-types">The 11 typed array types</h3>
+      <p>
+        There is no single <code>TypedArray</code> class exposed to your
+        code. Instead there are 11 distinct constructors, each pairing a
+        numeric type with a fixed byte width, and each carrying a static
+        <code>BYTES_PER_ELEMENT</code> property (1, 2, 4, or 8) telling you
+        that width:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Constructor</th><th>Bytes</th><th>Element type &amp; range</th></tr>
+          <tr><td><code>Int8Array</code></td><td>1</td><td>Signed byte, &minus;128 to 127</td></tr>
+          <tr><td><code>Uint8Array</code></td><td>1</td><td>Unsigned byte, 0 to 255</td></tr>
+          <tr><td><code>Uint8ClampedArray</code></td><td>1</td><td>Unsigned byte, 0 to 255, <em>clamps</em> on overflow instead of wrapping</td></tr>
+          <tr><td><code>Int16Array</code></td><td>2</td><td>Signed short, &minus;32,768 to 32,767</td></tr>
+          <tr><td><code>Uint16Array</code></td><td>2</td><td>Unsigned short, 0 to 65,535</td></tr>
+          <tr><td><code>Int32Array</code></td><td>4</td><td>Signed int, &minus;2,147,483,648 to 2,147,483,647</td></tr>
+          <tr><td><code>Uint32Array</code></td><td>4</td><td>Unsigned int, 0 to 4,294,967,295</td></tr>
+          <tr><td><code>Float32Array</code></td><td>4</td><td>IEEE-754 float — lower precision/range than a normal JS number, half the memory ("float" in C/Java)</td></tr>
+          <tr><td><code>Float64Array</code></td><td>8</td><td>IEEE-754 double — the same representation as an ordinary JavaScript number</td></tr>
+          <tr><td><code>BigInt64Array</code> <span class="badge new">ES2020</span></td><td>8</td><td>Signed 64-bit integer, represented as a <code>BigInt</code></td></tr>
+          <tr><td><code>BigUint64Array</code> <span class="badge new">ES2020</span></td><td>8</td><td>Unsigned 64-bit integer, represented as a <code>BigInt</code></td></tr>
+        </table>
+      </div>
+      <p>
+        <code>Uint8ClampedArray</code> is the odd one out. Storing a value
+        outside 0&ndash;255 in a plain <code>Uint8Array</code> element
+        "wraps around" using low-level modular arithmetic (fast, but
+        surprising); <code>Uint8ClampedArray</code> instead does extra
+        bounds-checking so an out-of-range value clamps to 0 or 255. This
+        exact clamping behavior is what the HTML <code>&lt;canvas&gt;</code>
+        element's pixel APIs (<code>ImageData</code>) rely on.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Out-of-range values are truncated silently — never an error</div>
+        <p>
+          Whether you're storing into an existing element or constructing
+          from values that don't fit, there's no warning and no exception:
+          fractions are dropped and integers wrap modulo the type's range.
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Uint8Array.of(1.23, 2.99, 45000)  // =&gt; Uint8Array [1, 2, 200]
+// 1.23 -&gt; 1 and 2.99 -&gt; 2 (fraction dropped)
+// 45000 doesn't fit in a byte, so it wraps modulo 256 -&gt; 200</code></pre>
+        </div>
+      </div>
+
+      <h3 id="creating-typed-arrays">Creating typed arrays</h3>
+      <p>
+        The simplest form calls a constructor with a single numeric
+        argument: the element count. Every element starts zeroed:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let bytes = new Uint8Array(1024);     // 1024 zeroed bytes
+let matrix = new Float64Array(9);      // A 3x3 matrix, all zeros
+let point = new Int16Array(3);         // A 3D point, all zeros
+let rgba = new Uint8ClampedArray(4);   // One RGBA pixel, all zeros</code></pre>
+      </div>
+      <p>
+        Every constructor also exposes static <code>from()</code> and
+        <code>of()</code> factories, matching <code>Array.from()</code> and
+        <code>Array.of()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let white = Uint8ClampedArray.of(255, 255, 255, 0);  // From explicit values
+let ints  = Uint32Array.from(white);                  // Copies white, changing type
+
+// If you only need the single-argument form of from(), you can drop it —
+// passing an iterable/array-like directly to the constructor works the same:
+let same = new Uint32Array(white);</code></pre>
+      </div>
+      <p>
+        <code>from()</code>'s source must have numeric elements &mdash; passing
+        a string works for <code>Array.from()</code> but makes no sense for a
+        typed array. As always, values that don't fit the target type are
+        truncated with no error.
+      </p>
+      <p>
+        The final way to create a typed array routes explicitly through an
+        <code>ArrayBuffer</code>. Passing an existing buffer, plus an
+        optional byte offset and element length, makes the new typed array a
+        <em>view</em> into that buffer's memory rather than memory of its
+        own &mdash; the foundation of the deep dive below:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let buffer = new ArrayBuffer(1024 * 1024);  // Allocate 1 MB of raw memory
+buffer.byteLength   // =&gt; 1048576
+
+let asBytes = new Uint8Array(buffer);              // Whole buffer, as bytes
+let asInts  = new Int32Array(buffer);              // Whole buffer, as 32-bit ints
+let lastK   = new Uint8Array(buffer, 1023 * 1024); // Last kilobyte, as bytes
+let ints2   = new Int32Array(buffer, 1024, 256);   // 2nd KB, as 256 ints</code></pre>
+      </div>
+      <p>
+        If both offset and length are omitted, the view spans the whole
+        buffer; if only length is omitted, the view spans from the offset to
+        the buffer's end. Offsets must respect alignment: an
+        <code>Int32Array</code> offset must be a multiple of 4, a
+        <code>Float64Array</code> offset a multiple of 8, and so on. Even
+        typed arrays you create <em>without</em> ever mentioning an
+        <code>ArrayBuffer</code> still have one underneath &mdash; the engine
+        allocates it for you automatically, and it's reachable afterward
+        through the array's <code>.buffer</code> property.
+      </p>
+
+      <h3 id="using-typed-arrays">Using typed arrays</h3>
+      <p>
+        Once created, elements are read and written with ordinary
+        square-bracket indexing, exactly like a regular array:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Sieve of Eratosthenes: largest prime smaller than n
+function sieve(n) {
+  let a = new Uint8Array(n + 1);        // a[x] is 1 if x is composite
+  let max = Math.floor(Math.sqrt(n));
+  let p = 2;                             // 2 is the first prime
+  while (p &lt;= max) {
+    for (let i = 2 * p; i &lt;= n; i += p) a[i] = 1;   // Mark multiples composite
+    while (a[++p]) /* empty */;                        // Next unmarked = prime
+  }
+  while (a[n]) n--;    // Walk backward to the last prime
+  return n;
+}</code></pre>
+      </div>
+      <p>
+        This code is identical to what you'd write with a plain array —
+        substituting <code>Uint8Array</code> for <code>Array</code> is the
+        entire change, and it's commonly several times faster and far more
+        memory-efficient, because the engine can store the data as a tight
+        run of single bytes rather than boxed, possibly-any-type values.
+      </p>
+      <p>
+        Most of <a href="06-arrays.html">Array's</a> methods are available
+        directly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let ints = new Int16Array(10);
+ints.fill(3).map(x =&gt; x * x).join("")   // =&gt; "9999999999"</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Length is fixed — resizing methods don't exist</div>
+        <p>
+          <code>length</code> is read-only, so <code>push()</code>,
+          <code>pop()</code>, <code>shift()</code>, <code>unshift()</code>,
+          and <code>splice()</code> (all of which change an array's length)
+          simply aren't implemented on typed arrays. Methods that mutate
+          <em>contents</em> without changing length &mdash; <code>sort()</code>,
+          <code>reverse()</code>, <code>fill()</code> &mdash; work fine, and
+          methods like <code>map()</code> and <code>slice()</code> that
+          return a new array give you back a typed array of the same
+          concrete type as the one you called them on (not a plain
+          <code>Array</code>).
+        </p>
+      </div>
+
+      <h3 id="typed-array-methods">set() and subarray(): typed-array-only methods</h3>
+      <p>
+        Beyond the standard Array methods, typed arrays add a couple of
+        methods of their own. <code>set()</code> bulk-copies elements from a
+        regular or typed array into an existing typed array at a given
+        offset (default 0):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let bytes = new Uint8Array(1024);
+let pattern = new Uint8Array([0, 1, 2, 3]);
+bytes.set(pattern);        // Copy to the start
+bytes.set(pattern, 4);     // Copy again, at offset 4
+bytes.set([0, 1, 2, 3], 8); // A plain array works too
+bytes.slice(0, 12)  // =&gt; Uint8Array [0,1,2,3, 0,1,2,3, 0,1,2,3]</code></pre>
+      </div>
+      <p>
+        Copying between two typed arrays via <code>set()</code> is typically
+        extremely fast, since it can be a raw memory copy rather than an
+        element-by-element loop.
+      </p>
+      <p>
+        <code>subarray()</code> takes the same start/end arguments as
+        <code>slice()</code>, and looks similar &mdash; but where
+        <code>slice()</code> copies into an independent new array,
+        <code>subarray()</code> returns another <em>view</em> over the exact
+        same underlying bytes, with no copying:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let ints = new Int16Array([0,1,2,3,4,5,6,7,8,9]);
+let last3 = ints.subarray(ints.length - 3, ints.length);
+last3[0]     // =&gt; 7, same value as ints[7]
+
+ints[9] = -1;   // Mutate the ORIGINAL array...
+last3[2]        // =&gt; -1, changed too — subarray() shares memory, slice() would not</code></pre>
+      </div>
+      <p>
+        Every typed array exposes three properties describing where it sits
+        relative to its underlying buffer, and the invariant that ties them
+        together:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">last3.buffer                  // The ArrayBuffer this view reads/writes
+last3.buffer === ints.buffer  // =&gt; true: subarray() shares the SAME buffer
+last3.byteOffset              // =&gt; 14: this view starts at byte 14
+last3.byteLength              // =&gt; 6: 3 elements * 2 bytes each
+
+// Always true for any typed array a:
+// a.length * a.BYTES_PER_ELEMENT === a.byteLength</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Indexing the ArrayBuffer itself is a silent no-op, not an error</div>
+        <p>
+          An <code>ArrayBuffer</code> is a plain JavaScript object as far as
+          property access goes, so <code>buffer[0] = 255</code> compiles and
+          runs — it just sets an ordinary, meaningless numeric
+          <em>property</em> named <code>"0"</code> on the buffer object. It
+          does <strong>not</strong> write the underlying byte. This is an easy
+          bug to introduce by reaching for <code>.buffer[i]</code> instead of
+          indexing a view of it.
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let bytes = new Uint8Array(8);
+bytes[0] = 1;
+bytes.buffer[0]        // =&gt; undefined — buffer has no numeric data here
+bytes.buffer[1] = 255; // "Succeeds," but only sets a stray JS property
+bytes.buffer[1]        // =&gt; 255
+bytes[1]               // =&gt; 0 — the actual byte was never touched</code></pre>
+        </div>
+      </div>
+
+      <h3 id="arraybuffer-views">Deep dive: ArrayBuffer, views, and shared memory <span class="badge hard">Hard part</span></h3>
+      <p>
+        It's worth being precise about the three-layer relationship here,
+        because it's the source of both typed arrays' speed and their
+        sharpest gotchas:
+      </p>
+      <ol>
+        <li><strong>ArrayBuffer</strong> is just raw memory — a fixed-size
+          block of bytes with no type information at all. You cannot read or
+          write it directly; all it exposes is its <code>byteLength</code>.</li>
+        <li>A <strong>typed array</strong> (<code>Int32Array</code>,
+          <code>Float64Array</code>, etc.) is a fixed-format <em>view</em>:
+          it interprets some (or all) of a buffer's bytes as a sequence of
+          numbers of one specific type, starting at one specific byte
+          offset.</li>
+        <li><strong>DataView</strong> (next section) is a more flexible,
+          format-per-call view over the same kind of buffer.</li>
+      </ol>
+      <p>
+        Nothing stops you from creating <em>multiple</em> views over the
+        <em>same</em> buffer, at the same or different offsets, as the same
+        or different types. Because they all ultimately read and write the
+        same bytes, a mutation through any one view is immediately visible
+        through every other view of the overlapping region:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 1: two views of completely overlapping memory, different formats
+let buffer = new ArrayBuffer(16);        // 16 raw bytes, contents undefined-ish (zeroed)
+let asBytes = new Uint8Array(buffer);     // View A: 16 individual bytes
+let asInts  = new Int32Array(buffer);     // View B: the SAME 16 bytes, as 4 ints
+
+asBytes[0] = 1;      // Write through view A...
+asInts[0]            // ...and view B sees it change too — same underlying memory
+
+// Example 2: build several differently-typed views from one starting array,
+// rather than from an ArrayBuffer directly — .buffer makes this easy
+let bytes  = new Uint8Array(1024);             // 1024 bytes of storage
+let ints   = new Uint32Array(bytes.buffer);     // Reinterpreted as 256 uint32s
+let floats = new Float64Array(bytes.buffer);    // Reinterpreted as 128 float64s
+ints.buffer === bytes.buffer     // =&gt; true
+floats.buffer === bytes.buffer   // =&gt; true — three formats, one shared buffer
+
+ints[0] = 0xff;      // Change one 32-bit word...
+bytes[0]             // ...and the individual bytes underneath it changed too</code></pre>
+      </div>
+      <p>
+        This is exactly why <code>subarray()</code> (unlike <code>slice()</code>)
+        doesn't copy: it's just constructing another lightweight view over
+        the same bytes the original array already owns, and the buffer
+        itself is the only place any data actually lives. Working with the
+        buffer directly, rather than always going through one fixed-type
+        array, is precisely how you'd parse a file or network payload that
+        mixes field widths in one contiguous chunk of memory — read the
+        first 4 bytes as a header length with one view, then reinterpret the
+        remaining bytes as pixel data with another.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Byte order (endianness) is a consequence of this same layering</div>
+        <p>
+          Because a multi-byte typed array element is really just several
+          consecutive bytes in the buffer reinterpreted as one number, the
+          <em>order</em> those bytes are arranged in matters, and typed
+          arrays always use the host machine's native order for speed. You
+          can detect it by building two views of one tiny buffer:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// If 0x00000001 is laid out in memory as 01 00 00 00, we're little-endian.
+// On a big-endian platform we'd see 00 00 00 01 instead.
+let littleEndian = new Int8Array(new Int32Array([1]).buffer)[0] === 1;</code></pre>
+        </div>
+        <p>
+          Most modern CPUs are little-endian, but plenty of network
+          protocols and binary file formats are specified as big-endian.
+          When the byte order of external data might not match the
+          platform's, don't use multi-byte typed arrays on it directly —
+          reach for <code>DataView</code>, next.
+        </p>
+      </div>
+
+      <h3 id="dataview">DataView and explicit endianness</h3>
+      <p>
+        A typed array always reads and writes using whatever byte order the
+        host platform natively uses. That's fine for data your own program
+        produced and consumes, but it's the wrong tool the moment you're
+        parsing bytes that came from somewhere else — a network protocol or
+        a binary file format — since those formats specify their own byte
+        order independent of whatever machine happens to be running your
+        code. <code>DataView</code> solves this: every read and write takes
+        an explicit endianness argument, so you're never at the mercy of
+        the host platform.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A DataView wraps a buffer (or a region of one, via offset + length)
+let view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+let a = view.getInt32(0);        // Read a big-endian signed int from byte 0
+let b = view.getInt32(4, false); // Also big-endian (false = big-endian, the default)
+let c = view.getUint32(8, true); // Little-endian this time (true = little-endian)
+view.setUint32(8, c, false);      // Write it back out in big-endian format</code></pre>
+      </div>
+      <p>
+        <code>DataView</code> defines one <code>get&hellip;()</code> and one
+        <code>set&hellip;()</code> method per numeric type &mdash; ten pairs,
+        covering every typed array type except <code>Uint8ClampedArray</code>:
+        <code>getInt8</code>/<code>setInt8</code>,
+        <code>getUint8</code>/<code>setUint8</code>,
+        <code>getInt16</code>/<code>setInt16</code>,
+        <code>getUint16</code>/<code>setUint16</code>,
+        <code>getInt32</code>/<code>setInt32</code>,
+        <code>getUint32</code>/<code>setUint32</code>,
+        <code>getBigInt64</code>/<code>setBigInt64</code>,
+        <code>getBigUint64</code>/<code>setBigUint64</code>,
+        <code>getFloat32</code>/<code>setFloat32</code>, and
+        <code>getFloat64</code>/<code>setFloat64</code>. Every getter's first
+        argument is the byte offset to start reading from; every setter's
+        first two arguments are the offset and the value to write.
+      </p>
+      <p>
+        The single-byte methods, <code>getInt8()</code>/<code>getUint8()</code>
+        and <code>setInt8()</code>/<code>setUint8()</code>, have no concept of
+        byte order (a single byte has nothing to reorder), so they take no
+        endianness argument at all. Every other getter/setter accepts an
+        optional trailing boolean: omit it or pass <code>false</code> for
+        big-endian (most significant byte first), pass <code>true</code> for
+        little-endian (least significant byte first).
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">When to reach for each tool</div>
+        <p>
+          Use a plain typed array (<code>Uint8Array</code>, etc.) for data
+          your own code produces and consumes on the same machine, or when
+          you specifically want an efficient array-like view for
+          computation. Use <code>Int8Array</code>/<code>Uint8Array</code> to
+          treat any incoming binary blob as individual bytes safely. Reach
+          for <code>DataView</code> the moment you need to interpret
+          multi-byte fields from an external source, a spec-defined file
+          format, or a network protocol, where the byte order is fixed by
+          the format rather than by whatever CPU happens to run your code.
+          Together, typed arrays and <code>DataView</code> are the toolkit
+          for tasks like decompressing an archive or pulling metadata out of
+          an image file.
+        </p>
+      </div>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

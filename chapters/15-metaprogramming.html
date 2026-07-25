@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Metaprogramming — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="15-metaprogramming.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 14</span>
+      <h1>Metaprogramming</h1>
+      <p class="lede">
+        Everything up to this point has been about writing code that
+        manipulates data. This chapter is about writing code that manipulates
+        <em>other code</em> — or, more precisely, that manipulates the rules
+        by which JavaScript objects behave. You'll rarely reach for this
+        material in application code, but it's exactly what you need to
+        understand how libraries "lock down" objects, how frameworks like
+        Vue and MobX detect reads and writes to plain objects without any
+        getter/setter boilerplate, how ORMs build query DSLs out of tagged
+        template strings, and what's actually happening when
+        <code>instanceof</code>, <code>for...in</code>, or
+        <code>JSON.stringify()</code> silently skip certain properties. The
+        line between "programming" and "metaprogramming" is blurry in a
+        dynamic language like JavaScript, but the features in this chapter —
+        property attributes, extensibility controls, well-known symbols,
+        template tags, <code>Reflect</code>, and <code>Proxy</code> — are the
+        ones that let you rewrite the rules rather than just play by them.
+      </p>
+
+      <h2 id="property-attributes">14.1 Property attributes <span class="badge hard">Deep dive</span></h2>
+      <p>
+        Every property on an object is more than just a name paired with a
+        value. Internally, the language tracks a small set of boolean and
+        functional <strong>attributes</strong> alongside that value, and
+        those attributes — not the value — are what determine whether the
+        property can be overwritten, whether it shows up when you enumerate
+        the object, and whether it can be deleted or reconfigured later.
+        Because a plain object literal or an ordinary assignment
+        (<code>obj.x = 1</code>) always produces a property with every
+        attribute turned on, most day-to-day JavaScript never has to think
+        about this layer at all. Library authors do, though, because it's
+        the only way to add methods to a prototype without them cluttering
+        up <code>for...in</code> loops, and the only way to build objects
+        that resist being tampered with by code you don't control.
+      </p>
+      <p>
+        Recall the distinction between <strong>data properties</strong> and
+        <strong>accessor properties</strong> from
+        <a href="05-objects.html#the-prototype-chain">the chapter on objects</a>: a
+        data property has an actual stored value, while an accessor property
+        is a getter and/or setter pair that computes or intercepts the value.
+        This distinction carries all the way down into the attribute system.
+        A data property has four attributes:
+      </p>
+      <ul>
+        <li><code>value</code> — the property's actual value.</li>
+        <li><code>writable</code> — whether assignment can change the value.</li>
+        <li><code>enumerable</code> — whether the property appears in <code>for...in</code>, <code>Object.keys()</code>, and similar enumeration.</li>
+        <li><code>configurable</code> — whether the property can be deleted, and whether its other attributes (besides <code>value</code>, in some cases) can be changed at all.</li>
+      </ul>
+      <p>
+        An accessor property has no <code>value</code> or <code>writable</code>
+        attribute — writability is implicit in whether a setter exists — and
+        instead has:
+      </p>
+      <ul>
+        <li><code>get</code> — the getter function, or <code>undefined</code> if there is none.</li>
+        <li><code>set</code> — the setter function, or <code>undefined</code> if there is none.</li>
+        <li><code>enumerable</code> — same meaning as for a data property.</li>
+        <li><code>configurable</code> — same meaning as for a data property.</li>
+      </ul>
+      <p>
+        JavaScript represents this bundle of attributes as a plain object
+        called a <strong>property descriptor</strong>, whose own keys are
+        literally named <code>value</code>, <code>writable</code>,
+        <code>get</code>, <code>set</code>, <code>enumerable</code>, and
+        <code>configurable</code>. You read one with
+        <code>Object.getOwnPropertyDescriptor()</code> and write one with
+        <code>Object.defineProperty()</code>.
+      </p>
+
+      <h3 id="reading-descriptors">Reading descriptors: <code>getOwnPropertyDescriptor</code></h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Object.getOwnPropertyDescriptor({ x: 1 }, "x");
+// => { value: 1, writable: true, enumerable: true, configurable: true }
+
+const random = {
+  get octet() { return Math.floor(Math.random() * 256); },
+};
+Object.getOwnPropertyDescriptor(random, "octet");
+// => { get: [Function: get octet], set: undefined,
+//      enumerable: true, configurable: true }
+
+// It only ever looks at OWN properties -- never the prototype chain.
+Object.getOwnPropertyDescriptor({}, "x");        // => undefined: no such property
+Object.getOwnPropertyDescriptor({}, "toString");  // => undefined: it's inherited</code></pre>
+      </div>
+      <p>
+        That last point trips people up: to inspect an <em>inherited</em>
+        property's attributes you have to walk the prototype chain yourself,
+        calling <code>Object.getPrototypeOf()</code> (covered in
+        <a href="#the-prototype-attribute">§14.3</a>) repeatedly until you
+        find the object that actually owns the property. There is also a
+        <code>Reflect.getOwnPropertyDescriptor()</code> with an almost
+        identical signature — see <a href="#reflect">§14.6</a> — the only
+        practical difference is that the <code>Reflect</code> version throws
+        a <code>TypeError</code> if you pass it something that isn't an
+        object, whereas the <code>Object</code> version just coerces or
+        returns <code>undefined</code>.
+      </p>
+
+      <h3 id="defining-properties">Writing descriptors: <code>defineProperty</code> and <code>defineProperties</code></h3>
+      <p>
+        <code>Object.defineProperty(obj, name, descriptor)</code> either
+        creates a brand-new property with exactly the attributes you specify,
+        or modifies an existing own property, changing only the attributes
+        you mention and leaving the rest untouched. When you're
+        <em>creating</em> a property and you omit an attribute, it defaults
+        to <code>false</code> or <code>undefined</code> — nothing is
+        implicitly turned on the way it is for object-literal properties.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = {};
+Object.defineProperty(o, "x", {
+  value: 1, writable: true, enumerable: false, configurable: true,
+});
+o.x;             // => 1 -- it works normally
+Object.keys(o);  // => [] -- but it's invisible to enumeration
+
+// Existing property: change just one attribute, leave the rest alone.
+Object.defineProperty(o, "x", { writable: false });
+o.x = 2;         // fails silently (throws in strict mode) -- no longer writable
+o.x;             // => 1
+
+// It's still configurable, so we CAN still overwrite value directly:
+Object.defineProperty(o, "x", { value: 2 });
+o.x;             // => 2
+
+// We can even flip a data property into an accessor property, as long
+// as it's configurable:
+Object.defineProperty(o, "x", { get() { return 0; } });
+o.x;             // => 0</code></pre>
+      </div>
+      <p>
+        To create or modify several properties in one call, use
+        <code>Object.defineProperties(obj, descriptorsMap)</code>, where the
+        second argument maps each property name to its own descriptor
+        object. Both functions return the object that was modified, which
+        makes them chainable, and both are also the mechanism behind the
+        second argument of <code>Object.create()</code> — see
+        <a href="#the-prototype-attribute">§14.3</a> — which accepts the
+        exact same descriptor-map shape to add properties to the object it
+        creates.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let p = Object.defineProperties({}, {
+  x: { value: 1, writable: true, enumerable: true, configurable: true },
+  y: { value: 1, writable: true, enumerable: true, configurable: true },
+  r: {
+    get() { return Math.sqrt(this.x * this.x + this.y * this.y); },
+    enumerable: true,
+    configurable: true,
+  },
+});
+p.r;  // => Math.SQRT2</code></pre>
+      </div>
+
+      <h3 id="defineproperty-rules">The rules governing when defineProperty throws</h3>
+      <p>
+        Calls to <code>Object.defineProperty()</code> and
+        <code>Object.defineProperties()</code> don't fail arbitrarily — they
+        enforce a specific, slightly asymmetric set of rules, and violating
+        any of them throws a <code>TypeError</code>:
+      </p>
+      <ul>
+        <li>You cannot add a brand-new property to an object that has been made non-extensible (<a href="#object-extensibility">§14.2</a>) — but you can still edit that object's existing own properties.</li>
+        <li>If a property is not configurable, you cannot change its <code>configurable</code> or <code>enumerable</code> attribute.</li>
+        <li>A non-configurable accessor property's getter/setter cannot be changed, and it cannot be converted into a data property.</li>
+        <li>A non-configurable data property cannot be converted into an accessor property.</li>
+        <li>A non-configurable data property's <code>writable</code> attribute can be flipped from <code>true</code> to <code>false</code>, but never back from <code>false</code> to <code>true</code>.</li>
+        <li>If a data property is both non-configurable <em>and</em> non-writable, its value is truly frozen. But if it's non-configurable yet still writable, its value <em>can</em> still be changed — logically that's fine, because you could always achieve the same result by making it writable, changing it, then making it non-writable again.</li>
+      </ul>
+      <div class="admonition note">
+        <div class="admonition-title">Configurable is (mostly) a one-way door</div>
+        <p>
+          Once <code>configurable</code> is <code>false</code>, it can never
+          be turned back to <code>true</code>, and the property can never be
+          deleted. But <code>configurable: false</code> does not by itself
+          freeze the <em>value</em> — that's <code>writable</code>'s job.
+          The two attributes are independent: a property can be
+          non-configurable yet perfectly writable, meaning you can still
+          reassign its value with plain <code>=</code>, you just can't
+          delete it, hide it from enumeration, or convert it to an accessor.
+        </p>
+      </div>
+
+      <h3 id="enumerability-and-visibility">Enumerability: what for/in, Object.keys, and JSON.stringify can't see <span class="badge hard">Deep dive</span></h3>
+      <p>
+        The <code>enumerable</code> attribute is the one with the most
+        far-reaching, and most frequently misunderstood, consequences. It
+        doesn't just control one API — it's the single switch that hides a
+        property from essentially every mechanism JavaScript provides for
+        listing "what properties does this object have." A non-enumerable
+        property still exists, still holds a real value, and can still be
+        read or written directly by name — it simply refuses to show up
+        when something iterates.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let obj = { visible: 1 };
+Object.defineProperty(obj, "hidden", {
+  value: 2, writable: true, enumerable: false, configurable: true,
+});
+
+obj.hidden;                 // => 2 -- direct access still works fine
+
+for (let key in obj) console.log(key);   // logs only "visible"
+
+Object.keys(obj);           // => ["visible"]
+Object.values(obj);         // => [1]
+Object.entries(obj);        // => [["visible", 1]]
+
+JSON.stringify(obj);        // => '{"visible":1}' -- "hidden" is gone entirely
+
+Object.getOwnPropertyNames(obj);  // => ["visible", "hidden"] -- this ONE
+                                   // function still sees it: it lists ALL
+                                   // own string-keyed properties regardless
+                                   // of enumerability
+</code></pre>
+      </div>
+      <p>
+        That last line is the important escape hatch. Every "casual"
+        enumeration API (<code>for...in</code>, <code>Object.keys()</code>,
+        <code>Object.values()</code>, <code>Object.entries()</code>, the
+        spread operator on an object, and <code>JSON.stringify()</code>)
+        filters by enumerability. Only the more deliberate,
+        introspection-oriented functions —
+        <code>Object.getOwnPropertyNames()</code>,
+        <code>Object.getOwnPropertySymbols()</code>, and
+        <code>Reflect.ownKeys()</code> — bypass the filter and show you
+        everything.
+      </p>
+      <p>
+        This is precisely why every method built into the standard library —
+        <code>Array.prototype.map</code>, <code>Object.prototype.toString</code>,
+        and so on — never appears when you do
+        <code>for (let k in [])</code> or <code>Object.keys(Array.prototype)</code>:
+        the built-in methods were all defined as non-enumerable properties
+        of the prototype. When you write your own reusable library, mimicking
+        that convention for your own prototype methods keeps consumers'
+        <code>for...in</code> loops and serialization code clean:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function Range(from, to) { this.from = from; this.to = to; }
+Object.defineProperty(Range.prototype, "includes", {
+  value: function (x) { return this.from &lt;= x &amp;&amp; x &lt;= this.to; },
+  writable: true, enumerable: false, configurable: true,
+});
+
+let r = new Range(1, 10);
+for (let key in r) console.log(key);   // logs "from" and "to" -- not "includes"
+JSON.stringify(r);                      // => '{"from":1,"to":10}' -- clean output,
+                                         //    even though `includes` is reachable via r.includes(5)</code></pre>
+      </div>
+      <p>
+        As a worked example of the whole attribute API together,
+        <code>Object.assign()</code> (see
+        <a href="05-objects.html">the objects chapter</a>) copies enumerable
+        <em>values</em> from source objects into a target — if a source has
+        an accessor property, <code>assign()</code> calls its getter and
+        copies the resulting value, not the getter function itself. The
+        following <code>assignDescriptors()</code> helper instead copies the
+        full descriptor — including non-enumerable properties, and including
+        getters/setters as live functions rather than one-time snapshots —
+        by pairing <code>getOwnPropertyDescriptor()</code> with
+        <code>defineProperty()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Object.defineProperty(Object, "assignDescriptors", {
+  writable: true, enumerable: false, configurable: true,
+  value: function (target, ...sources) {
+    for (let source of sources) {
+      for (let name of Object.getOwnPropertyNames(source)) {
+        Object.defineProperty(target, name,
+          Object.getOwnPropertyDescriptor(source, name));
+      }
+      for (let symbol of Object.getOwnPropertySymbols(source)) {
+        Object.defineProperty(target, symbol,
+          Object.getOwnPropertyDescriptor(source, symbol));
+      }
+    }
+    return target;
+  },
+});
+
+let src = { c: 1, get count() { return this.c++; } };
+let byValue = Object.assign({}, src);              // copies the CURRENT value
+let byDescriptor = Object.assignDescriptors({}, src); // copies the GETTER itself
+
+byValue.count;      // => 1 every time -- it's now a frozen-in-time data property
+byValue.count;      // => 1
+byDescriptor.count; // => 2 -- the getter ran once during the copy (bumping `c`)...
+byDescriptor.count; // => 3 -- ...and keeps incrementing, because it's still live</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">defineProperty and defineProperties throw, Reflect's versions don't</div>
+        <p>
+          <code>Object.defineProperty()</code> throws a <code>TypeError</code>
+          the instant any of the rules above is violated. Its
+          <code>Reflect.defineProperty()</code> counterpart (<a href="#reflect">§14.6</a>)
+          performs the exact same check but returns <code>false</code>
+          instead of throwing, which is what makes it suitable for use
+          inside a <code>Proxy</code>'s <code>defineProperty</code> trap —
+          you often want to report failure as a value, not unwind the stack.
+        </p>
+      </div>
+
+      <h2 id="object-extensibility">14.2 Object extensibility</h2>
+      <p>
+        Alongside each property's own attributes, every object as a whole
+        carries a single boolean attribute, <code>extensible</code>, which
+        governs whether new properties can be added to it at all. Ordinary
+        objects start out extensible. Three functions let you progressively
+        lock an object down, each one a strict superset of the restrictions
+        imposed by the previous:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Function</th><th>Blocks adding new properties?</th><th>Blocks delete / reconfigure of existing?</th><th>Blocks changing existing writable values?</th></tr>
+          <tr><td><code>Object.preventExtensions(o)</code></td><td>Yes</td><td>No</td><td>No</td></tr>
+          <tr><td><code>Object.seal(o)</code></td><td>Yes</td><td>Yes (all own props become non-configurable)</td><td>No — writable properties can still be reassigned</td></tr>
+          <tr><td><code>Object.freeze(o)</code></td><td>Yes</td><td>Yes</td><td>Yes — all own data properties become non-writable too</td></tr>
+        </table>
+      </div>
+      <p>
+        Each of the three has a matching predicate —
+        <code>Object.isExtensible()</code>, <code>Object.isSealed()</code>,
+        <code>Object.isFrozen()</code> — and each of the three locking
+        functions returns the object it was passed, which makes nesting them
+        convenient:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let frozenProto = Object.freeze({ x: 1 });
+let o = Object.seal(
+  Object.create(frozenProto, { y: { value: 2, writable: true, enumerable: true } })
+);
+Object.isSealed(o);        // => true
+Object.isFrozen(o);        // => false -- y is still writable, only sealed props are non-configurable
+o.y = 20;                  // works: seal doesn't touch writability
+o.z = 3;                   // silently fails (or throws in strict mode): sealed means non-extensible too</code></pre>
+      </div>
+      <p>
+        Note that unlike accessor properties, <code>Object.freeze()</code>
+        leaves setter functions alone — if an object has an accessor
+        property with a setter, that setter can still run even on a frozen
+        object, because freezing only affects <em>data</em> properties.
+      </p>
+      <p>
+        There's no way to reverse any of these three operations once
+        applied — you cannot make a sealed or frozen object extensible again.
+        There is also no built-in "deep freeze": these functions only touch
+        the own properties of the exact object you pass in, never its
+        prototype and never any object stored as a property value.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Freeze/seal are shallow — and prototypes are untouched too</div>
+        <p>
+          <code>Object.freeze(obj)</code> does nothing to
+          <code>obj.child</code> — <code>obj.child.x = 1</code> still
+          succeeds freely unless <code>obj.child</code> is frozen
+          separately. Likewise, freezing <code>obj</code> has zero effect on
+          <code>Object.getPrototypeOf(obj)</code>; if you want a truly
+          tamper-proof object graph you must walk it and freeze every
+          object in it, including the prototype chain. A common use case is
+          freezing objects handed to third-party callback code so that
+          library consumers can't accidentally mutate your internal state —
+          but be aware this can break testing tools that rely on being able
+          to stub or monkey-patch objects.
+        </p>
+      </div>
+      <p>
+        <code>Reflect.isExtensible()</code> and
+        <code>Reflect.preventExtensions()</code> exist too, with the usual
+        Reflect-vs-Object difference: they throw on non-object arguments
+        rather than coercing or silently succeeding (<a href="#reflect">§14.6</a>).
+      </p>
+
+      <h2 id="the-prototype-attribute">14.3 The prototype attribute</h2>
+      <p>
+        Every object also carries a <code>[[Prototype]]</code> internal
+        attribute — the object it inherits properties from, as covered in
+        depth in <a href="05-objects.html#the-prototype-chain">the prototype chain</a>.
+        This section is specifically about querying and changing that
+        attribute programmatically, rather than through the normal channels
+        (object literals default to <code>Object.prototype</code>;
+        <code>new SomeClass()</code> uses <code>SomeClass.prototype</code>;
+        <code>Object.create(proto)</code> uses whatever you pass as
+        <code>proto</code>, including <code>null</code>).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Object.getPrototypeOf({});       // => Object.prototype
+Object.getPrototypeOf([]);       // => Array.prototype
+Object.getPrototypeOf(() => {}); // => Function.prototype</code></pre>
+      </div>
+      <p>
+        A matching <code>Reflect.getPrototypeOf()</code> exists too; the
+        difference is narrow — <code>Object.getPrototypeOf()</code> coerces
+        a primitive argument to its wrapper object and only throws for
+        <code>null</code>/<code>undefined</code>, while
+        <code>Reflect.getPrototypeOf()</code> throws a <code>TypeError</code>
+        for any non-object argument.
+      </p>
+      <p>
+        To test whether one object sits anywhere in another's prototype
+        chain, use <code>isPrototypeOf()</code> rather than manually walking
+        the chain:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let p = { x: 1 };
+let o = Object.create(p);
+p.isPrototypeOf(o);                 // => true: o inherits from p
+Object.prototype.isPrototypeOf(p);  // => true: p inherits from Object.prototype
+Object.prototype.isPrototypeOf(o);  // => true: transitively, so does o</code></pre>
+      </div>
+      <p>
+        <code>isPrototypeOf()</code> answers essentially the same question
+        as <code>instanceof</code>, but the two aren't interchangeable:
+        <code>instanceof</code> takes a <em>constructor function</em> on its
+        right side and checks whether <code>Constructor.prototype</code>
+        appears in the chain, whereas <code>p.isPrototypeOf(o)</code> checks
+        directly against the object <code>p</code> — useful when you built
+        your prototype object with <code>Object.create()</code> and never
+        bothered defining a constructor function for it at all.
+      </p>
+      <p>
+        The prototype is normally fixed for the life of an object, but
+        <code>Object.setPrototypeOf()</code> (and a matching
+        <code>Reflect.setPrototypeOf()</code>) can change it after the fact:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1 };
+let newProto = { y: 2 };
+Object.setPrototypeOf(o, newProto);
+o.y;   // => 2 -- o now inherits y
+
+let a = [1, 2, 3];
+Object.setPrototypeOf(a, newProto);
+a.join;  // => undefined -- a lost every Array.prototype method in one call!</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Avoid setPrototypeOf in anything performance-sensitive</div>
+        <p>
+          There's rarely a real need to call <code>Object.setPrototypeOf()</code>
+          in application code. JS engines aggressively optimize property
+          access on the assumption that an object's prototype — and
+          therefore its whole "shape" — never changes after creation. Call
+          this function even once on an object, and every subsequent
+          operation on it (and often on other objects that share its
+          former shape) can fall out of those fast paths and run
+          measurably slower. Prefer setting the prototype once, up front,
+          with <code>Object.create(proto)</code>.
+        </p>
+      </div>
+      <p>
+        You may also encounter the legacy <code>__proto__</code> property —
+        two underscores on each side — which some early browsers exposed as
+        a getter/setter view onto the prototype attribute. It's deprecated
+        but standardized for web-facing JS engines because too much existing
+        code depends on it, and it remains readable/writable today. One
+        legitimate surviving use is setting the prototype directly inside an
+        object literal, which no other syntax can do:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let base = { z: 3 };
+let o = { x: 1, y: 2, __proto__: base };
+o.z;  // => 3 -- inherited via the literal's own __proto__ entry</code></pre>
+      </div>
+
+      <h2 id="well-known-symbols">14.4 Well-known symbols</h2>
+      <p>
+        ES6 introduced the <code>Symbol</code> primitive type specifically
+        so that new language hooks could be added without any risk of
+        colliding with a string-keyed property some existing website
+        already happened to be using. The result is a small family of
+        "well-known symbols" — values stored as static properties on the
+        global <code>Symbol</code> function — each of which lets your own
+        classes plug into a piece of behavior that used to be reserved for
+        built-ins only.
+      </p>
+
+      <h3 id="symbol-iterator-async">14.4.1 Symbol.iterator and Symbol.asyncIterator</h3>
+      <p>
+        You've already met these two: implementing a method named
+        <code>[Symbol.iterator]()</code> makes instances of a class work
+        with <code>for...of</code>, spread, and destructuring, and
+        <code>[Symbol.asyncIterator]()</code> does the same for
+        <code>for await...of</code>. Both are covered at length in
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>
+        and are mentioned here only so the family of well-known symbols is
+        complete.
+      </p>
+
+      <h3 id="symbol-hasinstance">14.4.2 Symbol.hasInstance</h3>
+      <p>
+        Ordinarily, <code>o instanceof F</code> requires <code>F</code> to
+        be a function and works by searching for <code>F.prototype</code> in
+        <code>o</code>'s prototype chain. But if the object on the
+        right-hand side of <code>instanceof</code> defines a method named
+        <code>[Symbol.hasInstance]</code>, that method is invoked with the
+        left-hand value instead, and its return value (coerced to boolean)
+        becomes the result of the whole expression — the right-hand side
+        doesn't even need to be a function anymore.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A "pseudotype": an ordinary object usable as instanceof's right operand
+let uint8 = {
+  [Symbol.hasInstance](x) {
+    return Number.isInteger(x) &amp;&amp; x >= 0 &amp;&amp; x &lt;= 255;
+  },
+};
+128 instanceof uint8;      // => true
+256 instanceof uint8;      // => false: out of range
+Math.PI instanceof uint8;  // => false: not an integer</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Clever, but often clearer as a plain function</div>
+        <p>
+          Overloading <code>instanceof</code> to mean "satisfies this
+          predicate" reads as surprising to anyone maintaining the code
+          later — a standalone <code>isUint8(x)</code> function does the
+          exact same job with none of the misdirection. Reach for
+          <code>Symbol.hasInstance</code> mainly when you're already deep in
+          library code that other people expect to compose with
+          <code>instanceof</code>-based logic.
+        </p>
+      </div>
+
+      <h3 id="symbol-tostringtag">14.4.3 Symbol.toStringTag</h3>
+      <p>
+        Calling <code>Object.prototype.toString()</code> on a plain object
+        gives the unhelpful <code>"[object Object]"</code>, but calling that
+        same generic method on instances of built-ins is surprisingly more
+        informative:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Object.prototype.toString.call([]);      // => "[object Array]"
+Object.prototype.toString.call(/./);     // => "[object RegExp]"
+Object.prototype.toString.call(() => {}); // => "[object Function]"
+
+function classof(o) {
+  return Object.prototype.toString.call(o).slice(8, -1);
+}
+classof(null);      // => "Null"
+classof(10n ** 100n); // => "BigInt"
+classof(new Map());   // => "Map"</code></pre>
+      </div>
+      <p>
+        Before ES6 this "class tag" mechanism was hardwired to recognize
+        only built-in types — running <code>classof()</code> on an instance
+        of a class you wrote yourself just returned <code>"Object"</code>.
+        In ES6 and later, <code>Object.prototype.toString()</code> looks for
+        a property (typically a getter) named <code>Symbol.toStringTag</code>
+        on its argument and, if present, splices that string into the
+        output instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Range {
+  get [Symbol.toStringTag]() { return "Range"; }
+}
+let r = new Range();
+Object.prototype.toString.call(r);  // => "[object Range]"
+classof(r);                         // => "Range"</code></pre>
+      </div>
+
+      <h3 id="symbol-species">14.4.4 Symbol.species</h3>
+      <p>
+        Since ES6 you can subclass built-ins like <code>Array</code>
+        directly with <code>extends</code> (see
+        <a href="08-classes.html">Classes</a> and
+        <a href="06-arrays.html">Arrays</a>), which raises a design question:
+        when an inherited method like <code>map()</code>, <code>filter()</code>,
+        <code>slice()</code>, <code>splice()</code>, or <code>concat()</code>
+        constructs and returns a brand-new array, should that new array be a
+        plain <code>Array</code> or an instance of your subclass?
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class EZArray extends Array {
+  get first() { return this[0]; }
+  get last() { return this[this.length - 1]; }
+}
+let e = new EZArray(1, 2, 3);
+let f = e.map(x => x * x);
+f.last;  // => 9 -- f is ALSO an EZArray, with a working `.last` getter</code></pre>
+      </div>
+      <p>
+        The spec's answer is: array-returning methods create their result by
+        effectively calling <code>new this.constructor[Symbol.species]()</code>
+        instead of <code>new Array()</code>. <code>Array</code> itself
+        defines <code>Symbol.species</code> as a read-only <em>accessor</em>
+        whose getter just returns <code>this</code> — and because subclass
+        constructors inherit that getter, every subclass is, by default, its
+        own species. If you want array-returning methods on your subclass to
+        yield plain arrays instead, override the getter (a direct
+        assignment fails, since the inherited property is read-only, so you
+        either use <code>defineProperty()</code> or, more simply, declare
+        your own static getter up front):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class EZArray extends Array {
+  static get [Symbol.species]() { return Array; }
+  get first() { return this[0]; }
+  get last() { return this[this.length - 1]; }
+}
+let e = new EZArray(1, 2, 3);
+let f = e.map(x => x - 1);
+f.last;  // => undefined: f is a plain Array now, no `.last` getter</code></pre>
+      </div>
+      <p>
+        The same species protocol governs typed arrays,
+        <code>ArrayBuffer.prototype.slice()</code>, and
+        <code>Promise</code> methods like <code>then()</code> that return a
+        new promise — so subclassing any of those has the identical
+        default-species behavior baked in.
+      </p>
+
+      <h3 id="symbol-isconcatspreadable">14.4.5 Symbol.isConcatSpreadable</h3>
+      <p>
+        <code>Array.prototype.concat()</code> (see
+        <a href="06-arrays.html">Arrays</a>) treats array-like arguments
+        differently from ordinary values: arrays (including <code>this</code>)
+        are flattened one level into the result, while everything else is
+        just appended as a single element. Before ES6, that decision was
+        made purely with <code>Array.isArray()</code>; since ES6, if the
+        candidate value has a <code>Symbol.isConcatSpreadable</code>
+        property, its boolean value wins instead, which lets you opt
+        array-like objects <em>in</em> or array subclasses <em>out</em>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let arraylike = { length: 1, 0: 1, [Symbol.isConcatSpreadable]: true };
+[].concat(arraylike);  // => [1] -- would be [[1]] without the flag
+
+class NonSpreadableArray extends Array {
+  get [Symbol.isConcatSpreadable]() { return false; }
+}
+let a = new NonSpreadableArray(1, 2, 3);
+[].concat(a).length;   // => 1 -- would be 3 if `a` were spread as normal</code></pre>
+      </div>
+
+      <h3 id="pattern-matching-symbols">14.4.6 Pattern-matching symbols</h3>
+      <p>
+        The string methods <code>match()</code>, <code>matchAll()</code>,
+        <code>search()</code>, <code>replace()</code>, and
+        <code>split()</code> — introduced with
+        <a href="11-regular-expressions.html">regular expressions</a> — were
+        generalized in ES6 to accept not just a <code>RegExp</code> but
+        <em>any</em> object exposing the right symbolically named methods:
+        <code>Symbol.match</code>, <code>Symbol.search</code>,
+        <code>Symbol.replace</code>, <code>Symbol.split</code>. A call like
+        <code>string.replace(pattern, arg)</code> is really dispatched as
+        <code>pattern[Symbol.replace](string, arg)</code>. This lets you
+        build entirely custom matching semantics — fuzzy matching,
+        locale-aware comparison via <code>Intl.Collator</code>, Soundex,
+        Levenshtein-distance matching — that plug into the exact same call
+        sites regular expressions use. As an illustration, here's a small
+        "glob" pattern class implementing shell-style <code>*</code>/<code>?</code>
+        wildcards on top of an internally-built <code>RegExp</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Glob {
+  constructor(glob) {
+    this.glob = glob;
+    let regexpText = glob.replace("?", "([^/])").replace("*", "([^/]*)");
+    this.regexp = new RegExp(`^${regexpText}$`, "u");
+  }
+  toString() { return this.glob; }
+  [Symbol.search](s) { return s.search(this.regexp); }
+  [Symbol.match](s) { return s.match(this.regexp); }
+  [Symbol.replace](s, replacement) { return s.replace(this.regexp, replacement); }
+}
+
+let pattern = new Glob("docs/*.txt");
+"docs/js.txt".search(pattern);   // => 0
+"docs/js.htm".search(pattern);   // => -1: no match
+"docs/js.txt".replace(pattern, "web/$1.htm");  // => "web/js.htm"</code></pre>
+      </div>
+
+      <h3 id="symbol-toprimitive">14.4.7 Symbol.toPrimitive</h3>
+      <p>
+        The default rules for converting an object to a primitive —
+        preferring <code>toString()</code> for string contexts,
+        <code>valueOf()</code> for numeric contexts, and <code>Date</code>
+        objects reversing the usual "default" tie-break — were covered
+        earlier as the object-to-primitive algorithm. <code>Symbol.toPrimitive</code>
+        replaces all of that with one method you fully control, invoked with
+        a hint string telling you what conversion context triggered it:
+      </p>
+      <ul>
+        <li><code>"string"</code> — a string is preferred but not required (e.g. template-literal interpolation).</li>
+        <li><code>"number"</code> — a number is preferred but not required (e.g. <code>&lt;</code>, <code>&gt;</code>, arithmetic operators).</li>
+        <li><code>"default"</code> — either would do (e.g. <code>+</code>, <code>==</code>, <code>!=</code>).</li>
+      </ul>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Money {
+  constructor(cents) { this.cents = cents; }
+  [Symbol.toPrimitive](hint) {
+    if (hint === "number") return this.cents / 100;
+    if (hint === "string") return `$${(this.cents / 100).toFixed(2)}`;
+    return this.cents / 100;  // "default" -- used by +, ==, etc.
+  }
+}
+`${new Money(150)}`;   // => "$1.50" (hint: "string")
+new Money(150) - 0;    // => 1.5     (hint: "number")
+new Money(150) + "";   // => "1.5"   (hint: "default", result then string-coerced)</code></pre>
+      </div>
+      <p>
+        Defining <code>Symbol.toPrimitive</code> is also the cleanest way to
+        make a value class comparable with <code>&lt;</code>/<code>&gt;</code>
+        without needing separate comparison methods.
+      </p>
+
+      <h3 id="symbol-unscopables">14.4.8 Symbol.unscopables</h3>
+      <p>
+        This is a niche, backward-compatibility-only symbol tied to the
+        deprecated <code>with</code> statement, which executes a block as if
+        an object's properties were local variables. When ES6 added new
+        <code>Array.prototype</code> methods, existing <code>with</code>-based
+        code on the web could break if one of those method names happened
+        to collide with a variable already used inside a <code>with</code>
+        block. <code>Symbol.unscopables</code> is the fix: a <code>with(o)</code>
+        statement computes <code>Object.keys(o[Symbol.unscopables] || {})</code>
+        and simply ignores any of those names when constructing its
+        simulated scope. In practice, the only reason to ever look at this
+        symbol is archaeological curiosity:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// The newest Array methods, as of whichever spec version you're running:
+Object.keys(Array.prototype[Symbol.unscopables]);</code></pre>
+      </div>
+
+      <h2 id="template-tags">14.5 Template tags</h2>
+      <p>
+        A template literal preceded directly by a function reference — no
+        parentheses, no space required — becomes a <strong>tagged template
+        literal</strong>: an ordinary function call in disguise. Writing a
+        tag function is metaprogramming in a very literal sense — you're
+        effectively inventing new syntax, because the tag decides what the
+        whole expression evaluates to, not just what string gets built.
+        This is the exact mechanism behind Emotion's <code>css``</code>
+        tag and GraphQL's <code>gql``</code> tag: each parses (or otherwise
+        transforms) the literal's text into something that isn't a plain
+        string at all.
+      </p>
+
+      <h3 id="tag-function-signature">How a tag function receives its pieces</h3>
+      <p>
+        There's no special syntax for defining a tag function — any ordinary
+        function can be used as one. What's special is how it's called:
+        its first argument is an array of the literal text segments (the
+        parts <em>outside</em> the <code>${...}</code> interpolations), and
+        it's followed by one additional argument per interpolated
+        expression, in source order. If there are <var>n</var> interpolated
+        values, the tag receives <var>n</var> + 1 arguments total: an array
+        of <var>n</var> + 1 strings (any of which may be empty), then the
+        <var>n</var> values themselves.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function inspectTag(strings, ...values) {
+  console.log(strings);  // the literal text, split around each interpolation
+  console.log(values);   // the interpolated values, in order
+}
+let x = 5, y = 10;
+inspectTag`x is ${x} and y is ${y}!`;
+// strings => ["x is ", " and y is ", "!"]
+// values  => [5, 10]</code></pre>
+      </div>
+      <p>
+        The <em>value</em> of a plain template literal is always a string,
+        but the value of a <em>tagged</em> template literal is simply
+        whatever the tag function returns — which is what makes tags
+        suitable for building DSLs: the return value can be a query object,
+        a parsed AST, a styled-component descriptor, anything at all.
+      </p>
+
+      <h3 id="writing-a-tag-function">Writing your own tag function</h3>
+      <p>
+        A tag that returns a string — for instance, one that automatically
+        HTML-escapes interpolated values to guard against injection — simply
+        reassembles the strings array around the (transformed) values:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function html(strings, ...values) {
+  let escape = s => String(s).replace(/[&amp;&lt;&gt;"']/g, c => ({
+    "&amp;": "&amp;amp;", "&lt;": "&amp;lt;", "&gt;": "&amp;gt;",
+    '"': "&amp;quot;", "'": "&amp;#39;",
+  }[c]));
+  return strings.reduce((out, str, i) =>
+    out + (i > 0 ? escape(values[i - 1]) : "") + str, "");
+}
+let name = "&lt;script&gt;alert(1)&lt;/script&gt;";
+html`&lt;p&gt;Hello, ${name}!&lt;/p&gt;`;
+// => "&lt;p&gt;Hello, &amp;lt;script&amp;gt;...!&lt;/p&gt;" -- injection defused automatically</code></pre>
+      </div>
+      <p>
+        A tag doesn't have to return a string at all. Reusing the
+        <code>Glob</code> class from <a href="#pattern-matching-symbols">§14.4.6</a>,
+        a <code>glob</code> tag can assemble the raw pieces into one string
+        and then hand that string to the <code>Glob</code> constructor,
+        returning a parsed pattern object rather than text:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function glob(strings, ...values) {
+  let s = strings[0];
+  for (let i = 0; i &lt; values.length; i++) s += values[i] + strings[i + 1];
+  return new Glob(s);
+}
+let root = "/tmp";
+let filePattern = glob`${root}/*.html`;
+"/tmp/test.html".match(filePattern)[1];  // => "test"</code></pre>
+      </div>
+      <p>
+        This same pattern — parse-not-concatenate — is exactly how a SQL
+        query builder can be made injection-safe: rather than the tag
+        interpolating each value directly into a SQL string, it can keep the
+        literal text and the values <em>separate</em>, producing something
+        like <code>{ text: "SELECT * FROM users WHERE id = $1", values: [userId] }</code>
+        for a parameterized query API — the interpolated values never touch
+        the SQL text at all, which is what actually prevents injection (as
+        opposed to escaping, which merely reduces the risk). The same
+        strings-plus-values shape is also a natural fit for i18n tag
+        functions, where the strings array (being a stable, repeatable
+        sequence for a given call site) can double as a lookup key into a
+        translation table, with the values slotted back in afterward.
+      </p>
+
+      <h3 id="the-raw-property">The raw property: unescaped text</h3>
+      <p>
+        The strings array passed to a tag function carries one more piece of
+        information beyond its own elements: a <code>.raw</code> property,
+        itself an array of the same length, containing the literal text with
+        backslash escape sequences left completely uninterpreted. This is
+        exactly how the built-in <code>String.raw` `</code> tag is
+        implemented, and it matters whenever your DSL's own grammar wants to
+        use backslashes for something other than a JS escape sequence — for
+        example, extending the <code>glob</code> tag above to support
+        Windows-style paths without forcing every caller to double every
+        backslash:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function rawGlob(strings, ...values) {
+  let s = strings.raw[0];  // use .raw instead of the (escape-interpreted) strings
+  for (let i = 0; i &lt; values.length; i++) s += values[i] + strings.raw[i + 1];
+  return new Glob(s);
+}
+rawGlob`C:\Users\*\Desktop`;  // \U, \D are passed through literally via .raw,
+                              // instead of being interpreted (and likely erroring)
+                              // as JS escape sequences</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Trade-off</div>
+        <p>
+          Switching a tag over to <code>strings.raw</code> means you also
+          lose the ability to use real JS escapes like <code>\n</code> or
+          <code>\u00e9</code> inside that particular literal — every
+          backslash becomes meaningful only to your DSL's own grammar, not
+          to JavaScript's. Choose whichever behavior your DSL's users will
+          actually expect.
+        </p>
+      </div>
+
+      <h2 id="reflect">14.6 The Reflect API</h2>
+      <p>
+        <code>Reflect</code>, like <code>Math</code>, is not a class or
+        constructor — it's simply a namespace object bundling a set of
+        related static functions, added in ES6. None of what it offers is a
+        genuinely new capability: every <code>Reflect</code> function
+        duplicates something already expressible through core syntax
+        (property access, <code>delete</code>, <code>in</code>, function
+        calls, <code>new</code>) or through an existing <code>Object</code>
+        static method. What <code>Reflect</code> actually buys you is
+        uniformity: one flat API of ordinary callable functions, each with a
+        signature that lines up — argument for argument — with one
+        <code>Proxy</code> trap (<a href="#proxy">§14.7</a>). That
+        correspondence is the entire reason <code>Reflect</code> exists: it
+        gives every <code>Proxy</code> trap a trivial way to "do the normal
+        thing" after intercepting an operation.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Reflect function</th><th>Roughly equivalent to</th><th>Notes</th></tr>
+          <tr><td><code>Reflect.get(o, name, receiver)</code></td><td><code>o[name]</code></td><td>Optional <code>receiver</code> becomes <code>this</code> inside a getter</td></tr>
+          <tr><td><code>Reflect.set(o, name, value, receiver)</code></td><td><code>o[name] = value</code></td><td>Returns <code>true</code>/<code>false</code> instead of throwing</td></tr>
+          <tr><td><code>Reflect.has(o, name)</code></td><td><code>name in o</code></td><td>&#8212;</td></tr>
+          <tr><td><code>Reflect.deleteProperty(o, name)</code></td><td><code>delete o[name]</code></td><td>Returns <code>true</code>/<code>false</code></td></tr>
+          <tr><td><code>Reflect.ownKeys(o)</code></td><td><code>getOwnPropertyNames(o)</code> + <code>getOwnPropertySymbols(o)</code></td><td>Strings and symbols, combined, regardless of enumerability</td></tr>
+          <tr><td><code>Reflect.defineProperty(o, name, desc)</code></td><td><code>Object.defineProperty()</code></td><td>Returns <code>true</code>/<code>false</code> instead of throwing/returning <code>o</code></td></tr>
+          <tr><td><code>Reflect.getOwnPropertyDescriptor(o, name)</code></td><td><code>Object.getOwnPropertyDescriptor()</code></td><td>Throws <code>TypeError</code> for non-object <code>o</code></td></tr>
+          <tr><td><code>Reflect.getPrototypeOf(o)</code></td><td><code>Object.getPrototypeOf()</code></td><td>Throws for non-object <code>o</code>; doesn't coerce primitives</td></tr>
+          <tr><td><code>Reflect.setPrototypeOf(o, p)</code></td><td><code>Object.setPrototypeOf()</code></td><td>Returns <code>true</code>/<code>false</code></td></tr>
+          <tr><td><code>Reflect.isExtensible(o)</code></td><td><code>Object.isExtensible()</code></td><td>Throws for non-object <code>o</code> instead of returning <code>false</code></td></tr>
+          <tr><td><code>Reflect.preventExtensions(o)</code></td><td><code>Object.preventExtensions()</code></td><td>Returns <code>true</code>/<code>false</code> instead of <code>o</code></td></tr>
+          <tr><td><code>Reflect.apply(f, thisVal, args)</code></td><td><code>f.apply(thisVal, args)</code></td><td>&#8212;</td></tr>
+          <tr><td><code>Reflect.construct(c, args, newTarget)</code></td><td><code>new c(...args)</code></td><td>Optional <code>newTarget</code> controls <code>new.target</code> inside <code>c</code></td></tr>
+        </table>
+      </div>
+      <p>
+        The pattern across almost every row is the same: the
+        <code>Reflect</code> version signals failure by <em>returning</em>
+        <code>false</code> (or throwing only for a genuinely malformed
+        argument, like a non-object where an object is required), while the
+        older <code>Object</code> static method signals the same failure by
+        <em>throwing</em> a <code>TypeError</code>. That difference is
+        exactly what makes the <code>Reflect</code> functions pleasant to
+        call from inside a <code>Proxy</code> trap, where a boolean return
+        value is usually what the trap protocol expects anyway.
+      </p>
+
+      <h2 id="proxy">14.7 Proxy objects <span class="badge hard">The big one</span></h2>
+      <p>
+        <code>Proxy</code> is the most powerful metaprogramming feature in
+        the language: it lets you construct an object that has essentially
+        no fixed behavior of its own, and instead forwards every fundamental
+        operation performed on it — reading a property, writing one,
+        deleting one, checking <code>in</code>, enumerating keys, querying
+        or changing the prototype, calling it as a function, using it with
+        <code>new</code> — to a <strong>handlers</strong> object you supply.
+        Any operation whose corresponding handler ("trap") you don't define
+        simply falls through to the real operation on an underlying
+        <strong>target</strong> object.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let proxy = new Proxy(target, handlers);</code></pre>
+      </div>
+      <p>
+        With an empty handlers object, a proxy is a fully transparent
+        pass-through to its target — reads, writes, and deletes on the proxy
+        really happen on the target:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let t = { x: 1, y: 2 };
+let p = new Proxy(t, {});
+p.x;         // => 1
+delete p.y;  // => true
+t.y;         // => undefined -- the delete really happened on the target
+p.z = 3;
+t.z;         // => 3 -- likewise, the write really happened on the target</code></pre>
+      </div>
+      <p>
+        A transparent wrapper on its own isn't very useful — but as a
+        <strong>revocable</strong> proxy it becomes a genuine access-control
+        tool. <code>Proxy.revocable(target, handlers)</code> returns
+        <code>{ proxy, revoke }</code>; calling <code>revoke()</code>
+        permanently disables the proxy, turning every subsequent operation
+        on it into a thrown <code>TypeError</code>. This gives you a way to
+        hand a reference to code you don't fully trust and then cut off its
+        access later, without that code being able to keep working around
+        the cutoff:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function accessTheDatabase() { return 42; }
+let { proxy, revoke } = Proxy.revocable(accessTheDatabase, {});
+proxy();   // => 42 -- works like the real function (proxies wrap functions too)
+revoke();  // cut off access
+proxy();   // !TypeError -- can never be called again, even by whoever holds `proxy`</code></pre>
+      </div>
+
+      <h3 id="proxy-traps-table">The full set of traps</h3>
+      <p>
+        Every trap name matches, argument-for-argument, one of the
+        <code>Reflect</code> functions from <a href="#reflect">§14.6</a> —
+        which is why the two are almost always used together: a trap logs,
+        validates, or transforms, and then calls the identically-shaped
+        <code>Reflect</code> function to actually perform the operation.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Trap</th><th>Intercepts</th><th>Matching Reflect function</th></tr>
+          <tr><td><code>get(target, prop, receiver)</code></td><td>Property reads: <code>proxy.prop</code></td><td><code>Reflect.get</code></td></tr>
+          <tr><td><code>set(target, prop, value, receiver)</code></td><td>Property writes: <code>proxy.prop = v</code></td><td><code>Reflect.set</code></td></tr>
+          <tr><td><code>has(target, prop)</code></td><td><code>prop in proxy</code></td><td><code>Reflect.has</code></td></tr>
+          <tr><td><code>deleteProperty(target, prop)</code></td><td><code>delete proxy.prop</code></td><td><code>Reflect.deleteProperty</code></td></tr>
+          <tr><td><code>ownKeys(target)</code></td><td><code>Object.keys()</code>, <code>for...in</code>, spread, <code>Object.getOwnPropertyNames()</code></td><td><code>Reflect.ownKeys</code></td></tr>
+          <tr><td><code>getOwnPropertyDescriptor(target, prop)</code></td><td><code>Object.getOwnPropertyDescriptor()</code></td><td><code>Reflect.getOwnPropertyDescriptor</code></td></tr>
+          <tr><td><code>defineProperty(target, prop, desc)</code></td><td><code>Object.defineProperty()</code></td><td><code>Reflect.defineProperty</code></td></tr>
+          <tr><td><code>getPrototypeOf(target)</code></td><td><code>Object.getPrototypeOf()</code>, <code>instanceof</code></td><td><code>Reflect.getPrototypeOf</code></td></tr>
+          <tr><td><code>setPrototypeOf(target, proto)</code></td><td><code>Object.setPrototypeOf()</code></td><td><code>Reflect.setPrototypeOf</code></td></tr>
+          <tr><td><code>isExtensible(target)</code></td><td><code>Object.isExtensible()</code></td><td><code>Reflect.isExtensible</code></td></tr>
+          <tr><td><code>preventExtensions(target)</code></td><td><code>Object.preventExtensions()</code></td><td><code>Reflect.preventExtensions</code></td></tr>
+          <tr><td><code>apply(target, thisArg, args)</code></td><td>Calling the proxy: <code>proxy(...)</code></td><td><code>Reflect.apply</code></td></tr>
+          <tr><td><code>construct(target, args, newTarget)</code></td><td><code>new proxy(...)</code></td><td><code>Reflect.construct</code></td></tr>
+        </table>
+      </div>
+      <p>
+        With enough traps defined, the target object becomes almost
+        irrelevant — the handlers alone can conjure up behavior no ordinary
+        object could ever have, such as an object that appears to already
+        possess an infinite number of read-only properties:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let identity = new Proxy({}, {
+  get(o, name) { return name; },
+  has(o, name) { return true; },
+  ownKeys(o) { throw new RangeError("infinite number of properties"); },
+  getOwnPropertyDescriptor(o, name) {
+    return { value: name, enumerable: false, writable: false, configurable: false };
+  },
+  set(o, name, value) { return false; },
+  deleteProperty(o, name) { return false; },
+  defineProperty(o, name, desc) { return false; },
+  isExtensible(o) { return false; },
+  getPrototypeOf(o) { return null; },
+  setPrototypeOf(o, proto) { return false; },
+});
+identity.x;              // => "x"
+identity[0];             // => "0"
+identity.x = 1;          // no-op: set trap returns false
+delete identity.x;       // => false
+Object.keys(identity);   // !RangeError -- ownKeys refuses to enumerate</code></pre>
+      </div>
+
+      <h3 id="validating-proxy">Worked example: a validating proxy <span class="badge hard">Worked example</span></h3>
+      <p>
+        One of the most common real-world uses of <code>Proxy</code> is
+        input validation — rejecting writes that would put an object into
+        an invalid state, without changing a single line of the code that
+        reads and writes the object normally:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function validated(target, rules) {
+  return new Proxy(target, {
+    set(obj, prop, value, receiver) {
+      let rule = rules[prop];
+      if (rule &amp;&amp; !rule(value)) {
+        throw new TypeError(`Invalid value for "${String(prop)}": ${value}`);
+      }
+      return Reflect.set(obj, prop, value, receiver);
+    },
+    defineProperty(obj, prop, desc) {
+      if ("value" in desc &amp;&amp; rules[prop] &amp;&amp; !rules[prop](desc.value)) {
+        throw new TypeError(`Invalid value for "${String(prop)}": ${desc.value}`);
+      }
+      return Reflect.defineProperty(obj, prop, desc);
+    },
+  });
+}
+
+let user = validated({ name: "Ada", age: 30 }, {
+  age: n => Number.isInteger(n) &amp;&amp; n >= 0,
+});
+user.age = 31;      // fine
+user.name = "Ada L."; // fine -- no rule for "name", so anything goes
+user.age = -5;       // !TypeError: Invalid value for "age": -5
+Object.defineProperty(user, "age", { value: 3.5 });  // !TypeError, same rule applies</code></pre>
+      </div>
+      <p>
+        Read-only wrappers are the same idea with the failure mode
+        hardcoded, which is handy for defensive testing — pass one of these
+        into a function under test and any attempt by that function to
+        mutate its argument surfaces immediately as a thrown error instead
+        of a silent, hard-to-detect side effect:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function readOnlyProxy(o) {
+  const fail = () => { throw new TypeError("read-only"); };
+  return new Proxy(o, {
+    set: fail, defineProperty: fail, deleteProperty: fail, setPrototypeOf: fail,
+  });
+}
+let ro = readOnlyProxy({ x: 1, y: 2 });
+ro.x;             // => 1: reads pass through fine
+ro.x = 2;         // !TypeError
+delete ro.y;      // !TypeError
+ro.__proto__ = {}; // !TypeError -- setPrototypeOf is trapped too</code></pre>
+      </div>
+
+      <h3 id="logging-proxy">Worked example: a contagious logging proxy</h3>
+      <p>
+        Because a trap can call <code>Reflect</code> to delegate while still
+        doing something else first, proxies are an excellent way to observe
+        exactly how an unfamiliar function uses an object it's given —
+        including third-party or built-in functions whose internals you
+        can't otherwise inspect. The following generates a trap for
+        <em>every</em> operation automatically by iterating
+        <code>Reflect.ownKeys(Reflect)</code>, and — crucially — has its
+        <code>get</code> trap wrap any object or function property value in
+        another logging proxy before returning it, so the logging follows
+        values as they're passed around ("contagious" logging):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function loggingProxy(o, label) {
+  const handlers = {
+    get(target, prop, receiver) {
+      console.log(`get(${label}, ${String(prop)})`);
+      let value = Reflect.get(target, prop, receiver);
+      if (Reflect.ownKeys(target).includes(prop) &amp;&amp;
+          (typeof value === "object" || typeof value === "function") &amp;&amp; value !== null) {
+        return loggingProxy(value, `${label}.${String(prop)}`);
+      }
+      return value;
+    },
+    set(target, prop, value, receiver) {
+      console.log(`set(${label}, ${String(prop)}, ${value})`);
+      return Reflect.set(target, prop, value, receiver);
+    },
+    apply(target, thisArg, args) {
+      console.log(`${label}(${args})`);
+      return Reflect.apply(target, thisArg, args);
+    },
+  };
+  Reflect.ownKeys(Reflect).forEach(name => {
+    if (!(name in handlers)) {
+      handlers[name] = (target, ...args) => {
+        console.log(`${name}(${label}, ${args})`);
+        return Reflect[name](target, ...args);
+      };
+    }
+  });
+  return new Proxy(o, handlers);
+}
+
+let data = loggingProxy([10, 20], "data");
+for (let x of data) { /* ... */ }
+// get(data, Symbol(Symbol.iterator))
+// get(data, length)
+// get(data, 0)
+// get(data, length)
+// get(data, 1)
+// get(data, length)
+// -- revealing that for/of re-checks .length on EVERY iteration rather
+//    than assuming a fixed length</code></pre>
+      </div>
+
+      <h3 id="proxy-invariants">Proxy invariants: where the illusion breaks down <span class="badge hard">Deep dive</span></h3>
+      <p>
+        A trap can return almost anything it wants — but "almost" is the
+        key word. The <code>Proxy</code> class is not a pure pass-through:
+        after invoking a trap, the engine runs a sanity check against the
+        <em>target</em> object to make sure the result doesn't contradict a
+        guarantee JavaScript makes elsewhere about non-extensible objects or
+        non-configurable properties. If a trap's return value violates one
+        of these <strong>invariants</strong>, the engine throws a
+        <code>TypeError</code> itself — no matter what the trap tried to
+        return. A <code>Proxy</code> can extend an object's behavior in
+        almost unlimited ways, but it can never be used to make a frozen or
+        sealed object <em>lie</em> about being frozen or sealed.
+      </p>
+      <p>
+        The most common invariant in practice: if the target has a
+        non-configurable, non-writable data property, the <code>get</code>
+        trap is not allowed to return anything other than that property's
+        real, current value.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let target = Object.freeze({ x: 1 });
+let proxy = new Proxy(target, { get() { return 99; } });
+proxy.x;  // !TypeError: 'get' on proxy: property 'x' is a read-only and
+          //             non-configurable data property on the proxy target
+          //             so the trap can't report a different value</code></pre>
+      </div>
+      <p>
+        A second invariant guards <code>isExtensible</code>: if the target
+        is non-extensible, the trap is not allowed to report the object as
+        extensible.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let target2 = Object.preventExtensions({});
+let proxy2 = new Proxy(target2, { isExtensible() { return true; } });
+Reflect.isExtensible(proxy2);  // !TypeError: invariant violation --
+                                // the trap disagrees with the actual target</code></pre>
+      </div>
+      <p>
+        A closely related invariant covers <code>deleteProperty</code>: a
+        trap cannot report a non-configurable own property of the target as
+        successfully deleted, because that property is, by definition,
+        undeletable.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let target3 = {};
+Object.defineProperty(target3, "id", { value: 1, configurable: false });
+let proxy3 = new Proxy(target3, {
+  deleteProperty(t, prop) { return true; },  // lying: claims every delete succeeds
+});
+delete proxy3.id;
+// !TypeError: 'deleteProperty' on proxy: property 'id' is a
+//             non-configurable property of the proxy target and can't be
+//             reported as deleted</code></pre>
+      </div>
+      <p>
+        Other invariants in the same family: a <code>getPrototypeOf</code>
+        trap on a non-extensible target must return that target's actual
+        prototype, and a <code>set</code> trap can't successfully report
+        writing to a non-writable, non-configurable data property.
+        Practically, this whole invariant system means <code>Proxy</code> is
+        safe to hand to library consumers even when the underlying data must
+        stay provably frozen — no combination of traps can be used to punch
+        a hole in that guarantee.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Minor inconsistencies are still allowed</div>
+        <p>
+          The <code>readOnlyProxy()</code> from earlier traps <code>set</code>
+          but not <code>isExtensible</code> or
+          <code>getOwnPropertyDescriptor</code> — so querying it with
+          <code>Reflect.isExtensible()</code> will happily (and misleadingly)
+          report the object as extensible, even though every write attempt
+          actually throws. That's a real inconsistency, but it's not one of
+          the invariants the engine enforces, so no error is thrown for it —
+          it's simply a gap you may want to close yourself by adding those
+          traps too.
+        </p>
+      </div>
+
+      <h3 id="proxy-practical-uses">A few more practical Proxy patterns</h3>
+      <p>
+        Beyond validation and logging, two small patterns show up often
+        enough to be worth naming directly. First, negative array indices —
+        indexing from the end of an array the way Python's <code>a[-1]</code>
+        does, which JavaScript arrays don't support natively:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function negativeArray(arr) {
+  return new Proxy(arr, {
+    get(target, prop, receiver) {
+      if (typeof prop === "string" &amp;&amp; /^-\d+$/.test(prop)) {
+        prop = String(target.length + Number(prop));
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+let a = negativeArray([10, 20, 30]);
+a[-1];  // => 30
+a[-2];  // => 20</code></pre>
+      </div>
+      <p>
+        Second, default values for otherwise-missing keys — useful for
+        configuration objects where you'd rather not sprinkle
+        <code>?? fallback</code> at every call site:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function withDefault(obj, defaultValue) {
+  return new Proxy(obj, {
+    get(target, prop, receiver) {
+      return prop in target ? Reflect.get(target, prop, receiver) : defaultValue;
+    },
+  });
+}
+let config = withDefault({ retries: 3 }, "unset");
+config.retries;  // => 3
+config.timeout;  // => "unset" -- instead of undefined</code></pre>
+      </div>
+      <p>
+        This "trap the get, delegate everything else" shape is exactly what
+        reactive-UI libraries like Vue 3 build on: wrap a plain state object
+        in a proxy whose <code>get</code> trap records which reactive
+        computation is currently reading which property, and whose
+        <code>set</code> trap re-runs every computation that depends on the
+        property just written — all without the application code ever
+        calling a special <code>.get()</code>/<code>.set()</code> method or
+        the library needing to redefine accessor properties one by one.
+      </p>
+
+      <h2 id="summary">14.8 Summary</h2>
+      <p>
+        Every property carries attributes beyond its value —
+        <code>writable</code>, <code>enumerable</code>, and
+        <code>configurable</code> for data properties, with <code>get</code>/
+        <code>set</code> replacing <code>value</code>/<code>writable</code>
+        for accessors — queryable and settable through
+        <code>Object.getOwnPropertyDescriptor()</code> and
+        <code>Object.defineProperty()</code>/<code>defineProperties()</code>,
+        and it's specifically <code>enumerable</code> that determines
+        invisibility to <code>for...in</code>, <code>Object.keys()</code>,
+        and <code>JSON.stringify()</code>. Whole objects carry an
+        <code>extensible</code> attribute, escalated by
+        <code>Object.preventExtensions()</code>, <code>seal()</code>, and
+        <code>freeze()</code> — each shallow, each one-way. The prototype
+        attribute can be read with <code>Object.getPrototypeOf()</code> and,
+        at a real performance cost, changed with
+        <code>Object.setPrototypeOf()</code>. Well-known symbols
+        (<code>Symbol.hasInstance</code>, <code>Symbol.toStringTag</code>,
+        <code>Symbol.toPrimitive</code>, <code>Symbol.species</code>,
+        <code>Symbol.isConcatSpreadable</code>, the pattern-matching symbols,
+        <code>Symbol.unscopables</code>) let your own classes hook into
+        behavior that used to be exclusive to built-ins. Tagged template
+        literals turn a function call into what looks like new syntax,
+        receiving the literal's text (both interpreted and, via
+        <code>.raw</code>, uninterpreted) alongside its interpolated values.
+        And <code>Reflect</code> and <code>Proxy</code> together are the
+        deepest layer of all: <code>Reflect</code> exposes every fundamental
+        object operation as a plain function, and <code>Proxy</code> lets
+        you intercept those same operations on an object you hand out to
+        the rest of your program — bounded by a set of invariants that keep
+        a proxied frozen object provably frozen no matter what its traps
+        try to claim.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

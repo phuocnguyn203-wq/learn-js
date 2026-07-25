@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Classes — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="08-classes.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 9</span>
+      <h1>Classes</h1>
+      <p class="lede">
+        A JavaScript object represents one unique bag of properties. A class
+        represents a whole family of objects that share the same behavior —
+        instances that differ in their own state (a particular Range's
+        <code>from</code> and <code>to</code>) but agree on their methods
+        (every Range's <code>includes()</code>). Long before <code>class</code>
+        existed as a keyword, JavaScript already had classes: a class is
+        nothing more than a set of objects that inherit from the same
+        prototype object, built with <a href="05-objects.html#the-prototype-chain">the
+        prototype mechanism</a> covered in Objects. ES6's <code>class</code>
+        syntax doesn't introduce a new object model — it's a cleaner notation
+        for exactly that old mechanism. This chapter works bottom-up: first
+        the prototype-only version with no constructor at all, then
+        constructor functions and <code>new</code>, then the modern
+        <code>class</code> keyword built on top of both, and finally
+        subclassing with <code>extends</code> and <code>super</code>.
+      </p>
+
+      <h2 id="classes-and-prototypes">9.1 Classes and prototypes</h2>
+      <p>
+        Strip away every convenience the language has added and a class is
+        just: one shared prototype object holding the methods, plus some way
+        to produce new objects that inherit from it. <code>Object.create()</code>
+        is that "some way." Nothing else is required. Example: a class of
+        Range objects, defined with a plain factory function and a hand-built
+        prototype object, no constructor, no <code>new</code>, no
+        <code>class</code> keyword anywhere in sight.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A factory function: returns a new range object, doesn't need `new`
+function range(from, to) {
+  // Object.create() makes an object that inherits from range.methods.
+  // The name "methods" is just a convenient property to hang the
+  // prototype off of -- nothing about it is special to the language.
+  let r = Object.create(range.methods);
+  r.from = from;   // Own, per-instance properties: the object's state
+  r.to = to;
+  return r;
+}
+
+// The shared prototype: every range object inherits these members.
+range.methods = {
+  includes(x) { return this.from <= x &amp;&amp; x <= this.to; },
+  *[Symbol.iterator]() {
+    for (let x = Math.ceil(this.from); x <= this.to; x++) yield x;
+  },
+  toString() { return `(${this.from}...${this.to})`; }
+};
+
+let r = range(1, 3);
+r.includes(2);   // => true
+r.toString();    // => "(1...3)"
+[...r];          // => [1, 2, 3] -- works because of the Symbol.iterator method</code></pre>
+      </div>
+      <p>
+        Every method here uses <code>this</code> to reach the caller's
+        <code>from</code>/<code>to</code>, which is the defining trait of a
+        method as opposed to an ordinary function: it's meaningless without an
+        object to be invoked on. Because <code>range.methods</code> is a
+        single shared object, all range objects created this way point at the
+        exact same method implementations in memory — that sharing, not
+        anything about syntax, is what makes this "a class." Two objects
+        belong to the same class precisely when they inherit from the same
+        prototype object; nothing else about how they were built matters.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">There's no built-in <code>instanceof</code> here</div>
+        <p>
+          <code>instanceof</code> (covered properly in <a href="03-expressions-operators.html">Expressions &amp; Operators</a>)
+          normally takes a constructor function on its right side, and this
+          class has none. To test membership against a bare prototype object
+          you reach for <code>isPrototypeOf()</code> instead:
+          <code>range.methods.isPrototypeOf(r)</code>. Once a constructor
+          enters the picture in the next section, <code>instanceof</code>
+          becomes the natural tool again.
+        </p>
+      </div>
+
+      <h2 id="constructors">9.2 Classes and constructors</h2>
+      <p>
+        The factory-function approach works but isn't idiomatic, because real
+        JavaScript classes are built around a <strong>constructor</strong>: a
+        function specifically designed to be invoked with <code>new</code>
+        (see <a href="07-functions.html#constructor-invocation">constructor
+        invocation</a> in Functions). When you call <code>new F()</code>, the
+        runtime does three things automatically, before a single line of
+        <code>F</code>'s body runs: it creates a brand-new plain object, it
+        sets that object's prototype to <code>F.prototype</code>, and it binds
+        that object to <code>this</code> for the duration of the call. The
+        function itself only has to fill in state — it never has to call
+        <code>Object.create()</code>, and it doesn't even need to
+        <code>return</code> the object (the <code>new</code> expression
+        returns it regardless, unless the constructor explicitly returns some
+        other object).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A constructor: capitalized by convention, invoked only with `new`.
+function Range(from, to) {
+  this.from = from;
+  this.to = to;
+}
+
+// Every function has a `prototype` property from the moment it's created.
+// For a constructor, THIS is the object new instances will inherit from --
+// and unlike range.methods above, the property name is not negotiable.
+Range.prototype = {
+  includes(x) { return this.from <= x &amp;&amp; x <= this.to; },
+  *[Symbol.iterator]() {
+    for (let x = Math.ceil(this.from); x <= this.to; x++) yield x;
+  },
+  toString() { return `(${this.from}...${this.to})`; }
+};
+
+let r = new Range(1, 3);   // `new` does the work range() used to do by hand
+r.includes(2);              // => true
+[...r];                     // => [1, 2, 3]</code></pre>
+      </div>
+      <p>
+        Compare the two Range classes carefully and the only real differences
+        are: the function is capitalized and invoked with <code>new</code>
+        instead of called plainly, and the prototype property has to be named
+        exactly <code>prototype</code> because that's the name the
+        <code>new</code> algorithm looks up on the constructor. Everything
+        about how the methods are written and used is identical. This is why
+        the book insists on teaching the constructor-function form before
+        <code>class</code>: <code>class</code> changes none of this, it only
+        changes the spelling.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Arrow functions cannot be constructors</div>
+        <p>
+          Arrow functions have no <code>prototype</code> property at all, so
+          <code>new SomeArrow()</code> throws a <code>TypeError</code>. They
+          also capture <code>this</code> lexically from their surrounding
+          scope rather than from however they're invoked, which makes them
+          unusable as methods too — a method's whole job is to read
+          <code>this</code> from its caller. Neither old-style constructor
+          functions nor the <code>class</code> keyword will let you write a
+          method as an arrow function for exactly this reason. See
+          <a href="07-functions.html#arrow-functions">Functions</a> for the
+          full rules on <code>this</code> binding.
+        </p>
+      </div>
+
+      <h3 id="new-target">Detecting constructor invocation with <code>new.target</code></h3>
+      <p>
+        Inside any function you can inspect the special expression
+        <code>new.target</code>. When the function was invoked with
+        <code>new</code>, it evaluates to the constructor that was invoked
+        (usually the function itself — but see subclassing below, where it
+        can refer to a subclass constructor instead). When the function was
+        called plainly, without <code>new</code>, it's <code>undefined</code>.
+        Some built-ins (the error constructors, for instance) tolerate being
+        called either way; you can emulate that in your own old-style
+        constructors:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function C() {
+  if (!new.target) return new C();   // called as a function -- fix it up
+  // ... normal initialization of `this` continues here
+}
+C();        // still works, and still returns a proper instance
+new C();    // also works</code></pre>
+      </div>
+      <p>
+        This escape hatch only exists for the old function-based style.
+        Classes defined with the <code>class</code> keyword refuse outright
+        to run their constructor without <code>new</code> — calling
+        <code>SomeClass()</code> throws a <code>TypeError</code>
+        unconditionally, no <code>new.target</code> check can save it.
+      </p>
+
+      <h3 id="instanceof-and-constructor">Class identity: <code>instanceof</code> and the <code>constructor</code> property</h3>
+      <p>
+        The prototype object, not the constructor function, is what actually
+        defines a class — two constructors could point their
+        <code>.prototype</code> at the very same object, and objects built by
+        either one would be full-fledged members of one class. Even so, the
+        constructor is treated as the class's public face: its name is
+        conventionally the class's name, and it's the righthand operand of
+        <code>instanceof</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">r instanceof Range   // => true: Range.prototype is in r's prototype chain
+
+// instanceof only walks the prototype chain -- it never actually checks
+// whether `r` was built by calling Range(). This can be exploited (and
+// occasionally exploited by accident):
+function Strange() {}
+Strange.prototype = Range.prototype;
+new Strange() instanceof Range   // => true, even though .from/.to were
+                                  // never set and none of its methods will
+                                  // behave sensibly</code></pre>
+      </div>
+      <p>
+        Every ordinary function automatically gets a <code>prototype</code>
+        object the moment it's defined, and that object automatically carries
+        one non-enumerable property: <code>constructor</code>, pointing back
+        at the function. So <code>F.prototype.constructor === F</code> holds
+        for any plain function <code>F</code>, and any instance
+        <code>new F()</code> inherits a <code>.constructor</code> property
+        that identifies its class. The catch: as soon as you replace
+        <code>Range.prototype</code> wholesale with an object literal (as
+        both examples above do), that auto-generated <code>constructor</code>
+        link is gone — the new object literal never had one. If code
+        downstream relies on <code>instance.constructor</code>, you must
+        restore it by hand, or avoid overwriting the prototype and instead add
+        methods to the existing one:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Option 1: put the back-reference back explicitly
+Range.prototype = {
+  constructor: Range,
+  includes(x) { /* ... */ },
+};
+
+// Option 2: never replace the prototype object -- extend it in place,
+// which preserves the automatically created constructor property
+Range.prototype.includes = function(x) { return this.from <= x &amp;&amp; x <= this.to; };
+Range.prototype.toString = function() { return `(${this.from}...${this.to})`; };</code></pre>
+      </div>
+
+      <h2 id="the-class-keyword">9.3 Classes with the <code>class</code> keyword <span class="badge new">ES2015</span></h2>
+      <p>
+        ES6 gave classes a dedicated syntax, but the machinery underneath —
+        a constructor function plus a shared prototype object holding the
+        methods — is unchanged. <code>class</code> is best understood as a
+        more disciplined way to write exactly the code from the previous
+        section, with mistakes (forgetting <code>prototype</code>, using
+        <code>=</code> instead of a method shorthand, forgetting to restore
+        <code>constructor</code>) made structurally impossible.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Range {
+  constructor(from, to) {
+    this.from = from;
+    this.to = to;
+  }
+  includes(x) { return this.from <= x &amp;&amp; x <= this.to; }
+  *[Symbol.iterator]() {
+    for (let x = Math.ceil(this.from); x <= this.to; x++) yield x;
+  }
+  toString() { return `(${this.from}...${this.to})`; }
+}
+
+let r = new Range(1, 3);
+r.includes(2);   // => true
+[...r];          // => [1, 2, 3]</code></pre>
+      </div>
+      <ul>
+        <li>The <code>constructor</code> keyword names the function that runs on <code>new</code> — but the variable the whole declaration produces is named <code>Range</code>, not "constructor".</li>
+        <li>If you need no initialization at all, you can omit <code>constructor</code> entirely; an empty one is generated for you.</li>
+        <li>Method bodies use object-literal shorthand syntax, but — unlike an object literal — there are <strong>no commas</strong> between members, and a class body cannot hold plain <code>key: value</code> data properties the way an object literal can.</li>
+      </ul>
+
+      <h3 id="desugaring">Deep dive: what <code>class</code> desugars to <span class="badge hard">Not a new object model</span></h3>
+      <p>
+        It's worth seeing this stated as plainly as possible, because it's
+        the single fact that makes every other rule in this chapter
+        predictable rather than arbitrary: <strong>a <code>class</code>
+        declaration produces a constructor function</strong>. Nothing more
+        exotic happens. <code>typeof Range === "function"</code> is true.
+        <code>Range.prototype</code> exists and holds the instance methods,
+        exactly as in the previous section. The two examples below are
+        behaviorally interchangeable.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Written with the class keyword
+class Point {
+  constructor(x, y) { this.x = x; this.y = y; }
+  dist() { return Math.hypot(this.x, this.y); }
+  static origin() { return new Point(0, 0); }
+}
+
+// The desugared, pre-ES6 equivalent -- run either and Point behaves the same
+function PointOld(x, y) { this.x = x; this.y = y; }
+PointOld.prototype.dist = function() { return Math.hypot(this.x, this.y); };
+PointOld.origin = function() { return new PointOld(0, 0); };
+
+typeof Point                              // => "function"
+Point.prototype.dist === Point.prototype.dist  // => true, one shared method
+new Point(3, 4).dist()                    // => 5
+Object.getPrototypeOf(new Point(3, 4)) === Point.prototype  // => true</code></pre>
+      </div>
+      <p>
+        A second worked example, showing that <code>instanceof</code> means
+        exactly what it meant for old-style constructors — a prototype-chain
+        check, nothing about the <code>class</code> keyword makes it "more
+        real":
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Animal {}
+let a = new Animal();
+
+// Swap out the prototype object after the fact, same as with function
+// constructors -- class instances are ordinary objects with an ordinary
+// prototype chain, and nothing prevents this (it's just rarely useful).
+function Impostor() {}
+Impostor.prototype = Animal.prototype;
+new Impostor() instanceof Animal   // => true -- same loophole as §9.2</code></pre>
+      </div>
+      <p>
+        Two real differences do exist, and they're the only two: class bodies
+        are always evaluated in <a href="02-types-values-variables.html">strict
+        mode</a> even with no directive, and class declarations, like
+        <code>let</code>, are <strong>not hoisted</strong> — the binding
+        exists in a temporal dead zone until the declaration is actually
+        reached (see <a href="04-statements.html#declarations">Statements</a>).
+        A function declared with <code>function</code> can be called from code
+        that textually precedes it; a class cannot.
+      </p>
+
+      <h3 id="static-methods">Static methods</h3>
+      <p>
+        A method marked <code>static</code> is attached to the constructor
+        function itself, not to <code>prototype</code> — so it's called on
+        the class, never on an instance. Static methods are also called
+        "class methods" for this reason, in contrast to ordinary "instance
+        methods."
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Range {
+  constructor(from, to) { this.from = from; this.to = to; }
+  static parse(s) {
+    let matches = s.match(/^\((\d+)\.\.\.(\d+)\)$/);
+    if (!matches) throw new TypeError(`Cannot parse Range from "${s}"`);
+    return new Range(Number(matches[1]), Number(matches[2]));
+  }
+}
+
+let r = Range.parse("(1...10)");   // OK -- called on the class
+r.parse("(1...10)");               // TypeError: r.parse is not a function</code></pre>
+      </div>
+      <p>
+        Because a static method is invoked through the constructor rather
+        than through any particular instance, using <code>this</code> inside
+        one almost never makes sense (it would refer to the constructor
+        function itself, not to any Range).
+      </p>
+
+      <h3 id="getters-setters-and-other-forms">Getters, setters, and other method forms</h3>
+      <p>
+        Every shorthand method form legal in an object literal is legal in a
+        class body too: getters and setters (accessed like a plain property
+        but backed by a function — see <a href="05-objects.html#getters-and-setters">Objects</a>),
+        generator methods marked with <code>*</code>, async methods, and
+        methods whose name is computed via a bracketed expression (most
+        commonly <code>[Symbol.iterator]</code>, as in the Range examples
+        above). The only syntactic wrinkle relative to object literals is that
+        there's no trailing comma after a getter or setter.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Temperature {
+  #celsius;
+  constructor(celsius) { this.#celsius = celsius; }
+  get fahrenheit() { return this.#celsius * 9 / 5 + 32; }
+  set fahrenheit(f) { this.#celsius = (f - 32) * 5 / 9; }
+}
+let t = new Temperature(0);
+t.fahrenheit;        // => 32 -- read like a property, runs like a method
+t.fahrenheit = 212;  // invokes the setter
+t.fahrenheit;        // => 212</code></pre>
+      </div>
+
+      <h3 id="fields-public-private-static">Public fields, private fields, and static fields <span class="badge new">ES2022</span></h3>
+      <p>
+        The original ES6 <code>class</code> spec only let you declare
+        methods — any per-instance data ("fields," an OOP synonym for
+        properties) had to be assigned inside <code>constructor</code>. Field
+        declaration syntax was standardized later, letting you declare fields
+        directly in the class body instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Old way: fields only exist as assignments inside the constructor
+class Buffer {
+  constructor() {
+    this.size = 0;
+    this.capacity = 4096;
+    this.buffer = new Uint8Array(this.capacity);
+  }
+}
+
+// New way: field declarations move to the top of the class body, and are
+// still run as part of construction -- `this.` is required on the right
+// side of an initializer even though it's dropped on the left side
+class Buffer2 {
+  size = 0;
+  capacity = 4096;
+  buffer = new Uint8Array(this.capacity);
+}</code></pre>
+      </div>
+      <p>
+        A field declared with no initializer (just <code>name;</code>)
+        starts out <code>undefined</code>; it's better style to always give
+        an explicit initial value. Prefixing a field (or a method, or a
+        static member) with <code>static</code> attaches it to the
+        constructor function instead of to instances — useful for shared
+        constants or lookup tables the whole class needs but no individual
+        instance owns.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Range {
+  static integerRangePattern = /^\((\d+)\.\.\.(\d+)\)$/;
+  static parse(s) {
+    let matches = s.match(Range.integerRangePattern);
+    if (!matches) throw new TypeError(`Cannot parse Range from "${s}"`);
+    return new Range(Number(matches[1]), Number(matches[2]));
+  }
+}</code></pre>
+      </div>
+
+      <h4 id="private-fields-deep-dive">Deep dive: <code>#</code> private fields are real encapsulation <span class="badge hard">Enforced by the language, not by politeness</span></h4>
+      <p>
+        Long before private fields existed, JavaScript programmers signaled
+        "don't touch this from outside" with a leading underscore —
+        <code>this._size</code>. That convention communicates intent to other
+        programmers, but the language enforces nothing: <code>obj._size</code>
+        is a completely ordinary, readable, writable, enumerable property.
+        Anyone (or any library) with a reference to the object can read it,
+        overwrite it, or iterate over it with <code>for...in</code> or
+        <code>Object.keys()</code>. The only true privacy technique before
+        <code>#</code> fields was to capture state in variables closed over by
+        methods created inside the constructor — but that forces every
+        method to be redefined per-instance instead of shared once on the
+        prototype, which is slower and less idiomatic.
+      </p>
+      <p>
+        A field name starting with <code>#</code> is different in kind, not
+        just in convention. It's a distinct piece of syntax: the field is
+        accessible only by code lexically written inside the same class body,
+        and it doesn't merely hide from casual enumeration — it's
+        unreachable and undetectable from the outside by any means at all,
+        including reflection.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Account {
+  #balance = 0;                 // private -- only this class's own code can see it
+  constructor(openingBalance) { this.#balance = openingBalance; }
+  deposit(amount) { this.#balance += amount; }
+  get balance() { return this.#balance; }   // the only sanctioned way out
+}
+
+let a = new Account(100);
+a.balance;          // => 100, via the getter
+a.#balance;          // SyntaxError -- outside the class body, `#balance` is
+                     // not even parseable as a property reference
+Object.keys(a);      // => [] -- private fields never show up in enumeration
+JSON.stringify(a);   // => "{}" -- and never get serialized either</code></pre>
+      </div>
+      <p>
+        Contrast that with merely making a property non-enumerable via
+        <code>Object.defineProperty()</code> (see
+        <a href="05-objects.html#property-attributes">Objects</a>): a
+        non-enumerable property still shows up under
+        <code>Object.getOwnPropertyNames()</code>, is still directly readable
+        as <code>obj.secret</code>, and can still be deleted or overwritten by
+        any caller. It hides from <em>enumeration</em> only. A <code>#</code>
+        field hides from <em>everything</em> — there is no reflection API
+        that can list, read, or write it from outside the declaring class,
+        and even asking whether <code>#balance in obj</code> only type-checks
+        inside that same class body.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Non-enumerable is NOT the same thing as private:
+class LooksPrivate {
+  constructor() {
+    Object.defineProperty(this, "secret", {
+      value: 42, enumerable: false, writable: true
+    });
+  }
+}
+let lp = new LooksPrivate();
+Object.keys(lp);                          // => [] -- hidden from enumeration
+lp.secret;                                // => 42 -- but freely readable!
+lp.secret = 99; lp.secret;                // => 99 -- and freely writable!
+Object.getOwnPropertyNames(lp);           // => ["secret"] -- and discoverable
+
+// True privacy requires the # syntax -- there is no runtime configuration
+// of an ordinary property that achieves the same guarantee.</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Declare before you use</div>
+        <p>
+          A private field must be declared with the field syntax directly in
+          the class body (even with no initializer: <code>#size;</code>)
+          before any method can reference <code>this.#size</code>. You cannot
+          conjure a private field into existence with a bare assignment
+          inside the constructor the way you can with a public one.
+        </p>
+      </div>
+
+      <h3 id="class-expressions">Class expressions</h3>
+      <p>
+        Like function declarations, class declarations have an expression
+        form. A class expression can be anonymous, or carry a name that's
+        only visible inside its own body:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let Square = class { constructor(x) { this.area = x * x; } };
+new Square(3).area;   // => 9
+
+let Named = class Inner {
+  whoAmI() { return Inner.name; }   // "Inner" is only visible in here
+};
+typeof Inner;   // ReferenceError outside the class body</code></pre>
+      </div>
+      <p>
+        Class expressions are far less common in everyday code than function
+        expressions (arrow functions cover most of that use case), but they
+        matter when you need to write a function that takes a class and
+        returns a new one built on top of it — a "mixin factory," covered
+        under subclassing below.
+      </p>
+
+      <h3 id="complex-number-example">Worked example: a Complex number class</h3>
+      <p>
+        Pulling every piece from this section together — constructor,
+        instance methods, getters, static methods, and static
+        "constant" fields attached after the fact:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Complex {
+  constructor(real, imaginary) {
+    this.r = real;
+    this.i = imaginary;
+  }
+  plus(that) { return new Complex(this.r + that.r, this.i + that.i); }
+  times(that) {
+    return new Complex(
+      this.r * that.r - this.i * that.i,
+      this.r * that.i + this.i * that.r
+    );
+  }
+  static sum(c, d) { return c.plus(d); }
+  static product(c, d) { return c.times(d); }
+  get real() { return this.r; }
+  get imaginary() { return this.i; }
+  get magnitude() { return Math.hypot(this.r, this.i); }
+  toString() { return `{${this.r},${this.i}}`; }
+  equals(that) {
+    return that instanceof Complex &amp;&amp; this.r === that.r &amp;&amp; this.i === that.i;
+  }
+}
+// Static "constants" attached after the class body, since this example
+// predates static field syntax being usable everywhere:
+Complex.ZERO = new Complex(0, 0);
+Complex.ONE = new Complex(1, 0);
+Complex.I = new Complex(0, 1);
+
+let c = new Complex(2, 3);
+let d = new Complex(c.i, c.r);
+c.plus(d).toString();     // => "{5,5}"
+c.magnitude;               // => Math.hypot(2, 3)
+Complex.product(c, d);     // => Complex {r: 0, i: 13}
+Complex.ZERO.toString();   // => "{0,0}"</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Classes should almost always define <code>toString()</code></div>
+        <p>
+          Without one, template literals, string concatenation, and
+          <code>console.log</code> fall back to the default
+          <code>"[object Object]"</code>. A short custom <code>toString()</code>
+          pays for itself the first time you debug an instance.
+        </p>
+      </div>
+
+      <h2 id="monkey-patching">9.4 Adding methods to existing classes</h2>
+      <p>
+        Because prototype-based inheritance is fully dynamic, methods added to
+        a prototype object <em>after</em> instances already exist are
+        immediately visible to those instances too — property lookup walks
+        the prototype chain at access time, not at creation time. That means
+        any class, including your own and including JavaScript's built-ins,
+        can be extended after the fact simply by assigning a new method onto
+        its <code>.prototype</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Add a method to a class you already defined
+Complex.prototype.conj = function() { return new Complex(this.r, -this.i); };
+
+// The same trick works on built-in prototypes -- useful historically for
+// polyfilling a method a JS engine didn't yet implement:
+if (!String.prototype.startsWith) {
+  String.prototype.startsWith = function(s) {
+    return this.indexOf(s) === 0;
+  };
+}
+
+// Or for adding conveniences the language never had:
+Number.prototype.times = function(f, context) {
+  let n = this.valueOf();
+  for (let i = 0; i < n; i++) f.call(context, i);
+};
+(3).times(i => console.log(`hello ${i}`));</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Monkey-patching built-ins is usually a bad idea</div>
+        <p>
+          Adding methods to built-in prototypes risks colliding with a
+          same-named method a future JavaScript version defines — your
+          polyfill and the real spec can silently disagree about edge cases.
+          It's especially dangerous on <code>Object.prototype</code>: any
+          property you add there becomes visible on <em>every</em> object via
+          <code>for...in</code> loops, unless you go out of your way to
+          define it with <code>Object.defineProperty()</code> and
+          <code>enumerable: false</code>.
+        </p>
+      </div>
+
+      <h2 id="subclasses">9.5 Subclasses</h2>
+      <p>
+        A subclass extends a superclass: its instances inherit the
+        superclass's methods, may override some of them, and its constructor
+        typically has to run the superclass constructor so the object is
+        fully initialized on both levels. This section first shows the manual
+        machinery of subclassing before ES6, then the same thing expressed
+        with <code>extends</code> and <code>super</code>, then discusses when
+        to avoid subclassing altogether in favor of composition, and finishes
+        with a worked hierarchy of abstract and concrete classes.
+      </p>
+
+      <h3 id="subclassing-without-class">Subclassing the old way</h3>
+      <p>
+        Making <code>B</code> a subclass of <code>A</code> boils down to one
+        line: point <code>B.prototype</code> at an object that itself
+        inherits from <code>A.prototype</code>, rather than at a plain
+        object. <code>Object.create()</code> does exactly this.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function Span(start, span) {
+  if (span >= 0) { this.from = start; this.to = start + span; }
+  else { this.to = start; this.from = start + span; }
+}
+
+// The line that actually creates the subclass relationship:
+Span.prototype = Object.create(Range.prototype);
+// Object.create() gives us a plain object as the prototype, with no
+// constructor back-reference -- restore it explicitly:
+Span.prototype.constructor = Span;
+// Overriding toString() shadows the one inherited from Range.prototype:
+Span.prototype.toString = function() {
+  return `(${this.from}... +${this.to - this.from})`;
+};
+
+let s = new Span(1, 3);
+s.includes(2);     // => true -- inherited straight from Range.prototype
+s.toString();      // => "(1... +3)" -- Span's own override wins</code></pre>
+      </div>
+      <p>
+        This works, but only because <code>Span</code> happens to know enough
+        about <code>Range</code>'s internals to fully reimplement
+        initialization and stringification itself, without ever calling into
+        <code>Range()</code>. A general-purpose subclassing mechanism needs a
+        way to actually invoke the superclass's constructor and the
+        superclass's overridden methods — before ES6, doing that reliably
+        was awkward. That's the gap <code>super</code> closes.
+      </p>
+
+      <h3 id="extends-and-super"><code>extends</code> and <code>super</code> <span class="badge hard">Rules to know cold</span></h3>
+      <p>
+        <code>extends</code> added onto a class declaration wires up the
+        prototype chain automatically — including, uniquely, chaining the
+        constructors' own static members together, something no amount of
+        manual prototype-juggling could do before ES6.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class EZArray extends Array {
+  get first() { return this[0]; }
+  get last() { return this[this.length - 1]; }
+}
+let a = new EZArray(1, 2, 3, 4);
+a instanceof EZArray;   // => true
+a instanceof Array;     // => true -- a genuine Array under the hood
+a.push(5); a.pop();     // inherited instance methods still work
+a.first;                // => 1 -- subclass getter
+Array.isArray(a);       // => true
+EZArray.isArray(a);     // => true -- static methods are inherited TOO
+
+// This last line only works because of `extends` specifically:
+Array.isPrototypeOf(EZArray);   // => true -- EZArray itself inherits from
+                                 // Array, not just EZArray.prototype from
+                                 // Array.prototype. Pre-ES6 prototype
+                                 // surgery had no equivalent for this.</code></pre>
+      </div>
+      <p>
+        The interesting rules all live in the constructor. Consider a
+        <code>TypedMap</code> that layers key/value type-checking on top of
+        the built-in <code>Map</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class TypedMap extends Map {
+  constructor(keyType, valueType, entries) {
+    if (entries) {
+      for (let [k, v] of entries) {
+        if (typeof k !== keyType || typeof v !== valueType) {
+          throw new TypeError(`Wrong type for entry [${k}, ${v}]`);
+        }
+      }
+    }
+    super(entries);              // MUST come before any use of `this`
+    this.keyType = keyType;      // now safe to set subclass-owned state
+    this.valueType = valueType;
+  }
+  set(key, value) {               // overrides Map.prototype.set
+    if (this.keyType &amp;&amp; typeof key !== this.keyType) {
+      throw new TypeError(`${key} is not of type ${this.keyType}`);
+    }
+    if (this.valueType &amp;&amp; typeof value !== this.valueType) {
+      throw new TypeError(`${value} is not of type ${this.valueType}`);
+    }
+    return super.set(key, value);  // delegate the real work upward
+  }
+}</code></pre>
+      </div>
+      <p>These are the four rules worth memorizing, not just skimming:</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Rule</th><th>Why it exists</th></tr>
+          <tr><td>If your class uses <code>extends</code>, its constructor <strong>must</strong> call <code>super(...)</code></td><td>The superclass is responsible for laying down its own part of the object first; the engine enforces this instead of trusting convention</td></tr>
+          <tr><td>You may not reference <code>this</code> before <code>super()</code> has run — doing so throws a <code>ReferenceError</code></td><td><code>this</code> is not fully "alive" until the superclass constructor has had a chance to initialize its share of the object</td></tr>
+          <tr><td>Omit the constructor entirely and one is synthesized that forwards all its arguments straight to <code>super(...)</code></td><td>So a subclass adding only methods, no new state, needs zero constructor boilerplate</td></tr>
+          <tr><td><code>super.method(...)</code> inside any method calls the superclass's version, and — unlike <code>super()</code> in the constructor — has no restriction on when in the method body you call it</td><td>Overriding a method usually means extending, not fully replacing, the inherited behavior</td></tr>
+        </table>
+      </div>
+      <p>
+        Two more worked examples make the "why" concrete rather than
+        abstract. First, what actually happens if you skip <code>super()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Base { constructor() { this.tag = "base"; } }
+
+class Broken extends Base {
+  constructor() {
+    this.oops = true;   // ReferenceError: must call super before accessing 'this'
+  }
+}
+new Broken();   // throws immediately -- never even reaches the assignment
+
+class Fixed extends Base {
+  constructor() {
+    super();          // Base's constructor runs first, sets this.tag
+    this.oops = true;  // NOW this is usable
+  }
+}
+new Fixed().tag;   // => "base"</code></pre>
+      </div>
+      <p>
+        Second, the override-and-delegate pattern with <code>super.method()</code>,
+        showing it's legal to call the superclass version at any point —
+        beginning, middle, or end — unlike the constructor's hard "before
+        <code>this</code>" rule:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Logger {
+  log(msg) { return `[LOG] ${msg}`; }
+}
+class TimestampedLogger extends Logger {
+  log(msg) {
+    let base = super.log(msg);     // call the overridden version first...
+    return `${new Date().toISOString()} ${base}`;  // ...then extend its result
+  }
+}
+new TimestampedLogger().log("started");
+// => "2026-...Z [LOG] started"</code></pre>
+      </div>
+      <p>
+        One more subtlety: inside a superclass constructor,
+        <code>new.target</code> refers to whichever constructor was
+        <em>originally</em> invoked with <code>new</code> — so if
+        <code>TimestampedLogger</code> is instantiated, code running inside
+        <code>Logger</code>'s own constructor (if it had one) would see
+        <code>new.target === TimestampedLogger</code>, not
+        <code>Logger</code>. A well-behaved superclass rarely needs to
+        branch on this, but it's occasionally handy for logging or for
+        blocking direct instantiation of an abstract base (see below).
+      </p>
+
+      <h3 id="composition-over-inheritance">Composition instead of subclassing</h3>
+      <p>
+        <code>extends</code> is easy to reach for, but every layer of
+        subclassing is a permanent coupling between two classes' internals.
+        When you want to reuse another class's <em>behavior</em> without
+        committing to a true is-a relationship (and without being on the hook
+        for <code>instanceof</code> checks succeeding), it's often simpler
+        and more flexible to hold an instance of that class privately and
+        delegate to it.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A Histogram counts occurrences, unlike Set which only tracks membership.
+// It could try to subclass Set, but the counting logic actually wants a
+// Map internally -- so delegate to a Map instead of inheriting from Set.
+class Histogram {
+  #map = new Map();
+  count(key) { return this.#map.get(key) ?? 0; }
+  has(key) { return this.count(key) > 0; }
+  get size() { return this.#map.size; }
+  add(key) { this.#map.set(key, this.count(key) + 1); }
+  delete(key) {
+    let n = this.count(key);
+    if (n === 1) this.#map.delete(key);
+    else if (n > 1) this.#map.set(key, n - 1);
+  }
+  [Symbol.iterator]() { return this.#map.keys(); }
+}</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Favor composition over inheritance</div>
+        <p>
+          Reach for <code>extends</code> when a subclass genuinely is a more
+          specific version of its parent, needs to pass <code>instanceof</code>
+          checks against it, or a framework requires you to extend its base
+          class. Otherwise, wrapping another object as a private field and
+          delegating to it is usually easier to reason about and harder to
+          break by accident — a lesson borrowed directly from classic
+          object-oriented design literature, not something unique to
+          JavaScript.
+        </p>
+      </div>
+
+      <h3 id="abstract-classes-and-hierarchies">Class hierarchies and abstract classes</h3>
+      <p>
+        JavaScript has no formal notion of an "abstract class" or "abstract
+        method" the way Java does — there's no keyword that forbids
+        instantiation or that marks a method as unimplemented. The pattern is
+        instead just a convention: a method body of
+        <code>throw new Error("Abstract method")</code>, which makes any
+        subclass that forgets to override it fail loudly and immediately
+        rather than silently misbehaving.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class AbstractSet {
+  has(x) { throw new Error("Abstract method"); }   // subclasses must override
+}
+
+class NotSet extends AbstractSet {
+  constructor(set) { super(); this.set = set; }
+  has(x) { return !this.set.has(x); }
+  toString() { return `{ x | x not in ${this.set} }`; }
+}
+
+class RangeSet extends AbstractSet {
+  constructor(from, to) { super(); this.from = from; this.to = to; }
+  has(x) { return x >= this.from &amp;&amp; x <= this.to; }
+  toString() { return `{ x | ${this.from} <= x <= ${this.to} }`; }
+}
+
+// A second layer of abstraction: this class implements isEmpty(),
+// toString(), and equals() concretely, purely in terms of an abstract
+// `size` getter and an abstract iterator that its OWN subclasses supply.
+class AbstractEnumerableSet extends AbstractSet {
+  get size() { throw new Error("Abstract method"); }
+  [Symbol.iterator]() { throw new Error("Abstract method"); }
+  isEmpty() { return this.size === 0; }
+  toString() { return `{${Array.from(this).join(", ")}}`; }
+  equals(other) {
+    if (!(other instanceof AbstractEnumerableSet)) return false;
+    if (this.size !== other.size) return false;
+    for (let el of this) if (!other.has(el)) return false;
+    return true;
+  }
+}
+
+class SingletonSet extends AbstractEnumerableSet {
+  constructor(member) { super(); this.member = member; }
+  has(x) { return x === this.member; }         // only the 3 abstract methods
+  get size() { return 1; }                      // need real implementations --
+  *[Symbol.iterator]() { yield this.member; }    // isEmpty/toString/equals are free
+}
+
+new SingletonSet(5).toString();   // => "{5}"
+new SingletonSet(5).equals(new SingletonSet(5));  // => true</code></pre>
+      </div>
+      <p>
+        This is the payoff of a class hierarchy done well: each concrete leaf
+        class only has to implement the handful of primitive operations that
+        are genuinely specific to it, while every derived, composable
+        operation (<code>isEmpty</code>, <code>equals</code>,
+        <code>toString</code>) is written exactly once, high up in the
+        hierarchy, and inherited everywhere below.
+      </p>
+
+      <h3 id="mixins">Mixins: working around single inheritance</h3>
+      <p>
+        A class can only <code>extends</code> one thing — JavaScript, like
+        most class-based languages, has single inheritance, not multiple
+        inheritance. When you want to blend in behavior from more than one
+        source (say, both "is serializable" and "is comparable" onto a class
+        that already extends something else), the common workaround is a
+        <strong>mixin</strong>: a function that takes a base class and
+        returns a new subclass adding the extra behavior. Because a class is
+        just a value, and <code>extends</code> accepts any expression that
+        evaluates to a constructor (not just a bare identifier), you can
+        <code>extends someMixin(Base)</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A mixin is a function from class to class
+const Serializable = Base => class extends Base {
+  serialize() { return JSON.stringify(this); }
+};
+const Comparable = Base => class extends Base {
+  equals(other) { return this.serialize?.() === other.serialize?.(); }
+};
+
+class Point { constructor(x, y) { this.x = x; this.y = y; } }
+
+// Stack mixins by nesting the calls -- each layer extends the last
+class SmartPoint extends Comparable(Serializable(Point)) {}
+
+let p = new SmartPoint(1, 2);
+p.serialize();                                   // => '{"x":1,"y":2}'
+p.equals(new SmartPoint(1, 2));                  // => true
+p instanceof Point;                              // => true -- still a Point</code></pre>
+      </div>
+      <p>
+        This is a pattern built entirely out of ordinary class expressions and
+        <code>extends</code>, not a separate language feature — which is
+        exactly why it works: since <code>class</code> is sugar over
+        constructor functions, an anonymous class expression returned from a
+        function is just another constructor function, perfectly legal as
+        the operand of <code>extends</code>.
+      </p>
+
+      <h3 id="customizing-instanceof">Customizing <code>instanceof</code> with <code>Symbol.hasInstance</code></h3>
+      <p>
+        <code>instanceof</code>'s prototype-chain walk is itself just the
+        default behavior — it can be overridden per-constructor by defining a
+        <code>[Symbol.hasInstance]</code> method (a facet of the
+        metaprogramming hooks covered in
+        <a href="15-metaprogramming.html">Metaprogramming</a>). This lets a
+        "class" that isn't built through real subclassing still participate
+        correctly in <code>instanceof</code> checks — useful for duck-typing
+        or for interfaces assembled out of mixins where no single prototype
+        chain captures "is one of these."
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class Iterable {
+  static [Symbol.hasInstance](obj) {
+    return obj != null &amp;&amp; typeof obj[Symbol.iterator] === "function";
+  }
+}
+
+[1, 2, 3] instanceof Iterable;   // => true -- arrays are iterable
+"hello" instanceof Iterable;      // => true -- strings are iterable
+(42) instanceof Iterable;         // => false -- numbers are not
+// None of these values are in any real prototype relationship with
+// Iterable -- the check is entirely custom logic, not a chain walk.</code></pre>
+      </div>
+
+      <h2 id="summary">9.6 Summary</h2>
+      <ul>
+        <li>Objects belong to the same class exactly when they inherit from the same prototype object — that shared prototype, buildable with nothing more than <code>Object.create()</code>, is the one truly essential feature of a JavaScript class.</li>
+        <li>Before ES6, classes were defined with a constructor function: every function carries a <code>prototype</code> property, and <code>new</code> uses it as the new object's prototype. The prototype object is the class's mechanism; the constructor is its public name and identity.</li>
+        <li><code>class</code> is syntax sugar over that same constructor-and-prototype mechanism — it changes the spelling (strict mode by default, no hoisting, a dedicated place for static members and fields) but not the underlying object model.</li>
+        <li>Public fields, private <code>#</code> fields, static methods, static fields, getters, setters, and generator methods can all be declared directly in a class body.</li>
+        <li><code>#</code>-prefixed fields are enforced by the language as genuinely private — invisible to enumeration, reflection, and outside code — unlike the older underscore-naming convention, which was purely cosmetic.</li>
+        <li>A subclass is declared with <code>extends</code>; its constructor must call <code>super(...)</code> before touching <code>this</code>, and its methods may call <code>super.method(...)</code> to build on rather than replace inherited behavior.</li>
+        <li>When a true is-a relationship and passing <code>instanceof</code> checks aren't required, composing another object as a private field and delegating to it is often more flexible than subclassing it.</li>
+      </ul>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

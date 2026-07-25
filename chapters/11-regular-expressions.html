@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Regular Expressions — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="11-regular-expressions.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 11, §11.3</span>
+      <h1>Regular Expressions</h1>
+      <p class="lede">
+        A regular expression is an object that describes a textual pattern —
+        a tiny, dense language of its own for matching, extracting, and
+        rewriting text. JavaScript's <code>RegExp</code> class implements
+        this language, and both <code>String</code> and <code>RegExp</code>
+        expose methods that use it to search, test, and replace. This page
+        works through the grammar symbol by symbol first — what each piece
+        of punctuation means — and then moves to the API that actually runs
+        a pattern against a string. It closes with the two places people get
+        burned in practice: quantifiers that don't backtrack the way you'd
+        guess, and a stateful <code>lastIndex</code> property that silently
+        corrupts loops built around a reused global regex.
+      </p>
+
+      <h2 id="literals">Defining a pattern: literal vs. constructor</h2>
+      <p>
+        Just as a string literal is text between quotation marks, a regular
+        expression literal is a pattern between a pair of forward slashes.
+        This is by far the more common way to write one, because the
+        pattern is usually known in advance and baked into the source code:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let pattern = /s$/;   // Matches any string ending in the letter "s"</code></pre>
+      </div>
+      <p>
+        Most characters in a pattern — letters and digits — simply match
+        themselves. <code>/java/</code> matches any string containing the
+        substring <code>"java"</code>. Other characters are
+        <strong>metacharacters</strong>: they don't match themselves but
+        carry special meaning. The <code>$</code> above means "end of
+        string," not a literal dollar sign. A pattern can also carry one or
+        more trailing <strong>flags</strong>, written after the closing
+        slash, which change how matching behaves without changing what the
+        pattern text says. Adding <code>i</code> makes the match
+        case-insensitive:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let pattern = /s$/i;   // Also matches strings ending in "S"</code></pre>
+      </div>
+      <p>
+        The equivalent way to build the same regex is the
+        <code>RegExp()</code> constructor, taking the pattern body as a
+        string and the flags as an optional second string argument:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let pattern = new RegExp("s$", "i");
+
+// You can also pass an existing RegExp to copy it while changing its flags:
+let exactMatch = /JavaScript/;
+let caseInsensitive = new RegExp(exactMatch, "i");</code></pre>
+      </div>
+      <p>
+        The constructor is the form you reach for whenever the pattern
+        isn't known until runtime — for example, building a search regex
+        out of text a user typed. Because both regular expression syntax
+        <em>and</em> string literal syntax use backslash for escaping, any
+        backslash that should end up in the pattern must be doubled when
+        it is written as a string:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Matches five ASCII digits in a row, with the "g" (global) flag
+let zipcode = new RegExp("\\d{5}", "g");</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">When in doubt, escape it</div>
+        <p>
+          A number of punctuation characters are metacharacters somewhere in
+          regex grammar: <code>^ $ . * + ? = ! : | \ / ( ) [ ] { }</code>. If
+          you want one of them matched literally, precede it with a
+          backslash — <code>\.</code>, <code>\(</code>, <code>\$</code>, and
+          so on. It is always <em>safe</em> to backslash-escape a
+          punctuation character even where it isn't strictly required. The
+          opposite is not true: letters and digits often gain a special
+          meaning once you put a backslash in front of them (<code>\d</code>,
+          <code>\b</code>, <code>\w</code>…), so never escape a letter or
+          digit you actually want matched literally.
+        </p>
+      </div>
+
+      <h2 id="literal-characters">Literal characters and escape sequences</h2>
+      <p>
+        Alongside ordinary letters and digits, a handful of backslash
+        escapes let a pattern refer to characters that are awkward to type
+        directly, such as tabs and newlines:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Escape</th><th>Matches</th></tr>
+          <tr><td><code>\0</code></td><td>The NUL character (code point 0)</td></tr>
+          <tr><td><code>\t</code></td><td>Tab (code point 9)</td></tr>
+          <tr><td><code>\n</code></td><td>Newline / line feed (code point 10)</td></tr>
+          <tr><td><code>\v</code></td><td>Vertical tab (code point 11)</td></tr>
+          <tr><td><code>\f</code></td><td>Form feed (code point 12)</td></tr>
+          <tr><td><code>\r</code></td><td>Carriage return (code point 13)</td></tr>
+          <tr><td><code>\xnn</code></td><td>The Latin-1 character with hex code <code>nn</code>, e.g. <code>\x0A</code> is the same as <code>\n</code></td></tr>
+          <tr><td><code>\uxxxx</code></td><td>The Unicode character with hex code <code>xxxx</code>, e.g. <code>\u0009</code> is the same as <code>\t</code></td></tr>
+          <tr><td><code>\u&#123;n&#125;</code></td><td>The Unicode character at codepoint <code>n</code> (1&ndash;6 hex digits, up to <code>10FFFF</code>). Requires the <code>u</code> or <code>v</code> flag</td></tr>
+          <tr><td><code>\cX</code></td><td>The control character produced by Ctrl-X, e.g. <code>\cJ</code> is the same as <code>\n</code></td></tr>
+        </table>
+      </div>
+      <p>
+        To match a literal backslash character, escape it with another
+        backslash: <code>/\\/</code>. Quotation marks, <code>@</code>, and
+        most other punctuation that isn't in the metacharacter list above
+        already match themselves with no escaping required.
+      </p>
+
+      <h2 id="character-classes">Character classes</h2>
+      <p>
+        A character class matches exactly one character out of a set you
+        define, by placing candidates inside square brackets. Prefixing the
+        set with <code>^</code> negates it — match any one character
+        <em>not</em> in the set — and a hyphen inside the brackets denotes a
+        range:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/[abc]/        // Matches "a", "b", or "c"
+/[^abc]/       // Matches any character EXCEPT "a", "b", or "c"
+/[a-z]/        // Any lowercase Latin letter
+/[a-zA-Z0-9]/  // Any Latin letter or digit
+/[Ѐ-ӿ]/  // Any one Cyrillic character (an explicit Unicode range)</code></pre>
+      </div>
+      <p>
+        To include a literal hyphen in a class, put it last, right before
+        the closing bracket, so it can't be read as a range separator.
+        Because certain classes come up constantly, JavaScript provides
+        one-letter escapes for them, and each has an uppercase counterpart
+        that matches its negation:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Syntax</th><th>Matches</th></tr>
+          <tr><td><code>[...]</code></td><td>Any one character listed (or ranged) between the brackets</td></tr>
+          <tr><td><code>[^...]</code></td><td>Any one character <em>not</em> listed between the brackets</td></tr>
+          <tr><td><code>.</code></td><td>Any character except a line terminator — or truly any character, including line terminators, with the <code>s</code> flag</td></tr>
+          <tr><td><code>\w</code> / <code>\W</code></td><td>ASCII "word" character, equivalent to <code>[a-zA-Z0-9_]</code> / its negation</td></tr>
+          <tr><td><code>\s</code> / <code>\S</code></td><td>Any Unicode whitespace character / any character that is not whitespace</td></tr>
+          <tr><td><code>\d</code> / <code>\D</code></td><td>ASCII digit, equivalent to <code>[0-9]</code> / its negation</td></tr>
+          <tr><td><code>[\b]</code></td><td>Literal backspace character — the one place <code>\b</code> does <em>not</em> mean "word boundary"</td></tr>
+        </table>
+      </div>
+      <p>
+        These class escapes can be nested inside a bracketed class:
+        <code>/[\s\d]/</code> matches one whitespace character or digit.
+        Note the <code>\d</code>/<code>\w</code> family only covers ASCII —
+        a French accented letter or a Devanagari digit will not satisfy
+        <code>\w</code> or <code>\d</code>.
+      </p>
+
+      <h3 id="unicode-property-escapes">Unicode property escapes <span class="badge new">ES2018</span></h3>
+      <p>
+        Because <code>\d</code> and <code>\w</code> are ASCII-only,
+        matching "any digit" or "any letter" across the world's scripts
+        needs a different tool. When a pattern carries the <code>u</code>
+        (or <code>v</code>) flag, <code>\p&#123;...&#125;</code> and its
+        negation <code>\P&#123;...&#125;</code> match characters by Unicode
+        category — categories defined by the Unicode standard itself, not
+        by JavaScript, so the exact set of characters they cover can shift
+        as Unicode is revised.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/\p{Decimal_Number}/u     // One decimal digit from ANY writing system
+/\P{Decimal_Number}/u     // Any character that is NOT a decimal digit
+/\p{Number}/u             // Any number-like character: digits, fractions, roman numerals
+
+// An internationalized approximation of \w:
+/[\p{Alphabetic}\p{Decimal_Number}\p{Mark}]/u
+
+// Matching characters from a specific script:
+let greekLetter = /\p{Script=Greek}/u;
+let cyrillicLetter = /\p{Script=Cyrillic}/u;</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">The <code>v</code> flag and set notation <span class="badge new">ES2024</span></div>
+        <p>
+          The newer <code>v</code> flag is a strict upgrade to <code>u</code>:
+          it enables everything <code>u</code> does, plus set-operator
+          syntax inside classes — <code>[\p{Letter}&amp;&amp;\p{Script=Latin}]</code>
+          for intersection and <code>[\p{Letter}--\p{ASCII}]</code> for
+          subtraction — and it allows classes to contain multi-codepoint
+          strings, not just single characters. You cannot set both
+          <code>u</code> and <code>v</code> on the same regex; pick one.
+          For most new code that needs Unicode-aware classes, prefer
+          <code>v</code>.
+        </p>
+      </div>
+
+      <h2 id="quantifiers">Quantifiers: repeating a pattern</h2>
+      <p>
+        Repetition operators always follow the element they apply to — a
+        single character, a character class, or a parenthesized group — and
+        say how many times that element may repeat.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Syntax</th><th>Meaning</th></tr>
+          <tr><td><code>?</code></td><td>Zero or one occurrence (the item is optional). Equivalent to <code>&#123;0,1&#125;</code></td></tr>
+          <tr><td><code>*</code></td><td>Zero or more occurrences. Equivalent to <code>&#123;0,&#125;</code></td></tr>
+          <tr><td><code>+</code></td><td>One or more occurrences. Equivalent to <code>&#123;1,&#125;</code></td></tr>
+          <tr><td><code>&#123;n&#125;</code></td><td>Exactly <code>n</code> occurrences</td></tr>
+          <tr><td><code>&#123;n,&#125;</code></td><td><code>n</code> or more occurrences</td></tr>
+          <tr><td><code>&#123;n,m&#125;</code></td><td>At least <code>n</code>, no more than <code>m</code>, occurrences</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let r = /\d{2,4}/;   // Between two and four digits
+r = /\w{3}\d?/;       // Exactly three word characters, then an optional digit
+r = /\s+java\s+/;     // "java" surrounded by one or more spaces on each side
+r = /[^(]*/;          // Zero or more characters that are not an open paren</code></pre>
+      </div>
+      <p>
+        To repeat something more complex than a single character or class —
+        an entire sequence of characters, or an alternation — wrap it in a
+        group first (see the next section); a quantifier right after
+        <code>)</code> applies to everything the group matched.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>*</code> and <code>?</code> can match nothing</div>
+        <p>
+          Because they permit zero occurrences, <code>/a*/</code> matches
+          the string <code>"bbbb"</code> — zero a's is a perfectly valid
+          match, found at position 0, with an empty matched string. Code
+          that expects "no match" when there's clearly no "a" in the
+          string, and instead gets an empty match, has run into this rule.
+        </p>
+      </div>
+
+      <h3 id="greedy-vs-lazy">Greedy vs. lazy quantifiers <span class="badge hard">Deep dive</span></h3>
+      <p>
+        Every quantifier above is <strong>greedy</strong> by default: it
+        consumes as many characters as it possibly can while still letting
+        the rest of the pattern succeed. Appending an extra <code>?</code>
+        to a quantifier — <code>??</code>, <code>+?</code>, <code>*?</code>,
+        or <code>&#123;1,5&#125;?</code> — makes it <strong>lazy</strong>
+        (also called "non-greedy"): it consumes as <em>few</em> characters
+        as it can, only expanding when forced to by a later part of the
+        pattern failing.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"aaa".match(/a+/)[0]    // =&gt; "aaa"  — greedy: grabs every "a" available
+"aaa".match(/a+?/)[0]   // =&gt; "a"    — lazy: grabs the minimum, just one "a"
+
+// A classic case where laziness changes the result: matching an
+// HTML-ish tag's contents.
+let markup = "&lt;em&gt;first&lt;/em&gt; and &lt;em&gt;second&lt;/em&gt;";
+markup.match(/&lt;em&gt;(.*)&lt;\/em&gt;/)[1]    // =&gt; "first&lt;/em&gt; and &lt;em&gt;second"  (greedy: spans BOTH tags)
+markup.match(/&lt;em&gt;(.*?)&lt;\/em&gt;/)[1]   // =&gt; "first"                     (lazy: stops at the FIRST closing tag)</code></pre>
+      </div>
+      <p>
+        That second example is the standard justification for reaching for
+        lazy quantifiers: greedy <code>.*</code> will happily swallow
+        everything up to the <em>last</em> possible closing delimiter in the
+        string, rather than the nearest one.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Laziness doesn't mean "shortest match anywhere" — it means "shortest match from the first viable start"</div>
+        <p>
+          A regex engine picks the <em>leftmost</em> position at which a
+          match is possible at all, and only <em>then</em> does greedy vs.
+          lazy decide how much to consume from that position onward. It
+          never abandons an already-found match at an early position to go
+          look for a shorter one starting later. Consider <code>/a+b/</code>
+          against <code>"aaab"</code>: it matches the entire string
+          <code>"aaab"</code>, because <code>a+</code> greedily eats all
+          three a's and then backtracks just enough to let the final
+          <code>b</code> match. Now compare the lazy version,
+          <code>/a+?b/</code>, against the very same string. You might
+          expect it to prefer a short match like just the last
+          <code>"ab"</code> — but it also matches the entire string
+          <code>"aaab"</code>:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"aaab".match(/a+b/)[0]    // =&gt; "aaab" — greedy version
+"aaab".match(/a+?b/)[0]   // =&gt; "aaab" — lazy version: SAME RESULT!
+
+// Why: a match starting at index 0 is possible, so the engine commits to
+// index 0 and never tries starting the match at index 1 or 2, even though
+// those would have produced a shorter overall match ("ab").</code></pre>
+        </div>
+        <p>
+          The lazy quantifier only changes <em>how greedily the engine
+          backtracks within a single candidate start position</em> — here,
+          it still has to consume all three a's, one at a time, backtracking
+          forward until <code>b</code> is found, because <code>a+?</code>
+          must match at least one <code>a</code> starting right at index 0,
+          and no <code>b</code> appears until index 3. The takeaway: lazy
+          quantifiers shrink a match relative to greedy ones only when there
+          are multiple points at which the trailing part of the pattern
+          could succeed <em>from the same start position</em> — they do not
+          search for a better start position.
+        </p>
+      </div>
+
+      <h2 id="groups-alternation">Alternation, grouping, and backreferences</h2>
+      <p>
+        Parentheses and the pipe character give a regex three closely
+        related powers: choosing between alternatives, treating a
+        sub-pattern as a single unit, and later referring back to whatever
+        text a sub-pattern matched.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Syntax</th><th>Meaning</th></tr>
+          <tr><td><code>|</code></td><td>Alternation — match the subexpression to the left OR the one to the right</td></tr>
+          <tr><td><code>(...)</code></td><td>Capturing group — groups items into one unit usable with <code>* + ? |</code> etc., and remembers the matched text for later reference</td></tr>
+          <tr><td><code>(?:...)</code></td><td>Non-capturing group — groups for repetition/alternation purposes only; does not create a numbered backreference</td></tr>
+          <tr><td><code>\n</code></td><td>Backreference — matches the same text that numbered group <code>n</code> matched. Groups are numbered by the position of their opening <code>(</code>, left to right; <code>(?:</code> groups are not numbered</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/ab|cd|ef/          // Matches "ab", "cd", or "ef"
+/\d{3}|[a-z]{4}/     // Matches three digits OR four lowercase letters
+
+/java(script)?/      // "java" with an optional "script" — one group, unit-quantified with ?
+/(ab|cd)+|ef/        // "ef", or one-or-more repetitions of "ab"/"cd"
+/([Jj]ava(?:[Ss]cript)?)\sis\s(fun\w*)/
+// Group 1 is (Jj]ava(?:[Ss]cript)?), group 2 is (fun\w*) — the
+// non-capturing (?:[Ss]cript) does not consume a group number, so
+// there is no separate group 2 for "Script".
+
+// Backreference: enforce that the closing quote MATCHES the opening one
+/(['"])[^'"]*\1/
+// Without the backreference, /['"][^'"]*['"]/ would happily accept a
+// string that opens with ' and closes with ", which is wrong.</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Alternation is tried left to right, and stops at the first match</div>
+        <p>
+          <code>|</code> does not pick the "best" or longest alternative —
+          it commits to the first one (reading left to right) that
+          succeeds. <code>/a|ab/</code> matched against <code>"ab"</code>
+          matches only the single letter <code>"a"</code>, because that
+          alternative is tried first and succeeds; the engine never
+          backtracks to try <code>ab</code> instead.
+        </p>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Backreferences can't appear inside a character class</div>
+        <p>
+          <code>/(['"])[^\1]*\1/</code> is not valid the way you might hope
+          — a <code>\1</code> written inside <code>[...]</code> is not
+          treated as "whatever group 1 matched"; character classes only
+          understand literal characters and class escapes.
+        </p>
+      </div>
+
+      <h3 id="named-groups">Named capture groups <span class="badge new">ES2018</span></h3>
+      <p>
+        Numbering groups by counting opening parentheses works, but it
+        makes a pattern hard to read and fragile to edit — insert a new
+        group anywhere and every later number shifts. Named groups solve
+        both problems: write <code>(?&lt;name&gt;...)</code> instead of
+        <code>(...)</code>, and refer to the captured text by name.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Validate/parse the last line of a US mailing address
+let address = /(?&lt;city&gt;\w+) (?&lt;state&gt;[A-Z]{2}) (?&lt;zipcode&gt;\d{5})(?&lt;zip9&gt;-\d{4})?/;
+
+// A named backreference uses \k&lt;name&gt; instead of \1
+let quoted = /(?&lt;quote&gt;['"])[^'"]*\k&lt;quote&gt;/;</code></pre>
+      </div>
+      <p>
+        Named groups are still numbered too (a name doesn't remove the
+        positional number), and the same name cannot be reused twice in one
+        pattern outside of separate alternation branches. You'll see how to
+        read named captures back out of a match result in the RegExp API
+        and String method sections below.
+      </p>
+
+      <h2 id="anchors">Anchors and word boundaries</h2>
+      <p>
+        Most regex elements match an actual character. Anchors are
+        different — they match a <em>position</em> in the string, consuming
+        no characters themselves, and are used to "pin" a pattern to a
+        specific place.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Syntax</th><th>Matches</th></tr>
+          <tr><td><code>^</code></td><td>The beginning of the string, or (with the <code>m</code> flag) the beginning of any line</td></tr>
+          <tr><td><code>$</code></td><td>The end of the string, or (with the <code>m</code> flag) the end of any line</td></tr>
+          <tr><td><code>\b</code></td><td>A word boundary — the position between a <code>\w</code> character and a <code>\W</code> character, or between a <code>\w</code> character and the start/end of the string</td></tr>
+          <tr><td><code>\B</code></td><td>A position that is <em>not</em> a word boundary</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/^JavaScript$/     // Matches only if the ENTIRE string is exactly "JavaScript"
+
+// Matching "Java" as a standalone word (not the "Java" inside "JavaScript")
+/\sJava\s/          // Works, but requires actual space characters and
+                    // fails at the start/end of a string, and the match
+                    // includes the surrounding spaces you probably don't want
+/\bJava\b/          // Better: anchors to word boundaries, consumes no spaces
+
+/\B[Ss]cript/       // Matches "JavaScript" and "postscript" (script is NOT
+                    // at a word boundary there) but not standalone "script"
+                    // or "Scripting" (where it IS at a boundary)</code></pre>
+      </div>
+
+      <h2 id="lookaround">Lookahead and lookbehind assertions</h2>
+      <p>
+        Lookaround takes the anchor idea further: instead of a fixed
+        position rule like "start of string," you supply an entire
+        sub-pattern that must (or must not) match at the current position —
+        without consuming any of the characters it checks. That means the
+        checked text is <em>not</em> included in the overall match.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Syntax</th><th>Meaning</th></tr>
+          <tr><td><code>(?=p)</code></td><td>Positive lookahead — what follows must match <code>p</code>, but <code>p</code> is not consumed</td></tr>
+          <tr><td><code>(?!p)</code></td><td>Negative lookahead — what follows must <em>not</em> match <code>p</code></td></tr>
+          <tr><td><code>(?&lt;=p)</code> <span class="badge new">ES2018</span></td><td>Positive lookbehind — what precedes the current position must match <code>p</code></td></tr>
+          <tr><td><code>(?&lt;!p)</code> <span class="badge new">ES2018</span></td><td>Negative lookbehind — what precedes must <em>not</em> match <code>p</code></td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Match the name of a language, but only when followed by a colon
+/[Jj]ava([Ss]cript)?(?=:)/
+// Matches "JavaScript" in "JavaScript: The Definitive Guide"
+// Does NOT match "Java" in "Java in a Nutshell" (no colon follows)
+
+// Negative lookahead: "Java" NOT followed by "Script"
+/Java(?!Script)([A-Z]\w*)/
+// Matches "JavaBeans", matches "JavaScrip" (note: not the full word
+// "JavaScript"), does NOT match "JavaScript" or "JavaScripter"
+
+// Lookbehind: a 5-digit zip code, only when it follows a US state code
+/(?&lt;=[A-Z]{2} )\d{5}/
+
+// Digits NOT preceded by a currency symbol or decimal point
+/(?&lt;![\p{Currency_Symbol}\d.])\d+(\.\d+)?/u</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Lookahead vs. lookbehind: direction, not power</div>
+        <p>
+          Both forms exist purely to check context around a match without
+          including that context in the result. Lookahead checks what comes
+          <em>after</em> the current position; lookbehind checks what comes
+          <em>before</em> it. Lookbehind arrived later (ES2018) and is the
+          one more likely to be missing from an older engine, though all
+          current evergreen browsers and Node support it.
+        </p>
+      </div>
+
+      <h2 id="flags">Flags</h2>
+      <p>
+        Flags change matching <em>behavior</em> without changing the
+        pattern text, and are written after the closing slash of a literal
+        (or as the second argument to the constructor). They can be
+        combined freely and in any order.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Flag</th><th>Name</th><th>Effect</th></tr>
+          <tr><td><code>g</code></td><td>global</td><td>Find all matches rather than stopping at the first. Also switches <code>match()</code>/<code>exec()</code>/<code>test()</code> into stateful, <code>lastIndex</code>-driven mode</td></tr>
+          <tr><td><code>i</code></td><td>ignoreCase</td><td>Case-insensitive matching</td></tr>
+          <tr><td><code>m</code></td><td>multiline</td><td><code>^</code> and <code>$</code> additionally match the start/end of each line, not just the whole string</td></tr>
+          <tr><td><code>s</code></td><td>dotAll</td><td><code>.</code> matches line terminators too, not just "any character except a newline"</td></tr>
+          <tr><td><code>u</code></td><td>unicode</td><td>Matches full Unicode codepoints instead of raw 16-bit code units; enables <code>\u&#123;...&#125;</code> and <code>\p&#123;...&#125;</code>. Use it by default so emoji and non-BMP characters aren't split in half</td></tr>
+          <tr><td><code>v</code></td><td>unicodeSets <span class="badge new">ES2024</span></td><td>Superset of <code>u</code>: adds set-operator class syntax and multi-codepoint string entries in classes. Mutually exclusive with <code>u</code></td></tr>
+          <tr><td><code>y</code></td><td>sticky</td><td>The next match must start at exactly <code>lastIndex</code> — no scanning forward to find a later match</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/script/gi      // global AND case-insensitive
+new RegExp("script", "giu")   // same, plus Unicode mode</code></pre>
+      </div>
+
+      <h2 id="regexp-api">The RegExp object: construction and properties</h2>
+      <p>
+        A <code>RegExp</code> instance carries the pattern, its flags, and —
+        for stateful patterns — a cursor into the last string it searched.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Property</th><th>Description</th></tr>
+          <tr><td><code>source</code></td><td>Read-only. The pattern text, as it would appear between the slashes of a literal</td></tr>
+          <tr><td><code>flags</code></td><td>Read-only. A string of the active flag letters, e.g. <code>"gi"</code></td></tr>
+          <tr><td><code>global</code></td><td>Read-only boolean — true if <code>g</code> is set</td></tr>
+          <tr><td><code>ignoreCase</code></td><td>Read-only boolean — true if <code>i</code> is set</td></tr>
+          <tr><td><code>multiline</code></td><td>Read-only boolean — true if <code>m</code> is set</td></tr>
+          <tr><td><code>dotAll</code></td><td>Read-only boolean — true if <code>s</code> is set</td></tr>
+          <tr><td><code>unicode</code></td><td>Read-only boolean — true if <code>u</code> is set</td></tr>
+          <tr><td><code>sticky</code></td><td>Read-only boolean — true if <code>y</code> is set</td></tr>
+          <tr><td><code>lastIndex</code></td><td><strong>Read/write</strong> integer. For <code>g</code> or <code>y</code> patterns, the character position where the next search begins. Consulted and updated by <code>exec()</code> and <code>test()</code></td></tr>
+        </table>
+      </div>
+      <p>
+        Every property except <code>lastIndex</code> is read-only and
+        derived entirely from how the RegExp was constructed —
+        <code>lastIndex</code> is the one piece of mutable state on the
+        object, and it's the subject of its own deep dive below.
+      </p>
+
+      <h2 id="test-exec">test() and exec()</h2>
+      <p>
+        <code>RegExp</code> itself defines two matching methods.
+        <code>test()</code> is the simple one: pass it a string, get back
+        <code>true</code> or <code>false</code>. Internally it's just
+        <code>exec()</code> with the result collapsed to a boolean, which
+        matters because it means <code>test()</code> inherits all of
+        <code>exec()</code>'s statefulness around <code>lastIndex</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/^\d+$/.test("123")   // =&gt; true
+/^\d+$/.test("12a")   // =&gt; false</code></pre>
+      </div>
+      <p>
+        <code>exec()</code> is the most powerful and most low-level way to
+        run a pattern. Given a string, it returns <code>null</code> on no
+        match, or — on success — an array just like the one
+        <code>String.prototype.match()</code> returns for a non-global
+        pattern: element 0 is the full match, subsequent elements are the
+        capturing groups, and the array carries extra properties
+        <code>index</code> (where the match started), <code>input</code>
+        (the searched string), and <code>groups</code> (an object of named
+        captures, or <code>undefined</code> if the pattern has none).
+      </p>
+      <p>
+        The crucial difference from <code>match()</code>:
+        <code>exec()</code> <em>always</em> returns single-match detail,
+        regardless of the <code>g</code> flag — it never switches to
+        returning a flat array of strings. Instead, when <code>g</code> or
+        <code>y</code> is set, each successful call moves
+        <code>lastIndex</code> to just past the match, so calling
+        <code>exec()</code> again continues from there. That's what makes
+        the classic "loop over every match" pattern work:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let pattern = /Java/g;
+let text = "JavaScript &gt; Java";
+let match;
+while ((match = pattern.exec(text)) !== null) {
+  console.log(`Matched ${match[0]} at ${match.index}`);
+  console.log(`Next search begins at ${pattern.lastIndex}`);
+}
+// Matched Java at 0
+// Next search begins at 4
+// Matched Java at 14
+// Next search begins at 18</code></pre>
+      </div>
+
+      <h2 id="lastindex-trap">The lastIndex trap <span class="badge hard">Classic bug</span></h2>
+      <p>
+        A pattern with the <code>g</code> or <code>y</code> flag is
+        <strong>stateful</strong>: the RegExp object itself remembers where
+        the last successful match ended, via <code>lastIndex</code>, and
+        <code>exec()</code>/<code>test()</code> resume from there on the
+        <em>same object's</em> next call. That statefulness is exactly what
+        a manual match-everything loop wants — and exactly what silently
+        breaks any code that reuses the same global-flagged RegExp for
+        something other than a clean, sequential scan.
+      </p>
+
+      <h3 id="lastindex-infinite-loop">Failure mode 1: a literal in the loop condition never advances</h3>
+      <p>
+        Suppose you want the index of every <code>&lt;p&gt;</code> tag in
+        an HTML string:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let match, positions = [];
+while ((match = /&lt;p&gt;/g.exec(html)) !== null) {  // POSSIBLE INFINITE LOOP
+  positions.push(match.index);
+}</code></pre>
+      </div>
+      <p>
+        If <code>html</code> contains even one <code>&lt;p&gt;</code>, this
+        never terminates. The regex literal <code>/&lt;p&gt;/g</code> is
+        re-evaluated on <em>every</em> iteration of the loop, which creates
+        a brand-new <code>RegExp</code> object each time — with
+        <code>lastIndex</code> freshly reset to <code>0</code>. Every call
+        restarts from the beginning of the string, finds the same first
+        match, and the loop condition is always truthy. The fix is to build
+        the RegExp exactly once, outside the loop, so the same object (and
+        its advancing <code>lastIndex</code>) is reused across iterations:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let tag = /&lt;p&gt;/g;             // Created ONCE
+let match, positions = [];
+while ((match = tag.exec(html)) !== null) {
+  positions.push(match.index);
+}</code></pre>
+      </div>
+
+      <h3 id="lastindex-stale-state">Failure mode 2: reusing a shared regex across unrelated calls</h3>
+      <p>
+        The mirror-image bug: sometimes you keep one RegExp variable around
+        for convenience, not realizing that using it once changes its
+        behavior the next time. Suppose you scan a dictionary for words
+        containing a doubled letter (like the "pp" in "apple"):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let dictionary = ["apple", "book", "coffee"];
+let doubleLetter = /(\w)\1/g;    // has "g" — carries state between calls!
+let doubleLetterWords = dictionary.filter(word =&gt; doubleLetter.test(word));
+doubleLetterWords   // =&gt; ["apple", "coffee"]  — "book" is WRONGLY missing!</code></pre>
+      </div>
+      <p>
+        Walking through it: <code>test("apple")</code> finds <code>"pp"</code>
+        starting at index 1, and because <code>g</code> is set,
+        <code>doubleLetter.lastIndex</code> is left at <code>3</code> (just
+        past the match). The <em>next</em> call, <code>test("book")</code>,
+        does not start scanning "book" from position 0 — it starts from
+        position 3, per the shared object's leftover <code>lastIndex</code>,
+        which is already past the <code>"oo"</code> in "book". No match is
+        found, "book" is skipped, and the RegExp resets
+        <code>lastIndex</code> back to <code>0</code> — which is why
+        "coffee" (checked next, from a clean position 0) matches
+        successfully and masks the fact anything went wrong.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Three ways to fix it — and which one to prefer</div>
+        <p>
+          1) Drop the <code>g</code> flag if you never needed global
+          matching in the first place (as here — <code>test()</code> just
+          needs a yes/no per word). 2) Reset
+          <code>re.lastIndex = 0</code> immediately before each independent
+          use. 3) Best for "loop over every match" use cases specifically:
+          use <code>String.prototype.matchAll()</code> instead of manual
+          <code>exec()</code>/<code>test()</code> calls — it is documented
+          below and, unlike every other regex method, it never reads or
+          mutates <code>lastIndex</code> on the RegExp you pass it, so
+          there is no shared state left over to trip on.
+        </p>
+      </div>
+
+      <h2 id="string-methods">Pattern matching with String methods</h2>
+      <p>
+        The RegExp methods above are low-level tools. In everyday code, the
+        regex-aware methods on <code>String.prototype</code> are usually
+        more convenient — each accepts a regex (or a plain string, which is
+        promoted to a regex or matched literally depending on the method)
+        and does something specific with it.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Returns</th></tr>
+          <tr><td><code>str.search(re)</code></td><td>Index of the first match, or <code>-1</code>. Always ignores the <code>g</code> flag — there's no such thing as a "global" single index</td></tr>
+          <tr><td><code>str.replace(re, repl)</code></td><td>New string with match(es) replaced. Replaces only the first match unless <code>re</code> has the <code>g</code> flag</td></tr>
+          <tr><td><code>str.replaceAll(re, repl)</code></td><td>New string, all matches replaced. If <code>re</code> is a regex, it <strong>must</strong> have the <code>g</code> flag or this throws a <code>TypeError</code></td></tr>
+          <tr><td><code>str.match(re)</code></td><td>Without <code>g</code>: one match-detail array (like <code>exec()</code>). With <code>g</code>: a flat array of matched strings only, no capture/index info, or <code>null</code> if nothing matched</td></tr>
+          <tr><td><code>str.matchAll(re)</code></td><td>An iterator of match-detail objects for every match. Requires <code>g</code>. Never touches <code>lastIndex</code></td></tr>
+          <tr><td><code>str.split(re)</code></td><td>Array of substrings split on the pattern. Capturing groups in the separator are spliced into the result array</td></tr>
+        </table>
+      </div>
+
+      <h3 id="search">search()</h3>
+      <p>
+        The simplest of the five: it returns where the first match starts,
+        or <code>-1</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"JavaScript".search(/script/ui)   // =&gt; 4
+"Python".search(/script/ui)       // =&gt; -1</code></pre>
+      </div>
+
+      <h3 id="replace">replace() and replaceAll()</h3>
+      <p>
+        With a plain replacement string, <code>$</code>-sequences let you
+        splice captured text into the output: <code>$1</code>...<code>$9</code>
+        refer to numbered capture groups, <code>$&lt;name&gt;</code> refers
+        to a named one, and <code>$&amp;</code> refers to the entire match.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Normalize capitalization no matter how the input was cased
+text.replace(/javascript/gi, "JavaScript");
+
+// $1 refers to the first capturing group — the text inside the quotes
+let quote = /"([^"]*)"/g;
+'He said "stop"'.replace(quote, '«$1»')   // =&gt; 'He said «stop»'
+
+// Named groups: reference by $&lt;name&gt; instead of a number
+let namedQuote = /"(?&lt;quotedText&gt;[^"]*)"/g;
+'He said "stop"'.replace(namedQuote, '«$&lt;quotedText&gt;»')  // =&gt; 'He said «stop»'</code></pre>
+      </div>
+      <p>
+        The second argument can also be a <strong>function</strong>,
+        invoked per match and expected to return the replacement text. It
+        receives: the full matched text; then one argument per capturing
+        group (in order); then the match's starting offset; then the whole
+        original string; and finally, if the pattern has named groups, an
+        object mapping names to captured text.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Convert every run of decimal digits to hexadecimal
+let s = "15 times 15 is 225";
+s.replace(/\d+/gu, n =&gt; parseInt(n).toString(16))   // =&gt; "f times f is e1"</code></pre>
+      </div>
+      <p>
+        <code>replaceAll()</code> is the more explicit sibling of
+        <code>replace()</code> for the "replace every match" case: it takes
+        the same replacement forms, but if you pass it a regex without the
+        <code>g</code> flag it throws, rather than silently only replacing
+        the first occurrence.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"a.b.c".replaceAll(".", "-")     // =&gt; "a-b-c" (plain string separator — fine, no flag needed)
+"a.b.c".replaceAll(/\./g, "-")   // =&gt; "a-b-c" (regex MUST carry g)
+"a.b.c".replaceAll(/\./, "-")    // =&gt; TypeError: replaceAll must be called with a global RegExp</code></pre>
+      </div>
+
+      <h3 id="match">match()</h3>
+      <p>
+        Behavior splits sharply depending on the <code>g</code> flag.
+        Without it, <code>match()</code> returns the same rich detail array
+        that <code>exec()</code> does — full match at index 0, capture
+        groups after it, plus <code>index</code>, <code>input</code>, and
+        <code>groups</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let url = /(?&lt;protocol&gt;\w+):\/\/(?&lt;host&gt;[\w.]+)\/(?&lt;path&gt;\S*)/;
+let text = "Visit my blog at http://www.example.com/~david";
+let match = text.match(url);
+match[0]                // =&gt; "http://www.example.com/~david"
+match.input             // =&gt; text
+match.index             // =&gt; 17
+match.groups.protocol   // =&gt; "http"
+match.groups.host       // =&gt; "www.example.com"
+match.groups.path       // =&gt; "~david"</code></pre>
+      </div>
+      <p>
+        With <code>g</code>, all of that detail is discarded — you get back
+        a flat array of the matched substrings only, with no index or
+        capture information:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"7 plus 8 equals 15".match(/\d+/g)   // =&gt; ["7", "8", "15"]  — no groups, no index</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">The <code>y</code> flag's effect on match()</div>
+        <p>
+          If <code>g</code> and <code>y</code> are both set,
+          <code>match()</code> still returns the flat array of strings, but
+          the first match must start at the very beginning of the string
+          and every subsequent one must start immediately where the
+          previous match ended — no skipping ahead to find a later match.
+          With <code>y</code> alone (no <code>g</code>), <code>match()</code>
+          looks for one match constrained to start at
+          <code>lastIndex</code> (default <code>0</code>), and updates
+          <code>lastIndex</code> to just after a successful match — or
+          resets it to <code>0</code> on failure:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let vowel = /[aeiou]/y;
+"test".match(vowel)      // =&gt; null: "test" doesn't begin with a vowel
+vowel.lastIndex = 1;     // Force the next attempt to start at index 1
+"test".match(vowel)[0]   // =&gt; "e": found a vowel right at position 1
+vowel.lastIndex          // =&gt; 2: auto-advanced past the match
+"test".match(vowel)      // =&gt; null: no vowel at position 2
+vowel.lastIndex          // =&gt; 0: reset after the failed match</code></pre>
+        </div>
+      </div>
+      <p>
+        Calling <code>match()</code> with a non-global regex is exactly
+        equivalent to calling <code>exec()</code> on that regex with the
+        string — same return value, same properties.
+      </p>
+
+      <h3 id="matchall">matchAll() <span class="badge new">ES2020</span></h3>
+      <p>
+        <code>matchAll()</code> combines the best of both worlds above: it
+        requires the <code>g</code> flag, but instead of collapsing to bare
+        strings, it returns an <strong>iterator</strong> that yields the
+        same rich match-detail object <code>match()</code> gives you
+        without <code>g</code> — full match, capture groups, index, and
+        named groups — for <em>every</em> match in the string.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const words = /\b\p{Alphabetic}+\b/gu;
+const text = "This is a naïve test of the matchAll() method.";
+for (let word of text.matchAll(words)) {
+  console.log(`Found '${word[0]}' at index ${word.index}.`);
+}</code></pre>
+      </div>
+      <p>
+        You can prime where matching starts by setting
+        <code>lastIndex</code> on the RegExp before calling
+        <code>matchAll()</code> — but unlike every other method covered on
+        this page, <code>matchAll()</code> never reads it again mid-loop
+        and never writes to it, which is precisely why it sidesteps the
+        <a href="#lastindex-trap">lastIndex trap</a> above entirely. For any
+        new code that needs to iterate every match with full detail, prefer
+        <code>matchAll()</code> over a manual <code>exec()</code> loop.
+      </p>
+
+      <h3 id="split">split()</h3>
+      <p>
+        <code>split()</code> breaks a string into an array of pieces using
+        the argument as the separator. A plain string separator is matched
+        literally; a regex separator lets the boundary itself be a
+        pattern:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">"123,456,789".split(",")             // =&gt; ["123", "456", "789"]
+"1, 2, 3,\n4, 5".split(/\s*,\s*/)     // =&gt; ["1", "2", "3", "4", "5"]</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Capturing groups in the separator leak into the result</div>
+        <p>
+          If the separator regex has capturing groups, the text those
+          groups matched is spliced into the returned array, interleaved
+          with the surrounding pieces — a detail that surprises people who
+          expect only the "outer" substrings back.
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const htmlTag = /&lt;([^&gt;]+)&gt;/;   // "&lt;", one or more non-"&gt;" characters, "&gt;"
+"Testing&lt;br/&gt;1,2,3".split(htmlTag)   // =&gt; ["Testing", "br/", "1,2,3"]
+// "br/" is the text captured by group 1, spliced into the array between
+// the two pieces the tag actually separated.</code></pre>
+        </div>
+      </div>
+
+      <h2 id="quick-reference">Quick reference</h2>
+      <p>
+        A condensed cheat sheet of everything above, for scanning while you
+        write a pattern:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Category</th><th>Syntax</th><th>Meaning</th></tr>
+          <tr><td rowspan="4">Classes</td><td><code>.</code></td><td>Any character (any character incl. newlines with <code>s</code>)</td></tr>
+          <tr><td><code>\d \D \w \W \s \S</code></td><td>Digit/non-digit, word/non-word, whitespace/non-whitespace</td></tr>
+          <tr><td><code>[abc] [^abc] [a-z]</code></td><td>Custom class, negated class, range</td></tr>
+          <tr><td><code>\p&#123;Name&#125;</code></td><td>Unicode property class (needs <code>u</code>/<code>v</code>)</td></tr>
+          <tr><td rowspan="4">Quantifiers</td><td><code>? * +</code></td><td>0-or-1, 0-or-more, 1-or-more (greedy)</td></tr>
+          <tr><td><code>&#123;n&#125; &#123;n,&#125; &#123;n,m&#125;</code></td><td>Exactly n, n-or-more, n-to-m</td></tr>
+          <tr><td><code>??  *?  +?  &#123;n,m&#125;?</code></td><td>Lazy versions of the above</td></tr>
+          <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+          <tr><td rowspan="4">Groups</td><td><code>(...)</code> / <code>(?:...)</code></td><td>Capturing / non-capturing group</td></tr>
+          <tr><td><code>(?&lt;name&gt;...)</code></td><td>Named capturing group</td></tr>
+          <tr><td><code>\1</code> / <code>\k&lt;name&gt;</code></td><td>Numbered / named backreference</td></tr>
+          <tr><td><code>|</code></td><td>Alternation</td></tr>
+          <tr><td rowspan="4">Anchors &amp; lookaround</td><td><code>^ $</code></td><td>Start / end of string (or line, with <code>m</code>)</td></tr>
+          <tr><td><code>\b \B</code></td><td>Word boundary / non-boundary</td></tr>
+          <tr><td><code>(?=p) (?!p)</code></td><td>Positive / negative lookahead</td></tr>
+          <tr><td><code>(?&lt;=p) (?&lt;!p)</code></td><td>Positive / negative lookbehind</td></tr>
+          <tr><td rowspan="7">Flags</td><td><code>g</code></td><td>Global — all matches; stateful <code>lastIndex</code></td></tr>
+          <tr><td><code>i</code></td><td>Case-insensitive</td></tr>
+          <tr><td><code>m</code></td><td>Multiline anchors</td></tr>
+          <tr><td><code>s</code></td><td><code>.</code> matches line terminators</td></tr>
+          <tr><td><code>u</code></td><td>Unicode codepoints, enables <code>\p&#123;...&#125;</code></td></tr>
+          <tr><td><code>v</code></td><td>Unicode + set-notation classes</td></tr>
+          <tr><td><code>y</code></td><td>Sticky — match must start at <code>lastIndex</code></td></tr>
+        </table>
+      </div>
+      <p>
+        Once a pattern is built, hand it to
+        <code>RegExp.prototype.test()</code>/<code>exec()</code> or to the
+        String methods (<code>search()</code>, <code>replace()</code>/
+        <code>replaceAll()</code>, <code>match()</code>,
+        <code>matchAll()</code>, <code>split()</code>) documented above.
+        Regular expressions are also the pattern-matching foundation you'll
+        see reused when parsing dates and formatting numbers in
+        <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; Utilities</a>,
+        and they show up again anywhere you're extracting structured data
+        out of the collection types covered in
+        <a href="10-collections-typed-arrays.html">Collections &amp; Typed Arrays</a>.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

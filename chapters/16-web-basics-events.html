@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Web Basics & Events — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="16-web-basics-events.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 15, &sect;15.1&ndash;15.2</span>
+      <h1>Web Basics &amp; Events</h1>
+      <p class="lede">
+        A web browser is JavaScript's original host environment, and it is a much
+        stranger place to run code than Node or a bare interpreter: pages load in
+        stages, scripts from unrelated authors share a single global namespace,
+        and almost everything your program does happens in response to an event
+        rather than as a straight-line script. This page works through the
+        mechanics of that environment &mdash; how a document and its scripts are
+        parsed and run, what the global object looks like in a browser, how
+        input arrives and output leaves, the browser's security boundaries, and
+        the event system that ties it all together. The DOM API itself, CSS
+        scripting, layout, components, graphics, navigation, networking, and
+        storage are each their own topic and live on the sibling pages linked
+        throughout.
+      </p>
+
+      <h2 id="script-tags">The &lt;script&gt; element</h2>
+      <p>
+        A browser only executes JavaScript that is embedded in, or referenced
+        from, an HTML document via a <code>&lt;script&gt;</code> tag. Code can
+        appear directly between the opening and closing tags:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script&gt;
+  function displayTime() {
+    document.querySelector("#clock").textContent =
+      new Date().toLocaleTimeString();
+  }
+  displayTime();
+  setInterval(displayTime, 1000);
+&lt;/script&gt;</code></pre>
+      </div>
+      <p>
+        or the tag's <code>src</code> attribute can point at an external file
+        (an absolute URL or one relative to the hosting document) instead of
+        inlining the code:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script src="scripts/digital_clock.js"&gt;&lt;/script&gt;</code></pre>
+      </div>
+      <p>
+        A file loaded this way behaves exactly as if its text appeared between
+        the tags &mdash; but note that HTML always requires the closing
+        <code>&lt;/script&gt;</code>, even when <code>src</code> is present; there
+        is no self-closing <code>&lt;script/&gt;</code> form. Using
+        <code>src</code> instead of inlining has several practical advantages:
+        it separates behavior from markup, lets multiple pages share one copy of
+        the code (and one cached download after the first page fetches it), and
+        lets a page load script served from an entirely different origin &mdash;
+        the mechanism most ad and analytics snippets rely on.
+      </p>
+      <p>
+        The tag's <code>type</code> attribute is essentially vestigial today.
+        Early in the web's history, authors wrote
+        <code>type="application/javascript"</code> or the older
+        <code>language="javascript"</code> in case browsers ever supported other
+        scripting languages; neither ever materialized, JavaScript is the
+        platform's only language, and both attributes are dead weight now. There
+        are exactly two live reasons to set <code>type</code> today: to mark a
+        script as an ES module with <code>type="module"</code> (see
+        <a href="09-modules.html">Modules</a> for the language-level
+        <code>import</code>/<code>export</code> mechanics), or to embed a blob
+        of non-executable data &mdash; JSON, an HTML template &mdash; inside the
+        page using an inert type such as <code>type="application/json"</code>,
+        a pattern covered on <a href="17-dom-css-scripting.html">DOM &amp; CSS
+        Scripting</a>.
+      </p>
+
+      <h2 id="script-loading">Loading order: default, defer, async, and module <span class="badge hard">When exactly does it run?</span></h2>
+      <p>
+        In the earliest browsers there was no API for editing an already-parsed
+        document, so the only way a script could affect page content was to
+        call <code>document.write()</code> while the page was still being
+        parsed, injecting raw HTML text at the script's own location in the
+        stream. That legacy is why a plain <code>&lt;script&gt;</code> tag is,
+        by default, <strong>synchronous and blocking</strong>: the HTML parser
+        must stop, fetch the script (if it has a <code>src</code>), run it
+        top-to-bottom, and only then resume parsing &mdash; because the engine
+        has no way to know in advance whether that script is about to call
+        <code>document.write()</code> and alter the rest of the document. For a
+        large page with several external scripts, that blocking behavior can
+        add seconds of delay before anything is visible.
+      </p>
+      <p>
+        The <code>defer</code> and <code>async</code> boolean attributes (both
+        meaningful only alongside <code>src</code>) exist to opt out of that
+        default. Both tell the browser "this script will not call
+        <code>document.write()</code>, so you're free to keep parsing the rest
+        of the document while it downloads." They differ in when the
+        downloaded code actually executes:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Form</th><th>Parsing blocked?</th><th>Downloads</th><th>Executes</th><th>Relative order</th></tr>
+          <tr><td><code>&lt;script src=&hellip;&gt;</code></td><td>Yes &mdash; parser halts to fetch and run it</td><td>Serially, at the point encountered</td><td>Immediately, before parsing resumes</td><td>Document order (trivially &mdash; nothing else can be running)</td></tr>
+          <tr><td><code>&lt;script defer src=&hellip;&gt;</code></td><td>No</td><td>In parallel with parsing</td><td>After parsing finishes, just before <code>DOMContentLoaded</code></td><td>Document order, always</td></tr>
+          <tr><td><code>&lt;script async src=&hellip;&gt;</code></td><td>No</td><td>In parallel with parsing</td><td>As soon as the download completes, which may interrupt parsing</td><td>Whichever finishes downloading first &mdash; may be out of document order</td></tr>
+          <tr><td><code>&lt;script type="module"&gt;</code></td><td>No</td><td>In parallel; recursively fetches every <code>import</code>ed module too</td><td>Deferred by default (same timing as <code>defer</code>); add <code>async</code> to run as soon as the module graph is ready</td><td>Document order unless <code>async</code> is added</td></tr>
+        </table>
+      </div>
+      <p>
+        If a tag carries both <code>defer</code> and <code>async</code>,
+        <code>async</code> wins. And because a module script defaults to
+        deferred timing, most of the reasoning below for <code>defer</code>
+        applies to plain <code>&lt;script type="module"&gt;</code> tags too.
+      </p>
+      <p>Walking the timeline makes the difference concrete. Given:</p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script src="a.js"&gt;&lt;/script&gt;
+&lt;script defer src="b.js"&gt;&lt;/script&gt;
+&lt;script async src="c.js"&gt;&lt;/script&gt;
+&lt;script defer src="d.js"&gt;&lt;/script&gt;</code></pre>
+      </div>
+      <ol>
+        <li>The parser hits <code>a.js</code> (no attributes) and stops dead: it fetches the file, runs it completely, then resumes parsing.</li>
+        <li>It hits <code>b.js</code> (<code>defer</code>) and <code>c.js</code> (<code>async</code>) in turn; both start downloading in the background, and parsing continues immediately past them without waiting.</li>
+        <li>It hits <code>d.js</code> (<code>defer</code>) and queues its download too, still without blocking.</li>
+        <li><code>c.js</code> (<code>async</code>) may finish downloading at any point &mdash; even while the parser is still mid-document &mdash; and when it does, it runs right away, momentarily pausing the parser. Its execution point relative to <code>b.js</code>/<code>d.js</code> is not guaranteed.</li>
+        <li>Once parsing of the whole document completes, <code>b.js</code> then <code>d.js</code> run, strictly in that document order, regardless of which one finished downloading first.</li>
+        <li>Only after all deferred/module scripts have run does <code>DOMContentLoaded</code> fire.</li>
+      </ol>
+      <p>
+        A second worked example shows why this matters for correctness, not just
+        performance. Two deferred scripts can depend on each other's declaration
+        order because deferred execution always preserves document order:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;script defer src="utils.js"&gt;&lt;/script&gt;   &lt;!-- defines window.formatDate --&gt;
+&lt;script defer src="app.js"&gt;&lt;/script&gt;     &lt;!-- calls formatDate() at top level --&gt;</code></pre>
+      </div>
+      <p>
+        If <code>app.js</code> were marked <code>async</code> instead, it could
+        legally execute <em>before</em> <code>utils.js</code> if it happened to
+        download faster, crashing with "formatDate is not a function." This is
+        exactly the class of bug <code>async</code> introduces, and why it
+        should be reserved for scripts with no dependency on document order or
+        on other scripts &mdash; typically third-party, self-contained widgets
+        like analytics or ad snippets.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Default to <code>defer</code> or a module script</div>
+        <p>
+          It gives you non-blocking downloads <em>and</em> predictable,
+          document-order execution &mdash; the combination almost every
+          application-level script wants. Reach for plain, attribute-less
+          <code>&lt;script&gt;</code> tags only for truly tiny inline snippets,
+          and reach for <code>async</code> only when a script is independent of
+          everything else on the page.
+        </p>
+      </div>
+      <p>
+        A simpler, older alternative to any of these attributes &mdash;
+        especially for an inline script &mdash; is simply placing the
+        <code>&lt;script&gt;</code> tag at the very end of <code>&lt;body&gt;</code>,
+        after all the markup it needs to touch. By the time the parser reaches
+        it, everything above has already been parsed and is ready to query.
+      </p>
+      <h3 id="loading-on-demand">Loading scripts on demand</h3>
+      <p>
+        Sometimes code is only needed after some user action &mdash; opening a
+        settings panel, say &mdash; and there's no reason to pay its download
+        cost on every page load. With modules, the dynamic <code>import()</code>
+        operator (see <a href="09-modules.html">Modules</a>) loads a module and
+        its dependency graph lazily and returns a promise. Without modules, the
+        classic technique is to create a <code>&lt;script&gt;</code> element
+        yourself and append it to the document, listening for its
+        <code>load</code>/<code>error</code> events to know when it's ready:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function importScript(url) {
+  return new Promise((resolve, reject) =&gt; {
+    let s = document.createElement("script"); // Build a &lt;script&gt; element
+    s.onload = () =&gt; resolve();               // Fulfilled once it has run
+    s.onerror = (e) =&gt; reject(e);              // Rejected if the fetch fails
+    s.src = url;                               // Setting src starts the fetch
+    document.head.append(s);                   // Must be inserted to load
+  });
+}
+
+importScript("widgets/date-picker.js").then(() =&gt; {
+  new DatePicker(document.querySelector("#start-date"));
+});</code></pre>
+      </div>
+
+      <h2 id="dom-overview">The Document Object Model, briefly</h2>
+      <p>
+        The <code>Document</code> object represents the loaded page, and the
+        API for reading and mutating it &mdash; the Document Object Model, or
+        DOM &mdash; is the single most important browser API and gets its own
+        dedicated treatment on <a href="17-dom-css-scripting.html">DOM &amp; CSS
+        Scripting</a>. It's worth previewing the mental model here because
+        everything else on this page assumes it. An HTML document is a tree:
+        every tag becomes an <code>Element</code> node, every run of text
+        becomes a <code>Text</code> node, and <code>Element</code>,
+        <code>Text</code>, and <code>Document</code> are all subclasses of the
+        more general <code>Node</code>. Given:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;html&gt;
+  &lt;head&gt;&lt;title&gt;Sample Document&lt;/title&gt;&lt;/head&gt;
+  &lt;body&gt;
+    &lt;h1&gt;An HTML Document&lt;/h1&gt;
+    &lt;p&gt;This is a &lt;i&gt;simple&lt;/i&gt; document.&lt;/p&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</code></pre>
+      </div>
+      <p>
+        the <code>&lt;html&gt;</code> node has <code>&lt;head&gt;</code> and
+        <code>&lt;body&gt;</code> as children; <code>&lt;body&gt;</code> has
+        <code>&lt;h1&gt;</code> and <code>&lt;p&gt;</code> as children; the
+        <code>&lt;p&gt;</code> has a text node, an <code>&lt;i&gt;</code>
+        element, and another text node as its children. Family-tree vocabulary
+        carries over directly: the node directly above another is its
+        <em>parent</em>, nodes one level below are its <em>children</em>, nodes
+        sharing a parent are <em>siblings</em>, everything below a node at any
+        depth is its <em>descendants</em>, and everything above it is its
+        <em>ancestors</em>. Each HTML tag type has a corresponding JavaScript
+        class &mdash; <code>&lt;body&gt;</code> is an
+        <code>HTMLBodyElement</code>, <code>&lt;img&gt;</code> is an
+        <code>HTMLImageElement</code> with a <code>src</code> property mirroring
+        the attribute, <code>&lt;video&gt;</code> is an
+        <code>HTMLVideoElement</code> with methods like <code>play()</code> and
+        <code>pause()</code> &mdash; and the full API for traversing, creating,
+        and mutating these nodes lives on the DOM &amp; CSS Scripting page.
+      </p>
+
+      <h2 id="global-object">window: the global object, and why scripts share one</h2>
+      <p>
+        Every browser tab has exactly one global object for its main-thread
+        code (workers get their own; see
+        <a href="20-storage-workers.html">Storage &amp; Workers</a>), and every
+        non-module script and every inline handler on the page shares it. That
+        global object plays double duty: it hosts the ordinary JavaScript
+        standard library (<code>parseInt</code>, <code>Math</code>,
+        <code>Set</code>, and so on) <em>and</em> it represents the browser
+        window itself, with properties like <code>document</code> (the current
+        page), <code>fetch</code> (network requests, see
+        <a href="19-navigation-networking.html">Navigation &amp; Networking</a>),
+        <code>innerWidth</code>, and <code>history</code>. One of its own
+        properties is named <code>window</code>, and its value is the global
+        object itself &mdash; so <code>window</code> and the implicit top-level
+        scope are the same thing, and <code>window.innerWidth</code> means
+        exactly what bare <code>innerWidth</code> means, though the explicit
+        prefix is often clearer for window-specific members.
+      </p>
+      <p>
+        Because non-module scripts share one global object, they also share one
+        top-level namespace &mdash; a historical wart that predates any notion
+        of module scoping. If script A defines a function <code>f()</code> and
+        script B defines a class <code>C</code>, script C can call
+        <code>f()</code> and construct <code>new C()</code> with no import step
+        at all, simply because all three shared <code>&lt;script&gt;</code>
+        tags execute as if concatenated into one program. There's a subtlety in
+        <em>how</em> that sharing happens, though: top-level <code>var</code>
+        and function declarations become actual properties of
+        <code>window</code>, so <code>f()</code> is reachable as either
+        <code>f()</code> or <code>window.f()</code>. Top-level
+        <code>const</code>, <code>let</code>, and <code>class</code>
+        declarations are shared with sibling scripts too, but they do
+        <em>not</em> become properties of <code>window</code> &mdash;
+        <code>new C()</code> works, <code>new window.C()</code> does not.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Modules opt out of this entirely</div>
+        <p>
+          Give a script <code>type="module"</code> and its top-level
+          declarations become private to that module, visible elsewhere only
+          via explicit <code>export</code>/<code>import</code>. That single
+          change is one of the strongest practical reasons to prefer modules
+          for anything beyond a trivial page &mdash; see
+          <a href="09-modules.html">Modules</a>.
+        </p>
+      </div>
+      <p>
+        An <code>&lt;iframe&gt;</code>'s embedded document gets its own
+        separate <code>window</code> and <code>Document</code>, distinct from
+        the page that contains it &mdash; there's no single, formally defined
+        boundary for "a JavaScript program" on the web, but an embedded frame
+        is usually the practical dividing line, subject to the
+        <a href="#web-security">same-origin policy</a> below.
+      </p>
+
+      <h2 id="program-execution">Two phases: loading, then events</h2>
+      <p>
+        It helps to think of a page's JavaScript as running in two distinct
+        phases. During the first, <strong>synchronous</strong> phase, the
+        document is being parsed and <code>&lt;script&gt;</code> elements run
+        &mdash; generally in document order, subject to the
+        <a href="#script-loading">defer/async</a> rules above &mdash; each one
+        running top to bottom before the next begins. Many scripts do nothing
+        more in this phase than define functions and register the event
+        handlers that will matter later; others do real, one-time work here,
+        such as a trailing script that scans the document for
+        <code>&lt;h1&gt;</code>/<code>&lt;h2&gt;</code> tags and builds a table
+        of contents before the page is ever shown.
+      </p>
+      <p>
+        Once loading finishes, execution shifts into the second,
+        <strong>event-driven</strong> phase, which lasts for as long as the tab
+        stays open. Nothing runs here unless the first phase registered a
+        handler for it: from this point on, the browser calls into your code
+        only in response to user input, timers, network completions, or
+        errors, with potentially long idle gaps in between. Spelled out in
+        full, the load sequence looks like this:
+      </p>
+      <ol>
+        <li>The browser creates the <code>Document</code> and begins parsing, adding nodes as it goes; <code>document.readyState</code> is <code>"loading"</code>.</li>
+        <li>A plain <code>&lt;script&gt;</code> (no <code>async</code>/<code>defer</code>/<code>module</code>) is added to the tree and run synchronously the instant the parser reaches it; it may see and mutate document content only up to that point, and it's the only kind of script that can safely call <code>document.write()</code>.</li>
+        <li><code>async</code> scripts (and their module dependency graphs) start downloading without pausing the parser, and run as soon as they finish &mdash; possibly interleaved with parsing.</li>
+        <li>Once parsing completes, <code>document.readyState</code> becomes <code>"interactive"</code>.</li>
+        <li><code>defer</code> scripts, and module scripts without <code>async</code>, run in document order.</li>
+        <li><code>DOMContentLoaded</code> fires on <code>document</code> &mdash; the DOM is fully built and every deferred/module script has run, though outstanding <code>async</code> scripts may not have executed yet.</li>
+        <li>When every remaining resource (images, stylesheets, iframes, any pending <code>async</code> scripts) finishes, <code>readyState</code> becomes <code>"complete"</code> and <code>load</code> fires on <code>window</code>.</li>
+        <li>From here on, only asynchronous event handlers run.</li>
+      </ol>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.addEventListener("DOMContentLoaded", () =&gt; {
+  // The full DOM exists here, but images/stylesheets may still be in flight.
+});
+
+window.addEventListener("load", () =&gt; {
+  // Everything, including images and stylesheets, has finished loading.
+});</code></pre>
+      </div>
+      <p>
+        With a <code>defer</code>red or module script, top-level code already
+        runs after the DOM is fully parsed, so such scripts frequently don't
+        need to wait for <code>DOMContentLoaded</code> at all &mdash; one more
+        argument for preferring that loading style.
+      </p>
+
+      <h3 id="threading-model">Single-threaded execution</h3>
+      <p>
+        JavaScript in the browser runs on a single thread shared by the page's
+        script execution and its event handlers. That constraint buys real
+        simplicity: two handlers can never run at once, nothing else can be
+        mutating the DOM out from under your code mid-handler, and there is no
+        need for locks or to reason about race conditions the way you would in
+        a genuinely concurrent language.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">A long-running script freezes the whole page</div>
+        <p>
+          Single-threaded also means the browser stops responding to
+          <em>all</em> input &mdash; clicks, scrolling, repainting &mdash;
+          for as long as your script or event handler is running. A
+          computationally heavy loop in a click handler doesn't just delay that
+          one feature; it makes the tab look hung to the user. There is no
+          built-in way to "pause" a synchronous script from outside; the fix is
+          either to break the work into chunks yielded back to the event loop
+          (e.g., via <code>setTimeout</code>) or to move it off the main thread
+          entirely with a <strong>web worker</strong>, a background thread that
+          has no access to the DOM and communicates only via asynchronous
+          messages &mdash; covered in full on
+          <a href="20-storage-workers.html">Storage &amp; Workers</a>.
+        </p>
+      </div>
+
+      <h2 id="program-input">Program input</h2>
+      <p>A client-side program can read from several sources beyond the DOM itself:</p>
+      <ul>
+        <li>
+          <strong>The URL.</strong> <code>document.URL</code> gives the full
+          address of the current page as a string; wrapping it in
+          <code>new URL(document.URL)</code> gives structured access to the
+          path, query string, and fragment &mdash; see
+          <a href="19-navigation-networking.html">Navigation &amp; Networking</a>
+          for how URLs are parsed and used to make requests.
+        </li>
+        <li>
+          <strong>Cookies.</strong> <code>document.cookie</code> exposes the
+          content of the HTTP <code>Cookie</code> request header as a single,
+          awkward, semicolon-joined string. Cookies exist mainly for
+          server-side session tracking, but client-side code can read and
+          write them too; the full storage picture, including why cookies are
+          usually the wrong tool today, is on
+          <a href="20-storage-workers.html">Storage &amp; Workers</a>.
+        </li>
+        <li>
+          <strong><code>document.referrer</code></strong> holds the URL of the
+          page that linked to the current one, when the browser supplied one
+          &mdash; useful for basic analytics, but not something to trust for
+          security decisions since it can be empty or spoofed-adjacent
+          depending on referrer policy.
+        </li>
+        <li>
+          <strong>User input events</strong> &mdash; clicks, taps, typing into
+          form fields &mdash; are the dominant input channel for interactive
+          pages and are the whole subject of <a href="#events-overview">the
+          event system</a> below.
+        </li>
+        <li>
+          <strong><code>navigator</code> and <code>screen</code></strong> are
+          the closest thing the browser has to environment variables:
+          <code>navigator.userAgent</code> identifies the browser,
+          <code>navigator.language</code> the user's preferred locale,
+          <code>navigator.hardwareConcurrency</code> the number of logical
+          CPUs available, and <code>screen.width</code>/<code>screen.height</code>
+          the display size.
+        </li>
+      </ul>
+
+      <h2 id="program-output">Program output</h2>
+      <p>
+        The normal way a client-side program produces output is by mutating
+        the document &mdash; inserting, removing, or restyling DOM nodes, as
+        detailed on <a href="17-dom-css-scripting.html">DOM &amp; CSS
+        Scripting</a> &mdash; or by delegating that job to a UI framework built
+        on top of the DOM. <code>console.log()</code> and its relatives remain
+        available for diagnostic output, but that output lands only in the
+        developer console, invisible to an ordinary user, so it is strictly a
+        debugging tool, never a user-facing output mechanism.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Avoid <code>document.write()</code></div>
+        <p>
+          This is the original, historical way scripts produced output: called
+          while the page is still parsing, it injects raw HTML text directly
+          into the input stream at the script's location. It is exactly why a
+          plain <code>&lt;script&gt;</code> tag must block parsing by default
+          (the engine can't know in advance whether a script will call it), and
+          calling it <em>after</em> the page has finished loading doesn't
+          insert content at all &mdash; it implicitly calls
+          <code>document.open()</code> first, which erases the entire existing
+          document and starts a new one. Between the parsing slowdown it forces
+          on every plain script and the destructive behavior post-load,
+          <code>document.write()</code> is considered obsolete; use DOM methods
+          instead.
+        </p>
+      </div>
+
+      <h2 id="program-errors">Program errors</h2>
+      <p>
+        A browser tab has no process to crash the way a Node script can crash
+        the OS process running it: an uncaught exception logs a message to the
+        developer console, and every previously registered event handler keeps
+        working exactly as before. To install a last-resort handler for
+        exceptions that nothing else caught, assign a function to
+        <code>window.onerror</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">window.onerror = function (message, url, line, column, error) {
+  reportErrorToServer({ message, url, line, column });
+  return true; // Tell the browser we've handled it: suppress its own console message
+};
+
+// Equivalent, addEventListener form:
+window.addEventListener("error", (event) =&gt; {
+  reportErrorToServer({ message: event.message, url: event.filename, line: event.lineno });
+  event.preventDefault(); // Also suppresses the default console logging
+});</code></pre>
+      </div>
+      <p>
+        <code>window.onerror</code> is invoked with a message string, the URL
+        of the offending script, and a line number (plus, in modern browsers, a
+        column number and the actual <code>Error</code> object); returning
+        <code>true</code> tells the browser the error was handled and it should
+        not also print its own message. A rejected promise with no
+        <code>.catch()</code> is the asynchronous equivalent of an uncaught
+        exception, and is reported the same general way, via
+        <code>window.onunhandledrejection</code> or an
+        <code>"unhandledrejection"</code> listener; the event object carries a
+        <code>promise</code> property (the rejected promise) and a
+        <code>reason</code> property (whatever value it rejected with), and
+        calling <code>preventDefault()</code> on that event marks it handled.
+        Neither handler is required for correct code, but both are the
+        standard hook for shipping client-side error telemetry back to a
+        server via <code>fetch()</code>.
+      </p>
+
+      <h2 id="web-security">The web security model</h2>
+      <p>
+        Letting arbitrary pages run arbitrary code on a visitor's device is
+        inherently dangerous, and the platform balances that against wanting
+        powerful client-side APIs by simply refusing to expose certain
+        capabilities at all: there is no JavaScript API for reading or writing
+        arbitrary files, listing directories, or opening a raw network socket
+        to an arbitrary host. A page can make HTTP requests and, with
+        WebSockets, talk to specially cooperating servers (see
+        <a href="19-navigation-networking.html">Navigation &amp; Networking</a>),
+        but it cannot act as a general-purpose network client.
+      </p>
+      <h3 id="same-origin-policy">The same-origin policy</h3>
+      <p>
+        The same-origin policy is the platform's broadest security boundary. It
+        matters most when a page embeds another via <code>&lt;iframe&gt;</code>:
+        script in one frame may read the properties of a window or document
+        only if that document shares the same <strong>origin</strong> &mdash;
+        protocol, host, and port &mdash; as the document the script is embedded
+        in. <code>https://example.com:443</code> and
+        <code>http://example.com</code> are different origins purely because
+        the protocol differs; two different ports on the same host are
+        different origins; and browsers generally treat every
+        <code>file:</code> URL as its own separate origin, which is why testing
+        a multi-document app by opening files directly (rather than via a local
+        static server) often breaks in confusing ways.
+      </p>
+      <p>
+        What matters for this check is the origin of the <em>document</em>
+        containing a script, not the origin the script's source file was
+        downloaded from. A script fetched via <code>src</code> from host A but
+        embedded in a page served by host B is treated as having host B's
+        origin, and gets full access to that page and any same-origin
+        <code>&lt;iframe&gt;</code>s within it. As soon as one of those frames
+        contains a document from a different origin, the boundary snaps back
+        into place.
+      </p>
+      <p>
+        Large sites split across subdomains have two escape hatches. A script
+        can widen its own origin by setting <code>document.domain</code> to a
+        suffix of its current host &mdash; a script at
+        <code>orders.example.com</code> can set
+        <code>document.domain = "example.com"</code> to interoperate with a
+        document at plain <code>example.com</code>, but it cannot set it to
+        anything shorter than a valid registrable suffix like
+        <code>"com"</code>. The more general and modern mechanism is
+        <strong>CORS</strong> (Cross-Origin Resource Sharing): a server opts in
+        to being read from other origins by sending an
+        <code>Access-Control-Allow-Origin</code> response header (naming
+        specific origins, or <code>*</code> for any), and the browser only
+        relaxes its restriction when that header is present &mdash; full
+        request-side details are on
+        <a href="19-navigation-networking.html">Navigation &amp; Networking</a>.
+      </p>
+      <h3 id="cross-site-scripting">Cross-site scripting (XSS)</h3>
+      <p>
+        XSS is the vulnerability class where an attacker gets their own
+        JavaScript to run inside a victim site's origin, most often by getting
+        unsanitized, attacker-controlled data injected into the page's HTML.
+        This is a classic vulnerable pattern:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let name = new URL(document.URL).searchParams.get("name");
+document.querySelector("h1").innerHTML = "Hello " + name; // DANGEROUS</code></pre>
+      </div>
+      <p>
+        Visited as <code>greet.html?name=David</code>, this innocently prints
+        "Hello David." But a query string of
+        <code>name=&lt;img src="x.png" onload="alert('hacked')"/&gt;</code>
+        (URL-encoded in the real link) gets assigned straight into
+        <code>innerHTML</code>, and the browser dutifully parses and runs the
+        injected <code>onload</code> handler as if the site's own author had
+        written it &mdash; with full access to that origin's cookies and DOM.
+        Because the attack usually arrives as a crafted link hosted or shared
+        on a different site that lures a victim into clicking through to the
+        vulnerable one, it's called <em>cross-site</em> scripting even though
+        the damage happens entirely within the target site's own origin.
+      </p>
+      <p>
+        The fix is to never let untrusted text reach <code>innerHTML</code> (or
+        an equivalent HTML sink) without escaping its special characters first:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function escapeHtml(s) {
+  return s
+    .replace(/&amp;/g, "&amp;amp;")
+    .replace(/&lt;/g, "&amp;lt;")
+    .replace(/&gt;/g, "&amp;gt;")
+    .replace(/"/g, "&amp;quot;")
+    .replace(/'/g, "&amp;#x27;")
+    .replace(/\//g, "&amp;#x2F;");
+}
+document.querySelector("h1").textContent = "Hello " + name; // safest: no HTML parsing at all</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Prefer <code>textContent</code> over escaping <code>innerHTML</code></div>
+        <p>
+          Assigning to <code>textContent</code> (or building nodes with
+          <code>document.createElement</code>/<code>append</code>) never parses
+          its argument as markup at all, which sidesteps the whole class of bug
+          rather than relying on remembering to escape correctly every time.
+          When a page must render content it truly cannot trust, sandboxing it
+          inside an <code>&lt;iframe sandbox&gt;</code> (which disables
+          scripting by default) is another layer of defense. Full DOM-writing
+          APIs are covered on
+          <a href="17-dom-css-scripting.html">DOM &amp; CSS Scripting</a>.
+        </p>
+      </div>
+
+      <h2 id="events-overview">15.2 Events: core vocabulary</h2>
+      <p>
+        Client-side JavaScript is fundamentally event-driven: the browser
+        raises an event whenever something notable happens &mdash; a document
+        finishes loading, the pointer moves over a link, a key goes down
+        &mdash; and a program registers functions to run when events of
+        interest occur. Five terms describe the whole model precisely:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Term</th><th>Meaning</th></tr>
+          <tr><td>Event type</td><td>A string naming the kind of event, e.g. <code>"click"</code>, <code>"keydown"</code>, <code>"load"</code> &mdash; also called the event's name.</td></tr>
+          <tr><td>Event target</td><td>The object the event happened on: most often a <code>Window</code>, <code>Document</code>, or <code>Element</code>, but any object with <code>addEventListener()</code> qualifies &mdash; a <code>Worker</code>, for instance, fires <code>"message"</code> events.</td></tr>
+          <tr><td>Event handler / listener</td><td>The function registered to run when a matching type/target pair fires; this book treats "handler" and "listener" as synonyms.</td></tr>
+          <tr><td>Event object</td><td>Passed as the sole argument to the handler; always has <code>type</code> and <code>target</code>, plus type-specific detail (mouse coordinates, key codes, and so on).</td></tr>
+          <tr><td>Event propagation</td><td>How the browser decides which objects' handlers to invoke for one event &mdash; see <a href="#propagation">capturing and bubbling</a> below.</td></tr>
+        </table>
+      </div>
+      <p>
+        Many events additionally have a <strong>default action</strong> the
+        browser performs on its own &mdash; following a clicked link,
+        submitting a form, scrolling on a touch drag &mdash; which a handler
+        can suppress; see <a href="#event-cancellation">event
+        cancellation</a>.
+      </p>
+      <h3 id="event-categories">Event categories</h3>
+      <p>
+        There are far too many distinct event types across the platform to
+        enumerate, but they fall into recognizable groups:
+      </p>
+      <ul>
+        <li><strong>Device-dependent input</strong> &mdash; tied to one specific input mechanism: <code>mousedown</code>/<code>mousemove</code>/<code>mouseup</code>, <code>touchstart</code>/<code>touchmove</code>/<code>touchend</code>, <code>keydown</code>/<code>keyup</code>.</li>
+        <li><strong>Device-independent input</strong> &mdash; abstract over the underlying device: <code>click</code> fires whether the activation came from a mouse, keyboard, or tap; <code>input</code> covers keyboard typing as well as paste and IME composition; <code>pointerdown</code>/<code>pointermove</code>/<code>pointerup</code> unify mouse, touch, and stylus input under one API.</li>
+        <li><strong>User interface events</strong> &mdash; higher level, usually on form controls: <code>focus</code>, <code>change</code>, <code>submit</code>.</li>
+        <li><strong>State-change events</strong> &mdash; triggered by the browser or network rather than direct user action: <code>DOMContentLoaded</code> and <code>load</code> (see <a href="#program-execution">the load timeline</a>), <code>online</code>/<code>offline</code>, and <code>popstate</code> from history navigation (<a href="19-navigation-networking.html">Navigation &amp; Networking</a>).</li>
+        <li><strong>API-specific events</strong> &mdash; defined alongside a particular API: <code>&lt;video&gt;</code>/<code>&lt;audio&gt;</code> fire <code>waiting</code>, <code>playing</code>, <code>seeking</code>, <code>volumechange</code>, and more (<a href="18-components-graphics.html">Web Components &amp; Graphics</a>); older, pre-promise APIs like IndexedDB are built entirely around <code>success</code>/<code>error</code> events (<a href="20-storage-workers.html">Storage &amp; Workers</a>).</li>
+      </ul>
+
+      <h2 id="registering">Registering event handlers</h2>
+      <p>There are three ways to attach a handler to a target; only one of them scales.</p>
+      <h3 id="handler-properties">Handler properties</h3>
+      <p>
+        Setting a property named <code>on</code> plus the lowercase event type
+        &mdash; <code>onclick</code>, <code>onchange</code>, <code>onload</code>
+        &mdash; to a function registers it as a handler:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">window.onload = function () {
+  let form = document.querySelector("form#shipping");
+  form.onsubmit = function (event) {   // "this" is the form itself here
+    if (!isFormValid(this)) {
+      event.preventDefault();          // block submission on invalid input
+    }
+  };
+};</code></pre>
+      </div>
+      <p>
+        The property names are case-sensitive and always entirely lowercase,
+        even for a multiword type like <code>mousedown</code> &mdash; note this
+        is different from frameworks like React, which use camelCase
+        (<code>onClick</code>) for its own synthetic handler props. The
+        fundamental limitation is that a property can hold only one function;
+        assigning a second one silently replaces the first.
+      </p>
+      <h3 id="handler-attributes">HTML handler attributes</h3>
+      <p>
+        The same handler properties can be set directly as HTML attributes,
+        with the attribute value being the <em>body</em> of the function (not
+        a full <code>function</code> declaration):
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;button onclick="console.log('Thank you');"&gt;Please Click&lt;/button&gt;</code></pre>
+      </div>
+      <p>
+        The browser wraps that string in a function roughly like
+        <code>function(event) { with(document) { with(this.form||{}) { with(this) { /* your code */ } } } }</code>
+        &mdash; which is why such code can refer to <code>event</code>, and to
+        properties of the target, its containing form, and the document, as
+        bare identifiers. That convenience comes from nested <code>with</code>
+        statements, which are forbidden in strict-mode script but are always
+        legal (and always in effect) for HTML attribute handlers &mdash; a
+        recipe for confusing name collisions, and the main reason this form is
+        considered obsolete in modern code, even though it still appears in
+        legacy pages.
+      </p>
+      <h3 id="addeventlistener">addEventListener() and removeEventListener()</h3>
+      <p>
+        Every event target &mdash; <code>Window</code>, <code>Document</code>,
+        every <code>Element</code> &mdash; defines
+        <code>addEventListener(type, handler, options)</code>. Unlike a handler
+        property, it never clobbers a previously registered handler; calling it
+        repeatedly with different functions registers all of them, and the
+        browser invokes them in registration order when the event fires:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;button id="mybutton"&gt;Click me&lt;/button&gt;
+&lt;script&gt;
+  let b = document.querySelector("#mybutton");
+  b.onclick = () =&gt; console.log("Thanks for clicking me!");
+  b.addEventListener("click", () =&gt; console.log("Thanks again!"));
+  // A single click now logs BOTH messages, in registration order.
+&lt;/script&gt;</code></pre>
+      </div>
+      <p>
+        Calling <code>addEventListener()</code> never touches the
+        <code>onclick</code> property, and vice versa &mdash; the two
+        registration mechanisms coexist peacefully, and invocation order across
+        both is simply the order in which each was registered. Registering the
+        exact same function for the exact same type on the exact same target
+        more than once has no effect: it's stored only once.
+        <code>removeEventListener()</code> takes matching arguments and
+        deregisters a handler &mdash; a common pattern is registering
+        temporary <code>mousemove</code>/<code>mouseup</code> handlers on
+        <code>mousedown</code> to track a drag, then removing them once the
+        drag ends:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function onMouseDown(event) {
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+}
+function onMouseUp(event) {
+  document.removeEventListener("mousemove", onMouseMove);
+  document.removeEventListener("mouseup", onMouseUp);
+}</code></pre>
+      </div>
+      <p>
+        The third argument controls dispatch details. Passing a bare
+        <code>true</code> is shorthand for <code>{capture: true}</code>
+        (registers the handler for the <a href="#propagation">capturing
+        phase</a> instead of the default bubbling phase) &mdash; and if you
+        register with <code>true</code>, you must also pass <code>true</code>
+        to <code>removeEventListener()</code> to remove it. More commonly the
+        third argument is an options object:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let controller = new AbortController();
+el.addEventListener("click", handler, { once: true });     // auto-removes after first firing
+el.addEventListener("scroll", handler, { passive: true });  // promises never to call preventDefault()
+document.addEventListener("click", handler, {
+  capture: true, once: true, passive: true,
+  signal: controller.signal,                                // abortable via the controller
+});
+controller.abort(); // removes the listener regardless of capture/once/passive</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>passive: true</code> matters for scroll performance</div>
+        <p>
+          Chrome and Firefox register <code>touchmove</code>/wheel listeners as
+          passive by default because a handler that might call
+          <code>preventDefault()</code> forces the browser to wait for it to
+          finish before it can safely start scrolling &mdash; on a touch
+          device, that delay is felt as jank. Marking a listener
+          <code>{ passive: true }</code> is a promise that it will never call
+          <code>preventDefault()</code>, letting the browser scroll
+          immediately in parallel; if you genuinely need to block scrolling
+          from such a handler, pass <code>{ passive: false }</code> explicitly
+          to opt back into the blocking behavior.
+        </p>
+      </div>
+      <p>
+        <code>removeEventListener()</code> also accepts an options object, but
+        only its <code>capture</code> property is checked &mdash;
+        <code>once</code> and <code>passive</code> are meaningless when
+        removing a listener and are silently ignored.
+      </p>
+
+      <h2 id="event-invocation">Event handler invocation</h2>
+      <h3 id="event-object">The event object argument</h3>
+      <p>
+        Every handler receives a single <code>Event</code> object. Fields
+        present on essentially all events include:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Property</th><th>Meaning</th></tr>
+          <tr><td><code>type</code></td><td>The event type string, e.g. <code>"click"</code>.</td></tr>
+          <tr><td><code>target</code></td><td>The object the event originally occurred on.</td></tr>
+          <tr><td><code>currentTarget</code></td><td>The object the <em>currently running</em> handler was registered on &mdash; differs from <code>target</code> whenever the event propagated to reach this handler.</td></tr>
+          <tr><td><code>timeStamp</code></td><td>Milliseconds since an arbitrary reference point &mdash; useful for measuring elapsed time between two events, not as an absolute clock reading.</td></tr>
+          <tr><td><code>isTrusted</code></td><td><code>true</code> if the browser itself dispatched the event (a real click), <code>false</code> if script did (see <a href="#custom-events">custom events</a>).</td></tr>
+        </table>
+      </div>
+      <p>
+        Specific event types layer on extra fields &mdash; mouse and pointer
+        events add <code>clientX</code>/<code>clientY</code>, keyboard events
+        add key and modifier details, and so on.
+      </p>
+      <h3 id="handler-this">The <code>this</code> value</h3>
+      <p>
+        Ordinary (non-arrow) function handlers are invoked as if they were a
+        method of the target &mdash; <code>this</code> inside the handler
+        refers to the object the handler was registered on, whether it was
+        registered via a property or via <code>addEventListener()</code>. This
+        does not apply to arrow function handlers, which have no <code>this</code>
+        of their own and instead see whatever <code>this</code> was in scope
+        where they were defined &mdash; a common source of confusion when
+        converting old-style handlers to arrow functions.
+      </p>
+      <h3 id="handler-return-value">Return value and invocation order</h3>
+      <p>
+        Modern handlers shouldn't return anything meaningful; the preferred way
+        to cancel a default action is
+        <code>event.preventDefault()</code>, described next. Some legacy code
+        instead returns <code>false</code> from a handler (for example, a form
+        <code>onsubmit</code> handler) to signal that the default action should
+        be skipped &mdash; supported for backward compatibility, but not the
+        idiom to write going forward. When multiple handlers are registered on
+        one target for one type, they run in the order they were registered,
+        and this ordering is consistent even when property-based and
+        <code>addEventListener()</code>-based handlers are mixed on the same
+        object.
+      </p>
+
+      <h2 id="propagation">Event propagation: capturing and bubbling <span class="badge hard">Two-phase (really three-phase) dispatch</span></h2>
+      <p>
+        When an event's target is a standalone object like <code>Window</code>
+        or a <code>Worker</code>, dispatch is simple: the browser just invokes
+        that object's own handlers. But when the target is a
+        <code>Document</code> or an <code>Element</code> nested inside others,
+        the browser doesn't stop at the target &mdash; it walks the whole
+        ancestor chain in <em>two</em> directions, giving every event exactly
+        three phases:
+      </p>
+      <ol>
+        <li><strong>Capturing phase.</strong> Starting at <code>window</code> and moving <em>down</em> the tree &mdash; <code>document</code>, then <code>&lt;html&gt;</code>, then <code>&lt;body&gt;</code>, and so on &mdash; only handlers registered with <code>{capture: true}</code> fire, stopping just short of the target itself.</li>
+        <li><strong>Target phase.</strong> Handlers registered directly on the target element run, in registration order, regardless of how they were registered.</li>
+        <li><strong>Bubbling phase.</strong> Starting back at the target's parent and moving <em>up</em> to <code>window</code>, ordinary (non-capturing) handlers on each ancestor fire in turn. This is where the overwhelming majority of handlers live, since it's the default when no capture option is given.</li>
+      </ol>
+      <p>
+        Not every event bubbles: notably <code>focus</code>, <code>blur</code>,
+        and <code>scroll</code> do not. The <code>load</code> event on a
+        document element bubbles as far as <code>Document</code> but no
+        further &mdash; it never reaches <code>window</code>; the
+        <code>window</code>-level <code>load</code> event described earlier is
+        a distinct firing, triggered only once the entire page has finished.
+      </p>
+      <p>
+        A single, concrete example makes all three phases visible at once.
+        Given nested markup:
+      </p>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;div id="outer"&gt;
+  &lt;div id="inner"&gt;
+    &lt;button id="btn"&gt;Click&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+      </div>
+      <p>registering both a capturing and a bubbling listener on the outer element:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let outer = document.querySelector("#outer");
+let btn = document.querySelector("#btn");
+
+outer.addEventListener("click", () =&gt; console.log("outer capture"), { capture: true });
+outer.addEventListener("click", () =&gt; console.log("outer bubble"));
+btn.addEventListener("click", () =&gt; console.log("target"));
+
+// Clicking the button logs, in this exact order:
+//   "outer capture"   (capturing phase, on the way down)
+//   "target"          (target phase)
+//   "outer bubble"    (bubbling phase, on the way back up)</code></pre>
+      </div>
+      <p>
+        A second example shows why capturing is useful on its own: it lets a
+        container intercept an event <em>before</em> it can ever reach a
+        target, which is exactly how drag interactions are often implemented
+        &mdash; motion needs to be tracked by the element being dragged, not by
+        whatever element happens to sit underneath the pointer as it moves:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function startDrag(downEvent) {
+  let dragTarget = downEvent.currentTarget;
+  function onMove(moveEvent) {
+    dragTarget.style.left = moveEvent.clientX + "px";
+    dragTarget.style.top = moveEvent.clientY + "px";
+  }
+  function onUp() {
+    document.removeEventListener("mousemove", onMove, { capture: true });
+    document.removeEventListener("mouseup", onUp, { capture: true });
+  }
+  // Capture on document so intervening elements can't "steal" the drag events.
+  document.addEventListener("mousemove", onMove, { capture: true });
+  document.addEventListener("mouseup", onUp, { capture: true });
+}</code></pre>
+      </div>
+      <h3 id="event-delegation">Event delegation</h3>
+      <p>
+        Bubbling's more everyday payoff is <strong>event delegation</strong>:
+        instead of registering a handler on every individual child element,
+        register one handler on a shared ancestor and inspect
+        <code>event.target</code> to figure out which descendant was actually
+        involved.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.querySelector("ul#todo-list").addEventListener("click", (event) =&gt; {
+  if (event.target.matches("button.delete")) {
+    event.target.closest("li").remove();
+  } else if (event.target.tagName === "LI") {
+    event.target.classList.toggle("done");
+  }
+});
+// One listener handles every &lt;li&gt; and every delete button --
+// including ones added to the list long after this handler was registered.</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Why delegate</div>
+        <p>
+          A delegated handler keeps working for elements added to the DOM
+          later, since it never needed to know about any specific child in the
+          first place &mdash; it just relies on bubbling to see the click.
+          It also uses less memory and setup time than attaching a separate
+          listener to every row of a long list, which matters once that list
+          has hundreds of items.
+        </p>
+      </div>
+
+      <h2 id="event-cancellation">Event cancellation</h2>
+      <p>
+        Browsers perform default actions for many events regardless of whether
+        your code reacts too: clicking a link navigates, typing in a focused
+        text field inserts the character, dragging a finger on a touchscreen
+        scrolls. Three methods on the event object give a handler control over
+        that behavior and over further propagation, and they are independent
+        of one another:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Effect</th></tr>
+          <tr><td><code>event.preventDefault()</code></td><td>Suppresses the browser's built-in default action for this event (following the link, submitting the form, scrolling). Has no effect on propagation, and is itself ineffective if the listener was registered with <code>{ passive: true }</code>.</td></tr>
+          <tr><td><code>event.stopPropagation()</code></td><td>Stops the event from continuing on to any further ancestors (or descendants, during capture) &mdash; but any <em>other</em> handlers already registered on the current element still run.</td></tr>
+          <tr><td><code>event.stopImmediatePropagation()</code></td><td>Everything <code>stopPropagation()</code> does, plus it skips any remaining handlers on the current element too.</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">form.addEventListener("submit", (event) =&gt; {
+  if (!isFormValid(form)) {
+    event.preventDefault(); // Don't actually submit -- but propagation continues normally
+  }
+});
+
+link.addEventListener("click", (event) =&gt; {
+  event.stopPropagation(); // Container's delegated click handler will never see this click
+});</code></pre>
+      </div>
+
+      <h2 id="custom-events">Dispatching custom events <span class="badge new">CustomEvent</span></h2>
+      <p>
+        Any object that supports <code>addEventListener()</code> is, by
+        definition, an "event target," and every event target also has a
+        <code>dispatchEvent()</code> method &mdash; meaning application code
+        can define and fire its own events with the same API the browser uses
+        internally. This is a clean way to decouple a piece of code that
+        detects something from the code that reacts to it: a data-loading
+        module, say, that has no idea a loading spinner even exists.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// The module doing the work only needs to know how to announce its state:
+document.dispatchEvent(new CustomEvent("app:busy", { detail: { loading: true } }));
+
+fetch(url)
+  .then(handleResponse)
+  .catch(handleError)
+  .finally(() =&gt; {
+    document.dispatchEvent(new CustomEvent("app:busy", { detail: { loading: false } }));
+  });
+
+// The UI module reacts, with zero knowledge of what triggered the state:
+document.addEventListener("app:busy", (event) =&gt; {
+  spinner.hidden = !event.detail.loading;
+});</code></pre>
+      </div>
+      <p>
+        The first argument to <code>CustomEvent()</code> is the event type
+        string; the second is an options object whose <code>detail</code>
+        property carries whatever payload &mdash; primitive, object, anything
+        &mdash; you want handlers to receive. If the event is meant to be
+        dispatched on a document element and should propagate the normal way,
+        add <code>bubbles: true</code> to that same options object, since
+        events created via <code>CustomEvent()</code> don't bubble by default.
+        Custom events go through the identical
+        <a href="#propagation">capturing/target/bubbling</a> pipeline as
+        native ones, and their <code>isTrusted</code> property is
+        <code>false</code>, marking them as script-dispatched rather than
+        generated by an actual user or browser action.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

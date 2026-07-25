@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Navigation & Networking — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="19-navigation-networking.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 15, &sect;15.10&ndash;15.11</span>
+      <h1>Navigation &amp; Networking</h1>
+      <p class="lede">
+        Two big client-side responsibilities that don't touch the DOM at all:
+        controlling what URL the address bar shows and how the Back/Forward
+        buttons behave, and talking to a server after the initial page has
+        already loaded. This page covers the <code>location</code> and
+        <code>history</code> objects in full &mdash; including the two
+        competing techniques for building history-aware single-page apps
+        &mdash; and then all three of the browser's networking APIs:
+        <code>fetch()</code>, Server-Sent Events, and WebSockets.
+      </p>
+
+      <h2 id="the-location-object">The <code>location</code> object</h2>
+      <p>
+        Both <code>window.location</code> and <code>document.location</code>
+        refer to the same <code>Location</code> object, which represents the
+        URL of the document currently displayed in the window and doubles as
+        the API for navigating to a new one. It shares most of its property
+        names with the <code>URL</code> class you'd use to parse an arbitrary
+        string URL, so if you already know <code>URL</code>, the shape here
+        is familiar &mdash; but <code>Location</code> is not a <code>URL</code>
+        instance, and the differences matter.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Property</th><th>Holds</th><th>Example, for <code>https://example.com:8080/items/3?sort=asc#reviews</code></th></tr>
+          <tr><td><code>href</code></td><td>The entire URL as a string</td><td><code>"https://example.com:8080/items/3?sort=asc#reviews"</code></td></tr>
+          <tr><td><code>protocol</code></td><td>Scheme, with trailing colon</td><td><code>"https:"</code></td></tr>
+          <tr><td><code>host</code></td><td>Hostname and port together</td><td><code>"example.com:8080"</code></td></tr>
+          <tr><td><code>hostname</code></td><td>Hostname alone</td><td><code>"example.com"</code></td></tr>
+          <tr><td><code>port</code></td><td>Port, as a string</td><td><code>"8080"</code></td></tr>
+          <tr><td><code>pathname</code></td><td>Path portion</td><td><code>"/items/3"</code></td></tr>
+          <tr><td><code>search</code></td><td>Query string, including the leading <code>?</code></td><td><code>"?sort=asc"</code></td></tr>
+          <tr><td><code>hash</code></td><td>Fragment identifier, including the leading <code>#</code></td><td><code>"#reviews"</code></td></tr>
+        </table>
+      </div>
+      <p>
+        <code>search</code> and <code>hash</code> deserve special attention
+        because both are commonly repurposed by application code rather than
+        left to their nominal meaning. <code>search</code> is intended for
+        server-facing query parameters, but nothing stops client-side script
+        from reading or writing it too. <code>hash</code> is nominally an
+        in-page anchor, but as you'll see below, it has a long history as a
+        DIY client-side routing mechanism precisely because changing it does
+        <em>not</em> trigger a page load.
+      </p>
+      <p>
+        Unlike a <code>URL</code> object, <code>Location</code> has no
+        <code>searchParams</code> property of its own. To get a parsed view
+        of the query string, wrap the location in a real <code>URL</code>
+        first:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let url = new URL(window.location);
+let query = url.searchParams.get("q");
+let numResults = parseInt(url.searchParams.get("n") || "10");</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">document.URL is a plain string</div>
+        <p>
+          Browsers also expose <code>document.URL</code>, which despite the
+          name is <em>not</em> a <code>URL</code> object &mdash; it's just a
+          string holding the current document's address, functionally
+          equivalent to <code>location.href</code>. Don't call
+          <code>.searchParams</code> on it; wrap it in <code>new URL(...)</code>
+          first if you need to parse it.
+        </p>
+      </div>
+
+      <h2 id="loading-new-documents">Loading new documents</h2>
+      <p>
+        Assigning a string to <code>location</code> (or <code>document.location</code>)
+        tells the browser to interpret it as a URL and navigate there,
+        replacing the current document:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">window.location = "https://example.com";  // navigate away entirely
+document.location = "page2.html";         // relative URL, resolved against the current page</code></pre>
+      </div>
+      <p>
+        A bare fragment identifier is a special case: assigning just a
+        <code>#</code>-prefixed string does <em>not</em> load a new document.
+        It scrolls the current page so the element whose <code>id</code> (or
+        legacy <code>name</code>) matches the fragment is at the top of the
+        viewport. The fragment <code>#top</code> is special-cased to always
+        scroll to the very start of the document, even if no element has
+        <code>id="top"</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">location = "#top";              // jump to the very top of the page
+location.hash = "TOC";          // scroll to the element with id="TOC"</code></pre>
+      </div>
+      <p>
+        Every individual property of <code>Location</code> is independently
+        writable, and setting any of them (other than <code>hash</code>)
+        triggers a fresh document load built from the modified URL:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">location.pathname = "pages/3.html";        // load a new path
+location.search = "?page=" + (page + 1);   // reload with a different query string
+location.hash = "TOC";                     // scroll within the current document only</code></pre>
+      </div>
+
+      <h3 id="assign-vs-replace">assign(), replace(), and reload()</h3>
+      <p>
+        <code>location.assign(url)</code> is exactly equivalent to assigning
+        the string directly to <code>location</code> &mdash; it exists mostly
+        for symmetry with <code>replace()</code>. <code>location.replace(url)</code>
+        is the one worth knowing well: it navigates just like
+        <code>assign()</code>, but it <strong>overwrites</strong> the current
+        entry in the browser's history instead of adding a new one after it.
+      </p>
+      <p>
+        The difference shows up the moment the user presses Back. Say a
+        script on document A calls <code>location.assign("B.html")</code>. The
+        history list now reads <code>[..., A, B]</code>, and clicking Back
+        from B returns the user to A &mdash; where, if that script runs
+        unconditionally on load, it would immediately navigate to B again,
+        trapping the user in a redirect loop they can never back out of.
+        <code>location.replace("B.html")</code> avoids this: it rewrites A's
+        entry into B, leaving history as <code>[..., B]</code>, so Back skips
+        A entirely and returns to whatever was displayed before it.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// A capability-detection redirect: use replace(), not assign()/href,
+// so Back doesn't bounce the user right back into the redirect.
+if (!isBrowserSupported()) {
+  location.replace("staticpage.html");
+}</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Rule of thumb</div>
+        <p>
+          Any time a script navigates unconditionally &mdash; a redirect, a
+          "you must be logged in" bounce, a capability fallback &mdash; prefer
+          <code>replace()</code>. Reserve <code>assign()</code>/plain
+          <code>href</code> assignment for navigations the user consciously
+          triggered, like clicking a link-like element, where they'd
+          reasonably expect Back to return them to where they were.
+        </p>
+      </div>
+      <p>
+        Finally, <code>location.reload()</code> reloads the current document
+        from scratch, equivalent to the user pressing the browser's reload
+        button.
+      </p>
+
+      <h2 id="browsing-history">The <code>history</code> object</h2>
+      <p>
+        <code>window.history</code> models the window's browsing history as a
+        list of documents and document states. Its <code>length</code>
+        property reports how many entries are in the list, but for privacy
+        reasons script can never read the actual stored URLs &mdash; if it
+        could, any page could snoop through everywhere you'd previously been.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">history.back();     // like clicking the Back button
+history.forward();  // like clicking the Forward button
+history.go(-2);      // back two entries at once
+history.go(0);        // go(0) reloads the current page</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Iframes interleave their history with the parent</div>
+        <p>
+          If a page contains child windows such as <code>&lt;iframe&gt;</code>
+          elements, their navigation histories are chronologically merged with
+          the top-level window's. Calling <code>history.back()</code> on the
+          main window can therefore cause a child frame to step back to a
+          previous document while the main window's own content stays exactly
+          where it was.
+        </p>
+      </div>
+      <p>
+        <code>back()</code>, <code>forward()</code>, and <code>go()</code> are
+        relics of an older web, where every "page" was a genuinely distinct
+        document fetched from the server. Modern single-page apps generate
+        and swap content dynamically without a real navigation ever
+        happening, which means the browser has no idea a "new page" occurred
+        &mdash; so Back and Forward would do nothing useful unless the app
+        does its own history bookkeeping. There are two established
+        techniques for that, covered next.
+      </p>
+
+      <h3 id="hash-based-routing">Older technique: <code>location.hash</code> + <code>hashchange</code></h3>
+      <p>
+        The first technique predates any dedicated history API and just
+        repurposes the URL fragment. Three facts make it work:
+      </p>
+      <ul>
+        <li>Setting <code>location.hash</code> does not have to name a real
+          element ID &mdash; it can be any string you like, and as long as no
+          element happens to share that ID, the browser won't scroll.</li>
+        <li>Setting it updates the address bar <em>and</em> pushes a new entry
+          onto the browsing history, all without a page reload.</li>
+        <li>Any time the fragment changes &mdash; whether your script set it,
+          or the user pressed Back/Forward and the browser changed it for you
+          &mdash; the window fires a <code>hashchange</code> event.</li>
+      </ul>
+      <p>
+        Building a router on this means writing two small conversion
+        functions &mdash; one that encodes your app's current state into a
+        short string suitable for a fragment, and one that parses that string
+        back into state &mdash; plus one rule of discipline: never render a
+        new state directly. Instead, encode it and assign it to
+        <code>location.hash</code>; let your <code>hashchange</code> handler
+        do the actual rendering, whether the change came from a user
+        interaction or a Back/Forward press:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function encodeState(state) {
+  return `view=${state.view}&amp;id=${state.id}`;
+}
+function decodeState(hash) {
+  let params = new URLSearchParams(hash.replace(/^#/, ""));
+  return { view: params.get("view"), id: params.get("id") };
+}
+
+window.addEventListener("hashchange", () => {
+  render(decodeState(location.hash));
+});
+
+function navigateTo(state) {
+  // Don't render() here directly -- setting the hash below will
+  // trigger the hashchange listener, which renders.
+  location.hash = encodeState(state);
+}</code></pre>
+      </div>
+      <p>
+        This still works everywhere and needs nothing from the server, which
+        is why it lingers in older codebases, but it's largely been
+        superseded by <code>pushState()</code> because it forces application
+        state into the ugly <code>#...</code> tail of every URL and offers no
+        way to change the path or query string cleanly.
+      </p>
+
+      <h2 id="pushstate-history-management">
+        Modern technique: <code>history.pushState()</code>
+        <span class="badge hard">hard</span>
+      </h2>
+      <p>
+        The History API lets an app push an arbitrary state object onto the
+        browsing history, associate it with a real URL (not just a fragment),
+        and be notified via a <code>popstate</code> event when the user
+        navigates back to it. This is the mechanism behind virtually every
+        modern single-page-app router.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">history.pushState(stateObject, unused, url);</code></pre>
+      </div>
+      <ul>
+        <li><strong>stateObject</strong> &mdash; anything you want restored
+          later; serialized with the structured clone algorithm, not JSON.</li>
+        <li><strong>unused</strong> &mdash; a title string the spec defines
+          but essentially no browser honors. Always pass <code>""</code>.</li>
+        <li><strong>url</strong> &mdash; optional, resolved relative to the
+          current document, and shown in the address bar immediately. This is
+          what makes the resulting state bookmarkable and shareable.</li>
+      </ul>
+
+      <h3 id="structured-clone-algorithm">The structured clone algorithm</h3>
+      <p>
+        <code>pushState()</code> does not run your state object through
+        <code>JSON.stringify()</code>. It uses the HTML-standard
+        <strong>structured clone algorithm</strong>, which is a strict
+        superset of what JSON can represent.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Can it survive a structured clone?</th><th>Notes</th></tr>
+          <tr><td>Plain objects, arrays, strings, numbers, booleans, <code>null</code></td><td>Yes &mdash; same as JSON</td></tr>
+          <tr><td><code>Map</code>, <code>Set</code>, <code>Date</code>, <code>RegExp</code></td><td>Yes &mdash; JSON cannot do any of these</td></tr>
+          <tr><td>Typed arrays, <code>ArrayBuffer</code></td><td>Yes</td></tr>
+          <tr><td>Circular references (an object that refers back to itself)</td><td>Yes &mdash; JSON.stringify throws on these</td></tr>
+          <tr><td>Functions, class methods</td><td>No &mdash; silently dropped / throws</td></tr>
+          <tr><td>DOM nodes / <code>Element</code> objects</td><td>No &mdash; host-defined types aren't cloneable</td></tr>
+          <tr><td>Prototype chain, getters/setters, non-enumerable properties</td><td>Not preserved &mdash; an instance of your own class comes back as a plain object</td></tr>
+        </table>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Your class instance loses its prototype</div>
+        <p>
+          If you pass an instance of a custom class to <code>pushState()</code>,
+          what comes back through <code>event.state</code> later is a plain
+          object with the same own properties &mdash; not an instance of your
+          class, and none of its methods are callable on it. Always re-wrap
+          restored state through a factory function, as shown below.
+        </p>
+      </div>
+
+      <h3 id="pushstate-popstate-walkthrough">Walking through pushState() and popstate</h3>
+      <p>
+        The sequence of events is the part people get wrong, so trace it
+        carefully:
+      </p>
+      <ol>
+        <li>The user is on state A. Your app calls
+          <code>history.pushState(stateA, "", urlA)</code>. The address bar
+          updates to <code>urlA</code>, and a new entry is appended to
+          history. <strong>No event fires from this call</strong> &mdash;
+          pushState() is a synchronous, silent bookkeeping operation. You
+          must render state A yourself, right after the call.</li>
+        <li>The user interacts further; your app calls
+          <code>pushState(stateB, "", urlB)</code>. History is now
+          <code>[..., A, B]</code>, address bar shows <code>urlB</code>. Again,
+          you render B yourself &mdash; still no event.</li>
+        <li>The user clicks the browser's <strong>Back</strong> button. The
+          browser moves the current position from B back to A and fires a
+          <code>popstate</code> event on <code>window</code>, whose
+          <code>event.state</code> is a structured-clone copy of whatever you
+          passed as <code>stateA</code>. Your <code>popstate</code> handler is
+          responsible for reading <code>event.state</code> and re-rendering
+          the page to match &mdash; the browser only changed the URL and
+          fired the event; it did not touch the DOM.</li>
+        <li>The user clicks Forward. Another <code>popstate</code> fires,
+          this time with a clone of <code>stateB</code>.</li>
+      </ol>
+      <div class="admonition warning">
+        <div class="admonition-title">popstate never fires from your own pushState() call</div>
+        <p>
+          This is the single most common bug when people first use this API:
+          they call <code>pushState()</code> and expect their own
+          <code>popstate</code> listener to fire so it can render the new
+          state. It never does. <code>popstate</code> only fires in response
+          to the <em>user</em> (or script calling <code>history.back()</code>
+          / <code>forward()</code> / <code>go()</code>) moving through
+          history that already exists. Every call to <code>pushState()</code>
+          must be paired with you manually rendering the state you just
+          pushed &mdash; typically by extracting that render logic into a
+          shared function called both right after <code>pushState()</code>
+          and inside the <code>popstate</code> handler.
+        </p>
+      </div>
+      <p>
+        A second subtlety: if the user bookmarks a <code>pushState()</code>-produced
+        URL and returns to it in a fresh tab tomorrow, there is no history
+        entry to pop and thus no <code>popstate</code> event for that visit
+        either &mdash; you must reconstruct state by parsing the URL itself on
+        load. That's why it's common to call <code>history.replaceState()</code>
+        for the very first, initial state, so a later "back past the
+        beginning" scenario still has something in <code>event.state</code>
+        to render, and to write a "restore from URL" path for the fresh-load
+        case.
+      </p>
+      <p><strong>Worked example 1 &mdash; a paginated list.</strong></p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function renderPage(state) {
+  document.querySelector("#list").textContent = `Showing page ${state.page}`;
+}
+
+function goToPage(page) {
+  let state = { page };
+  history.pushState(state, "", `?page=${page}`);
+  renderPage(state);          // <-- pushState() itself fires nothing; render manually
+}
+
+// Initial load: give this starting state a history entry too.
+let initialState = { page: Number(new URL(location).searchParams.get("page")) || 1 };
+history.replaceState(initialState, "", location.href);
+renderPage(initialState);
+
+document.querySelectorAll(".page-link").forEach(link => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    goToPage(Number(link.dataset.page));
+  });
+});
+
+// Back/Forward: the browser handles the URL, we handle the DOM.
+window.addEventListener("popstate", (event) => {
+  renderPage(event.state);
+});</code></pre>
+      </div>
+      <p>
+        <strong>Worked example 2 &mdash; a number-guessing game.</strong>
+        This example (adapted from the book's own case study) shows the
+        pattern with richer, class-shaped state, plus URL-based restoration
+        for the bookmarked case:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class GameState {
+  static newGame() {
+    let s = new GameState();
+    s.low = 0; s.high = 100; s.numGuesses = 0; s.guess = null;
+    s.secret = s.low + Math.ceil(Math.random() * (s.high - s.low - 1));
+    return s;
+  }
+  // Rebuild a real GameState from the plain object popstate hands us --
+  // structured clone strips the class, so the prototype must be restored.
+  static fromStateObject(obj) {
+    let s = new GameState();
+    Object.assign(s, obj);
+    return s;
+  }
+  toURL() {
+    let url = new URL(window.location);
+    url.searchParams.set("l", this.low);
+    url.searchParams.set("h", this.high);
+    url.searchParams.set("n", this.numGuesses);
+    return url.href;
+  }
+  updateForGuess(guess) {
+    if (guess < this.secret) this.low = guess;
+    else if (guess > this.secret) this.high = guess;
+    this.guess = guess;
+    this.numGuesses++;
+  }
+  render() {
+    document.querySelector("#heading").textContent =
+      `Guess between ${this.low} and ${this.high} (${this.numGuesses} so far)`;
+  }
+}
+
+// On load: reuse a previously-pushed state if popstate gives us one to work
+// with later, but on initial page load there IS no popstate event, so we
+// just start (or resume from the URL) and replaceState() to seed history.
+let game = GameState.newGame();
+history.replaceState(game, "", game.toURL());
+game.render();
+
+document.querySelector("#guessInput").addEventListener("change", (event) => {
+  game.updateForGuess(Number(event.target.value));
+  history.pushState(game, "", game.toURL());   // no event fires from this call
+  game.render();                                // so we render right here
+});
+
+window.addEventListener("popstate", (event) => {
+  game = GameState.fromStateObject(event.state); // clone comes back as plain object
+  game.render();
+});</code></pre>
+      </div>
+      <p>
+        <code>history.replaceState()</code> takes the exact same three
+        arguments as <code>pushState()</code> but overwrites the current
+        history entry instead of adding a new one after it &mdash; the
+        history-object counterpart of <code>location.replace()</code>.
+      </p>
+
+      <h2 id="fetch-overview">Networking: three APIs, three shapes</h2>
+      <p>
+        Every page load already triggers network requests for the HTML
+        itself plus its images, scripts, and stylesheets, but browsers also
+        expose networking directly to JavaScript for use after the page has
+        loaded. There are three APIs, each shaped for a different traffic
+        pattern:
+      </p>
+      <ul>
+        <li><strong><code>fetch()</code></strong> &mdash; a Promise-based
+          request/response API, the modern replacement for the old
+          <code>XMLHttpRequest</code> object. Good for one-shot HTTP calls.</li>
+        <li><strong>Server-Sent Events</strong> (<code>EventSource</code>)
+          &mdash; an event-based wrapper around a long-held HTTP connection
+          that the server writes to whenever it has something new. One-way,
+          server to client only.</li>
+        <li><strong>WebSockets</strong> &mdash; a genuinely separate protocol
+          (layered on top of an HTTP handshake) for full-duplex, low-overhead
+          message passing in both directions over one persistent connection.</li>
+      </ul>
+      <div class="admonition note">
+        <div class="admonition-title">XMLHttpRequest is not covered here</div>
+        <p>
+          You will still encounter <code>XMLHttpRequest</code> ("XHR") in
+          older code, despite the name having nothing to do with XML in
+          practice. There's no reason to reach for it in new code &mdash;
+          <code>fetch()</code> supersedes it entirely and is covered in full
+          below.
+        </p>
+      </div>
+      <p>
+        <code>fetch()</code> is deliberately simple for the common case:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fetch("/api/users/current")             // 1. make the GET request
+  .then(response => response.json())    // 2. ask for the body, parsed as JSON
+  .then(currentUser => {                // 3. do something with the result
+    displayUserInfo(currentUser);
+  });
+
+// Equivalently, with async/await:
+async function isServiceReady() {
+  let response = await fetch("/api/service/status");
+  let body = await response.text();
+  return body === "ready";
+}</code></pre>
+      </div>
+      <p>
+        Notice there are always <em>two</em> asynchronous hops:
+        <code>fetch()</code>'s own Promise resolves once the response's
+        status and headers have arrived, and then the Response's body-reading
+        method (<code>.json()</code>, <code>.text()</code>, etc.) returns a
+        second Promise that resolves once the body itself has fully arrived
+        and been parsed. If those two examples make sense, you already
+        understand the majority of how <code>fetch()</code> is used day to
+        day; the rest of this section fills in the configuration options and
+        edge cases.
+      </p>
+
+      <h2 id="fetch-error-handling">
+        fetch()'s error-handling model
+        <span class="badge hard">hard</span>
+      </h2>
+      <p>
+        This is the single most consequential thing to internalize about
+        <code>fetch()</code>, because getting it wrong means your app silently
+        treats "the server rejected this request" as success.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">The Promise only rejects on NETWORK failure</div>
+        <p>
+          <code>fetch()</code>'s returned Promise rejects only if the request
+          could not be completed at the transport level at all &mdash; the
+          user is offline, the hostname doesn't resolve, the connection was
+          refused or reset. If the server is reachable and sends back
+          <em>any</em> HTTP response &mdash; including a <code>404 Not Found</code>
+          or a <code>500 Internal Server Error</code> &mdash; that still
+          counts as a successfully fulfilled Promise. As far as
+          <code>fetch()</code> is concerned, the server responded; it just
+          responded with bad news, and it's on you to notice.
+        </p>
+      </div>
+      <p><strong>The naive, wrong pattern</strong> &mdash; relying on <code>.catch()</code> alone:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// WRONG: this silently treats a 404/500 as success, because the
+// Promise fulfills either way -- .catch() only fires for network failure.
+fetch("/api/users/current")
+  .then(response => response.json())
+  .then(currentUser => displayUserInfo(currentUser))
+  .catch(error => console.log("Something went wrong:", error));
+// A 500 response body of "Internal Server Error" gets JSON.parse'd
+// (and probably throws inside response.json(), masking the real problem),
+// or worse, a valid-but-wrong JSON error payload sails right through
+// to displayUserInfo() as if it were a real user object.</code></pre>
+      </div>
+      <p><strong>The correct pattern</strong> &mdash; explicitly check <code>response.ok</code>:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fetch("/api/users/current")
+  .then(response => {
+    // response.ok is true for any status in the 200-299 range.
+    if (response.ok &&
+        response.headers.get("Content-Type") === "application/json") {
+      return response.json();          // Promise for the parsed body
+    } else {
+      throw new Error(`Unexpected response ${response.status} ${response.statusText}`);
+    }
+  })
+  .then(currentUser => displayUserInfo(currentUser))
+  .catch(error => {
+    // Now this .catch() legitimately covers BOTH cases:
+    // network failure (fetch() itself rejected) and a bad HTTP
+    // status (we threw it ourselves, above).
+    console.log("Error while fetching current user:", error);
+  });
+
+// The async/await equivalent -- same principle, still an explicit check:
+async function getCurrentUser() {
+  let response = await fetch("/api/users/current");
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}</code></pre>
+      </div>
+      <p>
+        <code>response.status</code> is the numeric HTTP status code (e.g.
+        <code>200</code>, <code>404</code>); <code>response.statusText</code>
+        is the standard English phrase that goes with it (e.g.
+        <code>"Not Found"</code>); <code>response.ok</code> is simply
+        shorthand for "status is in <code>[200, 300)</code>". The
+        <code>headers</code> property is a <code>Headers</code> object with
+        case-insensitive <code>has(name)</code> and <code>get(name)</code>
+        methods, and it's iterable:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fetch(url).then(response => {
+  for (let [name, value] of response.headers) {
+    console.log(`${name}: ${value}`);
+  }
+});</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Always pair a .catch() with your .ok check</div>
+        <p>
+          Because network failure is always a possibility on any request,
+          every <code>fetch()</code> call benefits from a <code>.catch()</code>
+          (or a surrounding <code>try/catch</code> with <code>await</code>) in
+          addition to &mdash; never instead of &mdash; an explicit
+          <code>response.ok</code> check.
+        </p>
+      </div>
+
+      <h2 id="request-configuration">Configuring a request</h2>
+      <p>
+        A plain <code>fetch(url)</code> issues a GET request with no special
+        headers or body. Everything else is configured through an optional
+        second "options" argument, or by constructing an equivalent
+        <code>Request</code> object yourself and passing that instead:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Two equivalent forms:
+fetch(url, { headers, method, body });
+
+let request = new Request(url, { headers, method, body });
+fetch(request).then(response => /* ... */ null);</code></pre>
+      </div>
+
+      <h3 id="query-parameters">Query parameters</h3>
+      <p>
+        Build query strings with <code>URL</code>/<code>URLSearchParams</code>
+        rather than hand-concatenating &mdash; it takes care of escaping for
+        you, and <code>fetch()</code> happily accepts a <code>URL</code>
+        object as its first argument:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">async function search(term) {
+  let url = new URL("/api/search", location.origin);
+  url.searchParams.set("q", term);
+  let response = await fetch(url);
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}</code></pre>
+      </div>
+
+      <h3 id="request-headers">Request headers</h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let authHeaders = new Headers();
+// Never send Basic auth credentials over a plain http:// connection.
+authHeaders.set("Authorization", `Basic ${btoa(`${username}:${password}`)}`);
+
+fetch("/api/users/", { headers: authHeaders })
+  .then(response => {
+    if (!response.ok) throw new Error(response.statusText);
+    return response.json();
+  })
+  .then(usersList => displayAllUsers(usersList));</code></pre>
+      </div>
+
+      <h3 id="request-method-and-body">Method and body</h3>
+      <p>
+        Use the <code>method</code> option for anything other than GET. As
+        long as method isn't <code>"GET"</code> or <code>"HEAD"</code> (which
+        can't carry a body), set <code>body</code> to send data along with
+        the request:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">fetch(url, { method: "POST", body: "hello world" });
+// A plain string body defaults Content-Type to text/plain;charset=UTF-8 --
+// override it explicitly for anything more specific:
+fetch(url, {
+  method: "POST",
+  headers: new Headers({ "Content-Type": "application/json" }),
+  body: JSON.stringify(requestBody),
+});</code></pre>
+      </div>
+      <p>
+        <code>body</code> isn't limited to strings. A typed array,
+        <code>DataView</code>, <code>ArrayBuffer</code>, or <code>Blob</code>
+        all work directly (a <code>Blob</code>'s own <code>type</code>
+        becomes the default <code>Content-Type</code>). For classic
+        name/value form parameters, you have a choice between two encodings:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Body value</th><th>Resulting encoding</th><th>Best for</th></tr>
+          <tr><td><code>URLSearchParams</code></td><td><code>application/x-www-form-urlencoded</code> (a query-string-shaped body)</td><td>Short, simple key/value pairs</td></tr>
+          <tr><td><code>FormData</code></td><td><code>multipart/form-data; boundary=...</code></td><td>Long values, or <code>File</code>/<code>Blob</code> values with their own content types</td></tr>
+        </table>
+      </div>
+      <p>The browser sets <code>Content-Length</code> and <code>Content-Type</code> for you in both cases &mdash; don't set them by hand.</p>
+
+      <h3 id="file-upload">Uploading files</h3>
+      <p>
+        A <code>&lt;input type="file"&gt;</code> element's <code>change</code>
+        event exposes chosen files through its <code>files</code> array;
+        <code>File</code> objects are themselves a kind of <code>Blob</code>,
+        so uploading generated binary data (say, from a <code>&lt;canvas&gt;</code>)
+        works the same way:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// canvas.toBlob() is callback-based -- wrap it in a Promise.
+function getCanvasBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve));
+}
+
+async function uploadCanvasImage(canvas) {
+  let pngBlob = await getCanvasBlob(canvas);
+  let formData = new FormData();
+  formData.set("image", pngBlob, "drawing.png");
+  let response = await fetch("/upload", { method: "POST", body: formData });
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}</code></pre>
+      </div>
+
+      <h2 id="response-body-methods">Reading the response body</h2>
+      <p>
+        The Response object gives you a choice of five Promise-returning
+        methods for consuming the body, each intended for a different shape
+        of data, plus a sixth raw-stream option:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Resolves to</th><th>Use for</th></tr>
+          <tr><td><code>response.json()</code></td><td>Parsed value</td><td>JSON-formatted bodies</td></tr>
+          <tr><td><code>response.text()</code></td><td>String</td><td>Plain text, HTML fragments, anything textual</td></tr>
+          <tr><td><code>response.arrayBuffer()</code></td><td><code>ArrayBuffer</code></td><td>Binary data you'll read with a typed array or <code>DataView</code></td></tr>
+          <tr><td><code>response.blob()</code></td><td><code>Blob</code></td><td>Large binary payloads (images, media) &mdash; may stream to a temp file internally rather than buffering in memory</td></tr>
+          <tr><td><code>response.formData()</code></td><td><code>FormData</code></td><td>A <code>multipart/form-data</code> body &mdash; uncommon in responses, common in requests</td></tr>
+          <tr><td><code>response.body</code></td><td>Raw <code>ReadableStream</code></td><td>Processing chunks as they arrive, e.g. a progress bar</td></tr>
+        </table>
+      </div>
+      <p>
+        You can only successfully call one body-reading method per response;
+        once one has consumed the stream, <code>response.bodyUsed</code>
+        becomes <code>true</code> and further reads fail.
+      </p>
+
+      <h3 id="streaming-response-bodies">Streaming a response body</h3>
+      <p>
+        When you need to react to bytes as they arrive &mdash; a download
+        progress bar being the classic case &mdash; call
+        <code>getReader()</code> on <code>response.body</code> and pull
+        chunks manually. Each call to <code>reader.read()</code> resolves to
+        <code>{ done, value }</code>, where <code>value</code> is the next
+        chunk as a <code>Uint8Array</code> (or <code>undefined</code> once
+        there's nothing left), and <code>done</code> becomes <code>true</code>
+        once the stream is fully drained:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">async function streamBody(response, onProgress) {
+  let expectedBytes = parseInt(response.headers.get("Content-Length"));
+  let bytesRead = 0;
+  let reader = response.body.getReader();
+  let decoder = new TextDecoder("utf-8");
+  let text = "";
+  while (true) {
+    let { done, value } = await reader.read();
+    if (value) {
+      text += decoder.decode(value, { stream: true });
+      bytesRead += value.length;
+      onProgress?.(bytesRead, bytesRead / expectedBytes); // NaN if no Content-Length
+    }
+    if (done) break;
+  }
+  return text;
+}
+
+fetch("big.json")
+  .then(response => streamBody(response, updateProgressBar))
+  .then(text => JSON.parse(text))
+  .then(handleBigObject);</code></pre>
+      </div>
+
+      <h2 id="aborting-requests">Aborting requests and timeouts</h2>
+      <p>
+        <code>fetch()</code> supports cancellation through the generic
+        <code>AbortController</code>/<code>AbortSignal</code> pair (used by
+        several other web APIs too, not just <code>fetch()</code>). Create a
+        controller, pass its <code>signal</code> in the options object, and
+        call <code>controller.abort()</code> whenever you want to cancel
+        &mdash; doing so rejects any Promise tied to that request:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let controller = new AbortController();
+cancelButton.onclick = () => controller.abort();
+
+fetch(url, { signal: controller.signal })
+  .then(response => response.json())
+  .catch(err => {
+    if (err.name === "AbortError") console.log("Request was cancelled");
+    else throw err;
+  });</code></pre>
+      </div>
+      <p>The same mechanism gives you request timeouts, since a timer can call <code>abort()</code> just as well as a click handler:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function fetchWithTimeout(url, options = {}) {
+  if (options.timeout) {
+    let controller = new AbortController();
+    options.signal = controller.signal;
+    // Calling abort() after the fetch already finished is harmless,
+    // so there's no need to clear this timer on success.
+    setTimeout(() => controller.abort(), options.timeout);
+  }
+  return fetch(url, options);
+}
+
+fetchWithTimeout("/api/slow", { timeout: 5000 })
+  .then(response => response.json())
+  .catch(err => {
+    if (err.name === "AbortError") console.log("timed out after 5s");
+  });</code></pre>
+      </div>
+
+      <h2 id="cors-same-origin">Cross-origin requests and CORS</h2>
+      <p>
+        A request whose URL shares the current document's protocol,
+        hostname, <em>and</em> port is same-origin and always allowed. A
+        request to any other origin is cross-origin, and browsers block it by
+        default &mdash; not because <code>fetch()</code> refuses to send it,
+        but because the browser will not hand your script the response
+        unless the server explicitly opts in.
+      </p>
+      <p>
+        When you <code>fetch()</code> a cross-origin URL, the browser
+        automatically attaches an <code>Origin</code> header (you cannot
+        override or remove it) identifying where the request came from. The
+        server must respond with an <code>Access-Control-Allow-Origin</code>
+        header naming that origin (or <code>*</code>) for the browser to
+        release the response to your script; otherwise the Promise
+        <code>fetch()</code> returned rejects.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">This is enforced unilaterally by the browser</div>
+        <p>
+          CORS is not something the client can negotiate its way around by
+          design &mdash; there is no client-side header or option that makes
+          a browser ignore a missing <code>Access-Control-Allow-Origin</code>.
+          The policy exists to protect the <em>user</em> (whose cookies and
+          session might be attached to the request), not to protect the
+          server, so it can't be disabled from the calling page.
+        </p>
+      </div>
+
+      <h2 id="misc-request-options">Other request options</h2>
+      <p>
+        Two more options round out the fetch configuration surface:
+        <code>cache</code>, which overrides the browser's normal HTTP caching
+        behavior, and <code>redirect</code>, which controls what happens when
+        the server responds with a 3xx.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th><code>cache</code> value</th><th>Behavior</th></tr>
+          <tr><td><code>"default"</code></td><td>Normal HTTP caching: serve fresh entries from cache, revalidate stale ones</td></tr>
+          <tr><td><code>"no-store"</code></td><td>Ignore the cache completely, in both directions</td></tr>
+          <tr><td><code>"reload"</code></td><td>Always hit the network, but still store the result in cache afterward</td></tr>
+          <tr><td><code>"no-cache"</code></td><td>Always revalidate before using a cached value, fresh or not</td></tr>
+          <tr><td><code>"force-cache"</code></td><td>Serve from cache even if stale</td></tr>
+        </table>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <tr><th><code>redirect</code> value</th><th>Behavior</th></tr>
+          <tr><td><code>"follow"</code> (default)</td><td>Redirects are followed automatically; you never see a 3xx status</td></tr>
+          <tr><td><code>"error"</code></td><td>A redirect response causes the returned Promise to reject</td></tr>
+          <tr><td><code>"manual"</code></td><td>You get the raw 3xx Response back and must follow its <code>Location</code> header yourself</td></tr>
+        </table>
+      </div>
+      <p>
+        A <code>referrer</code> option is also available to override the
+        <code>Referer</code> request header (yes, historically misspelled
+        with three R's) &mdash; set it to <code>""</code> to omit the header
+        entirely.
+      </p>
+
+      <h2 id="server-sent-events">Server-Sent Events: one-way server push</h2>
+      <p>
+        HTTP is fundamentally client-initiated: the client asks, the server
+        answers. Server-Sent Events work around that by having the client
+        open a connection and then having <em>neither side close it</em> - the
+        server writes new data to the same open connection whenever it has
+        something to say, and the client's <code>EventSource</code> object
+        translates each write into a JavaScript event. If the connection
+        drops, <code>EventSource</code> reconnects automatically on your
+        behalf &mdash; you don't have to write any retry logic.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let ticker = new EventSource("/stockprices");
+ticker.addEventListener("bid", (event) => {
+  displayNewBid(JSON.parse(event.data));
+});</code></pre>
+      </div>
+      <p>
+        Every event object has the usual <code>type</code> (the event name)
+        and a <code>data</code> property holding whatever the server sent.
+        If the server doesn't label an event, its type defaults to
+        <code>"message"</code>. On the wire, the server writes plain-text
+        frames terminated by a blank line:
+      </p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">event: bid
+data: GOOG
+data: 999
+</code></pre>
+      </div>
+      <p>
+        (The two consecutive <code>data:</code> lines are joined with a
+        newline into a single <code>data</code> string.) The protocol also
+        supports per-event IDs so a reconnecting client can tell the server
+        the last event it saw and have missed events replayed, but that
+        machinery is invisible on the client side.
+      </p>
+      <p>
+        A natural application is a chat room: post outgoing messages with
+        <code>fetch()</code>, and receive the stream of everyone else's
+        messages through an <code>EventSource</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let chat = new EventSource("/chat");
+chat.addEventListener("chat", (event) => {
+  let div = document.createElement("div");
+  div.textContent = event.data;
+  document.querySelector("#messages").append(div);
+});
+
+document.querySelector("#input").addEventListener("change", (event) => {
+  fetch("/chat", { method: "POST", body: event.target.value })
+    .catch(err => console.error("failed to send:", err));
+  event.target.value = "";
+});</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">When to reach for SSE</div>
+        <p>
+          SSE is a good fit whenever data only ever needs to flow server to
+          client &mdash; live prices, notifications, dashboards, progress
+          updates &mdash; and you'd rather not run a separate protocol. The
+          moment the client also needs to push data over the <em>same</em>
+          connection (rather than via separate <code>fetch()</code> calls),
+          reach for WebSockets instead.
+        </p>
+      </div>
+
+      <h2 id="websockets">WebSockets: full-duplex messaging</h2>
+      <p>
+        WebSockets are a distinct network protocol, layered on top of an
+        initial HTTP handshake (the browser sends an
+        <code>Upgrade: websocket</code> request, and if the server agrees,
+        the connection switches protocols). Unlike <code>fetch()</code> or
+        SSE, a WebSocket connection is symmetric: once open, either side can
+        send messages to the other at any time, and messages may be binary
+        as well as text. URLs use <code>ws://</code> or, almost always in
+        practice, <code>wss://</code> (browsers generally restrict plain
+        <code>ws://</code> to pages that were themselves loaded insecurely).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let socket = new WebSocket("wss://example.com/chat");</code></pre>
+      </div>
+      <p>
+        Creating a <code>WebSocket</code> begins connecting immediately, but
+        the object is not yet connected when the constructor returns.
+        <code>socket.readyState</code> tracks the connection's lifecycle:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Constant</th><th>Meaning</th></tr>
+          <tr><td><code>WebSocket.CONNECTING</code></td><td>Handshake in progress</td></tr>
+          <tr><td><code>WebSocket.OPEN</code></td><td>Connected, ready to send/receive</td></tr>
+          <tr><td><code>WebSocket.CLOSING</code></td><td>Close in progress</td></tr>
+          <tr><td><code>WebSocket.CLOSED</code></td><td>Closed, or the initial connection attempt failed</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">socket.addEventListener("open", () => {
+  socket.send(JSON.stringify({ type: "join", room: "general" }));
+});
+
+socket.addEventListener("message", (event) => {
+  // event.data is a string for text frames; a Blob (by default) or an
+  // ArrayBuffer (if you set socket.binaryType = "arraybuffer") for binary ones.
+  let msg = JSON.parse(event.data);
+  displayMessage(msg);
+});
+
+socket.addEventListener("error", (event) => {
+  console.error("WebSocket error", event);
+});
+
+socket.addEventListener("close", (event) => {
+  console.log(`connection closed: code ${event.code}`);
+});
+
+// Later, to end the conversation cleanly:
+socket.close();</code></pre>
+      </div>
+      <p>
+        <code>send()</code> accepts a string, <code>Blob</code>,
+        <code>ArrayBuffer</code>, typed array, or <code>DataView</code>. It
+        buffers the message and returns immediately &mdash; it does not wait
+        for the network write to actually complete. If you need to know how
+        much is still queued, check <code>socket.bufferedAmount</code> (there
+        is, notably, no event that fires when that value reaches zero, so
+        polling is the only option if you need to track it).
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">No structured clone here</div>
+        <p>
+          Despite <code>MessageEvent</code> being used by several browser
+          APIs that do support the structured clone algorithm for rich
+          payloads, WebSockets is not one of them: every message is just a
+          single string or a single blob of bytes. Your application defines
+          its own message format on top &mdash; JSON-encoded strings are the
+          overwhelmingly common choice.
+        </p>
+      </div>
+      <p>
+        Because the protocol itself says nothing about message structure,
+        long-lived services often need a way to evolve. Two complementary
+        techniques handle that: bumping the URL path (e.g.
+        <code>wss://example.com/chat/v2</code>) for a hard break, or passing
+        a second, array argument to the <code>WebSocket()</code> constructor
+        listing the sub-protocols your client understands, letting the
+        server pick one during the handshake:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let socket = new WebSocket("wss://example.com/ticker", ["v2.price-feed", "v1.price-feed"]);
+socket.addEventListener("open", () => {
+  console.log("server chose protocol:", socket.protocol);
+});</code></pre>
+      </div>
+
+      <h2 id="comparison">Choosing among the three</h2>
+      <div class="table-wrap">
+        <table>
+          <tr><th>API</th><th>Direction</th><th>Transport</th><th>Best for</th></tr>
+          <tr><td><code>fetch()</code></td><td>Request &rarr; Response, one shot</td><td>HTTP/HTTPS</td><td>Standard API calls, file up/download</td></tr>
+          <tr><td><code>EventSource</code> (SSE)</td><td>Server &rarr; client only, ongoing</td><td>HTTP, connection kept open, auto-reconnect</td><td>Live feeds, notifications, dashboards</td></tr>
+          <tr><td><code>WebSocket</code></td><td>Both directions, ongoing</td><td>Its own protocol (<code>ws</code>/<code>wss</code>)</td><td>Chat, multiplayer, collaborative editing</td></tr>
+        </table>
+      </div>
+      <p>
+        These two topics &mdash; navigation/history and networking &mdash;
+        close out the browser platform coverage of this book chapter. For the
+        DOM and CSSOM APIs that these routes typically render into, see
+        <a href="17-dom-css-scripting.html">DOM &amp; CSS Scripting</a>; for
+        the media, canvas, and graphics elements a router might swap between,
+        see <a href="18-components-graphics.html">Components &amp; Graphics</a>;
+        and for persisting the state you're pushing into history &mdash;
+        <code>localStorage</code>, IndexedDB, and web workers &mdash; continue
+        to <a href="20-storage-workers.html">Storage &amp; Workers</a>.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

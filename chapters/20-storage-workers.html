@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Storage & Workers — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="20-storage-workers.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 15, &sect;15.12&ndash;15.13</span>
+      <h1>Storage &amp; Workers</h1>
+      <p class="lede">
+        Two capabilities that let a web page stop behaving like a stateless
+        document: a place to remember things between visits, and a way to run
+        JavaScript that doesn't block the main thread. Client-side storage
+        (Web Storage, cookies, IndexedDB) gives the browser a memory; workers
+        give it a second brain.
+      </p>
+
+      <h2 id="storage-overview">Client-side storage: the four mechanisms</h2>
+      <p>
+        A web app can choose to keep data around for the lifetime of a tab, or
+        persist it for months or years on the user's machine. Every mechanism
+        covered here is <strong>segregated by origin</strong> &mdash; a page
+        can never read storage written by a different protocol, host, or
+        port, even if the two pages are served by the same company. Two pages
+        that <em>do</em> share an origin, on the other hand, can use storage
+        as a communication channel: data entered in a form on one page can
+        show up in a table on another.
+      </p>
+      <p>
+        There are four mechanisms in practice, each with a different set of
+        tradeoffs:
+      </p>
+      <ul>
+        <li><strong>Web Storage</strong> (<code>localStorage</code> and <code>sessionStorage</code>) &mdash; a persistent string-keyed, string-valued map. Simple, synchronous, good for small-to-moderate amounts of data.</li>
+        <li><strong>Cookies</strong> &mdash; the oldest mechanism, designed for the server, awkwardly scriptable from the client, and re-sent with every matching HTTP request.</li>
+        <li><strong>IndexedDB</strong> &mdash; an asynchronous, transactional, indexed object database. The only one of the four that's a real database.</li>
+      </ul>
+
+      <h3 id="storage-comparison">Deep dive: choosing a storage mechanism <span class="badge hard">Hard</span></h3>
+      <p>
+        Picking the wrong one is a common source of bugs and performance
+        problems &mdash; slow requests because every cookie on the domain
+        rides along with them, or a UI that locks up because IndexedDB
+        wasn't used for something that should never have blocked the render.
+        The table below is the decision reference:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th></th><th><code>localStorage</code></th><th><code>sessionStorage</code></th><th>Cookies</th><th>IndexedDB</th></tr>
+          <tr><td>Lifetime</td><td>Forever, until explicitly deleted</td><td>Until the tab/window closes</td><td>Session by default; up to <code>max-age</code> seconds if set</td><td>Forever, until explicitly deleted</td></tr>
+          <tr><td>Scope</td><td>Origin (protocol + host + port), shared by all tabs</td><td>Origin <em>and</em> single tab &mdash; two tabs on the same page do not share it</td><td>Origin by default, but widenable with <code>path</code> and <code>domain</code> attributes</td><td>Origin, shared by all tabs</td></tr>
+          <tr><td>Size limit</td><td>~5&ndash;10&nbsp;MB (browser-dependent)</td><td>~5&ndash;10&nbsp;MB</td><td>~4&nbsp;KB per cookie; browsers aren't required to keep more than 300 total or 20 per server</td><td>Large &mdash; typically a quota tied to available disk space, often hundreds of MB or more</td></tr>
+          <tr><td>API style</td><td>Synchronous</td><td>Synchronous</td><td>Synchronous, but the string format is painful</td><td>Asynchronous, event-based (predates Promises)</td></tr>
+          <tr><td>Sent to server?</td><td>Never</td><td>Never</td><td><strong>Yes &mdash; automatically, with every matching HTTP request</strong></td><td>Never</td></tr>
+          <tr><td>Value types</td><td>Strings only</td><td>Strings only</td><td>Strings only (and a very restrictive charset)</td><td>Structured-clonable values: objects, arrays, <code>Map</code>, <code>Set</code>, typed arrays, dates</td></tr>
+        </table>
+      </div>
+      <p>
+        The single biggest gotcha in that table is the "sent to server" row.
+        Cookies were invented for server-side session tracking, and the
+        browser still faithfully attaches every cookie that matches a
+        request's domain and path to that request's headers &mdash; whether
+        or not the server has any use for that particular cookie. A page that
+        stores 3&nbsp;KB of client-only preference data in a cookie is paying
+        that 3&nbsp;KB in upload bandwidth on <em>every single request</em> to
+        that origin: every image, every script, every XHR. Web Storage and
+        IndexedDB data, by contrast, never leaves the browser unless your own
+        code explicitly sends it (e.g. in a <code>fetch()</code> body).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example A: a client-only setting — belongs in localStorage, never in a cookie.
+localStorage.setItem("reduceMotion", "true");
+// This value is never transmitted anywhere. The server never sees it, and
+// never needs to — only this page's own JavaScript reads it back.
+if (localStorage.getItem("reduceMotion") === "true") {
+  document.documentElement.classList.add("no-animations");
+}</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example B: a session identifier the *server* needs to read on every
+// request — this is the one legitimate remaining use case for a cookie,
+// and it's usually set by the server (Set-Cookie response header), not by
+// client JavaScript at all.
+// Set-Cookie: sessionId=abc123; Secure; HttpOnly; SameSite=Lax; Max-Age=3600
+//
+// document.cookie can't even see this cookie once HttpOnly is set — that's
+// the point: it keeps the session token out of reach of an XSS payload
+// that manages to run arbitrary JavaScript on your page.</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Nothing here is encrypted</div>
+        <p>
+          Browsers store saved passwords encrypted, but <code>localStorage</code>,
+          <code>sessionStorage</code>, cookies, and IndexedDB are all plain
+          text on disk. They're readable by anyone with access to the device
+          and by malicious software running on it. Never store passwords,
+          full payment details, or high-privilege tokens in any of them &mdash;
+          and treat <code>Secure</code>/<code>HttpOnly</code> cookies as the
+          floor of protection for a session token, not encryption.
+        </p>
+      </div>
+
+      <h2 id="web-storage">localStorage and sessionStorage</h2>
+      <p>
+        <code>localStorage</code> and <code>sessionStorage</code> (both
+        properties of <code>Window</code>) refer to <code>Storage</code>
+        objects. A <code>Storage</code> object behaves almost like a plain
+        JavaScript object, with two differences: every property value must be
+        a string, and the properties persist &mdash; reloading the page does
+        not clear them.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Plain property access works, just like a regular object:
+let name = localStorage.username;          // read
+if (!name) {
+  name = prompt("What is your name?");
+  localStorage.username = name;             // write
+}
+delete localStorage.username;               // remove one property
+
+// The Storage object also defines explicit methods, if you prefer them:
+localStorage.setItem("theme", "dark");
+localStorage.getItem("theme");              // => "dark"
+localStorage.removeItem("theme");
+localStorage.clear();                        // wipe every property for this origin
+
+// Enumerate everything currently stored:
+for (let key in localStorage) { console.log(key, "=", localStorage[key]); }
+Object.keys(localStorage);                   // same idea, as an array</code></pre>
+      </div>
+      <p>
+        Because only strings can be stored, anything else has to be encoded
+        going in and decoded coming out. JSON is the usual choice for
+        anything beyond a primitive:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Numbers are silently stringified — remember to parse them back:
+localStorage.x = 10;
+let x = parseInt(localStorage.x);
+
+// Dates need explicit conversion both ways:
+localStorage.lastRead = new Date().toUTCString();
+let lastRead = new Date(Date.parse(localStorage.lastRead));
+
+// JSON is the convenient path for anything structured:
+localStorage.prefs = JSON.stringify({ theme: "dark", fontSize: 14 });
+let prefs = JSON.parse(localStorage.prefs);</code></pre>
+      </div>
+
+      <h3 id="storage-lifetime-scope">Lifetime and scope</h3>
+      <p>
+        Data written through <code>localStorage</code> is permanent: it never
+        expires and stays on the device until a script deletes it or the user
+        clears it through browser UI. It is scoped to the document's
+        <strong>origin</strong> &mdash; protocol, hostname, and port together
+        &mdash; so all documents sharing an origin see the same
+        <code>localStorage</code>, regardless of which script on the page
+        actually touches it. It is also scoped per browser <em>implementation</em>:
+        visiting a site in Firefox and then again in Chrome gives you two
+        completely separate stores, even on the same machine.
+      </p>
+      <p>
+        <code>sessionStorage</code> has a different lifetime: it lives as
+        long as the top-level tab or window that created it. Closing that tab
+        deletes its <code>sessionStorage</code> for good (though a browser
+        that offers to reopen recently closed tabs may make this last longer
+        than it looks). Critically, <code>sessionStorage</code> is scoped
+        <em>per tab</em>, not just per origin &mdash; open the same page in
+        two tabs and each gets independent storage, even though they're
+        running byte-for-byte identical scripts.
+      </p>
+
+      <h3 id="storage-event">The <code>storage</code> event: cross-tab sync <span class="badge hard">Hard</span></h3>
+      <p>
+        Every time <code>localStorage</code> changes, the browser fires a
+        <code>storage</code> event on <em>every other</em> <code>Window</code>
+        that can see that data &mdash; but never on the window that made the
+        change. That asymmetry is what makes it usable as a broadcast
+        channel: one tab writes, every sibling tab hears about it, and the
+        writer doesn't get an event it has to filter out.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">window.addEventListener("storage", (event) => {
+  // key        — the property name that changed (null if clear() was called)
+  // newValue   — the new value (absent if removeItem() was called)
+  // oldValue   — the previous value (absent if the property is brand new)
+  // storageArea — the Storage object that changed (usually localStorage)
+  // url        — the URL of the document whose script made the change
+  console.log(`${event.key} changed from ${event.oldValue} to ${event.newValue}`);
+});</code></pre>
+      </div>
+      <p>
+        A worked example: an image-editing app lets the user pop tool
+        palettes out into separate windows. When the user picks a new tool in
+        one window, that window writes the choice to <code>localStorage</code>;
+        every other window sharing the origin receives a <code>storage</code>
+        event and updates its own palette display to match &mdash; with zero
+        direct references between the windows and no server round-trip:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// In the window where the user clicks a tool:
+function selectTool(toolName) {
+  localStorage.setItem("activeTool", toolName);   // triggers "storage" in siblings
+  applyTool(toolName);                             // update this window too
+}
+
+// In every window (including palette popouts):
+window.addEventListener("storage", (event) => {
+  if (event.key === "activeTool") {
+    highlightToolInPalette(event.newValue);
+  }
+});</code></pre>
+      </div>
+      <p>
+        A second, simpler example: broadcasting a "reduce motion" preference
+        so every open tab honors it immediately, without a page reload,
+        purely because setting <code>localStorage</code> is itself the
+        notification:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function setReduceMotion(on) {
+  localStorage.setItem("reduceMotion", on ? "1" : "0"); // fires storage in other tabs
+  document.documentElement.classList.toggle("no-animations", on);
+}
+window.addEventListener("storage", (e) => {
+  if (e.key === "reduceMotion") {
+    document.documentElement.classList.toggle("no-animations", e.newValue === "1");
+  }
+});</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Register with <code>window.onstorage</code> too</div>
+        <p>
+          You can set <code>window.onstorage</code> directly instead of
+          <code>addEventListener</code> if you only need one handler &mdash;
+          both work identically, since <code>storage</code> is a normal DOM event.
+        </p>
+      </div>
+
+      <h2 id="cookies">Cookies</h2>
+      <p>
+        A cookie is a small named piece of data associated with a page or an
+        entire site, implemented at the HTTP protocol level rather than as a
+        JavaScript feature. Cookies were designed for server-side scripts:
+        the browser automatically attaches matching cookies to every request
+        it sends to a server, which is exactly what makes them expensive
+        compared to Web Storage for anything the client alone cares about.
+        Client-side code can still read and write cookies, through the
+        <code>document.cookie</code> property &mdash; an old, cryptic API
+        with no dedicated methods at all.
+      </p>
+
+      <h3 id="cookie-format">Reading and writing <code>document.cookie</code></h3>
+      <p>
+        Reading <code>document.cookie</code> returns <strong>one string
+        containing every cookie visible to the current document</strong>,
+        formatted as <code>name=value</code> pairs separated by
+        <code>"; "</code>. There's no built-in way to read a single cookie by
+        name &mdash; you get the whole string and parse it yourself, typically
+        with <code>split("; ")</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.cookie;
+// => "theme=dark; sessionHint=abc123; consent=yes"  — every cookie, one string
+
+// Parse it into a Map, decoding values that were escaped on the way in:
+function getCookies() {
+  let cookies = new Map();
+  let list = document.cookie.split("; ");
+  for (let cookie of list) {
+    if (!cookie.includes("=")) continue;
+    let p = cookie.indexOf("=");
+    let name = cookie.substring(0, p);
+    let value = decodeURIComponent(cookie.substring(p + 1));
+    cookies.set(name, value);
+  }
+  return cookies;
+}</code></pre>
+      </div>
+      <p>
+        <em>Writing</em> to <code>document.cookie</code> looks like assignment
+        but behaves more like "merge this one cookie into the existing set" &mdash;
+        it never clobbers other cookies, only the one whose name you specify.
+        Cookie values can't contain semicolons, commas, or whitespace, so
+        <code>encodeURIComponent()</code> is standard practice before storing
+        anything that isn't a bare token:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">document.cookie = `version=${encodeURIComponent(document.lastModified)}`;
+
+// A reusable setter that handles the max-age attribute:
+function setCookie(name, value, daysToLive = null) {
+  let cookie = `${name}=${encodeURIComponent(value)}`;
+  if (daysToLive !== null) {
+    cookie += `; max-age=${daysToLive * 60 * 60 * 24}`;   // max-age is in seconds
+  }
+  document.cookie = cookie;
+}
+
+// To delete a cookie: set it again with the same name/path/domain,
+// any value, and max-age=0.
+function deleteCookie(name) {
+  document.cookie = `${name}=; max-age=0`;
+}</code></pre>
+      </div>
+
+      <h3 id="cookie-attributes">Cookie attributes: lifetime and scope</h3>
+      <p>
+        By default a cookie is <strong>transient</strong> &mdash; it lasts
+        only for the current browser session and disappears when the browser
+        exits. Attributes, appended to the same string you assign to
+        <code>document.cookie</code>, control lifetime and visibility:
+      </p>
+      <ul>
+        <li><code>max-age=<em>seconds</em></code> &mdash; how long the cookie should be retained. Without it, the cookie dies with the session.</li>
+        <li><code>expires=<em>date</em></code> &mdash; an older, date-based alternative to <code>max-age</code>.</li>
+        <li><code>path=<em>value</em></code> &mdash; by default a cookie is visible only to pages in the same directory (or subdirectories) as the page that set it. Setting <code>path=/catalog</code> shares it with everything under <code>/catalog</code>; <code>path=/</code> makes it site-wide, like <code>localStorage</code>.</li>
+        <li><code>domain=<em>value</em></code> &mdash; shares a cookie across subdomains, e.g. setting <code>domain=.example.com</code> from <code>catalog.example.com</code> makes it visible to <code>orders.example.com</code> too. You cannot set a domain that isn't a parent of the current host.</li>
+        <li><code>Secure</code> &mdash; the cookie is transmitted only over HTTPS, never plain HTTP.</li>
+        <li><code>SameSite=Strict|Lax|None</code> &mdash; controls whether the cookie is sent on cross-site requests (e.g. when the site is loaded via a link or a third-party <code>&lt;img&gt;</code>/<code>&lt;iframe&gt;</code>); the main modern defense against cross-site request forgery.</li>
+        <li><code>HttpOnly</code> &mdash; settable only by a server's <code>Set-Cookie</code> response header, never by client JavaScript. A cookie marked <code>HttpOnly</code> is invisible to <code>document.cookie</code> entirely, which is precisely the point: it keeps a session token safe even if an XSS bug lets an attacker run arbitrary JavaScript on the page.</li>
+      </ul>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Client-settable attributes, all client-side:
+document.cookie = "theme=dark; max-age=31536000; path=/; SameSite=Lax";
+// ~1 year, whole site, not sent on most cross-site navigations.
+
+// HttpOnly and Secure for anything sensitive are set by the SERVER, e.g.
+// via an HTTP response header — never available to document.cookie:
+//   Set-Cookie: sessionId=abc123; Secure; HttpOnly; SameSite=Lax; Max-Age=3600</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Cookie size and count limits</div>
+        <p>
+          Browsers aren't required to retain more than 300 cookies total, 20
+          per web server, or 4&nbsp;KB per cookie (name and value combined
+          count toward that limit) &mdash; though in practice most browsers
+          allow considerably more than 300 total. This is one more reason
+          cookies are a poor fit for anything beyond small identifiers.
+        </p>
+      </div>
+
+      <h2 id="indexeddb">IndexedDB: a transactional client-side database <span class="badge hard">Hard</span></h2>
+      <p>
+        IndexedDB is a genuine object database built into the browser &mdash;
+        more powerful, more efficient, and more robust than the flat
+        key-value model of Web Storage, though also considerably more
+        complex to use directly. It's an <em>object</em> database, not a
+        relational one: there's no SQL, no joins, just named collections of
+        JavaScript values called <strong>object stores</strong>. Like Web
+        Storage, an IndexedDB database is scoped to the document's origin.
+      </p>
+      <p>
+        The core vocabulary:
+      </p>
+      <ul>
+        <li><strong>Database</strong> &mdash; a named collection of object stores. Each origin can have any number of databases, each uniquely named.</li>
+        <li><strong>Object store</strong> &mdash; holds JavaScript values, serialized with the same structured clone algorithm used for worker messages (see below), which is why you can store <code>Map</code>s, <code>Set</code>s, and typed arrays directly, not just JSON-safe values.</li>
+        <li><strong>Key</strong> &mdash; every stored object needs a unique, sortable key: a string, number, or <code>Date</code>. You can let IndexedDB auto-generate one, or specify a <strong>key path</strong> &mdash; a property name IndexedDB pulls the key from automatically (e.g. an object's own <code>id</code> field).</li>
+        <li><strong>Index</strong> &mdash; a secondary, non-unique key defined on an object store, letting you query by some property other than the primary key.</li>
+        <li><strong>Transaction</strong> &mdash; every read or write happens inside a transaction, which guarantees all-or-nothing atomicity. Transactions auto-commit once every pending request on them has succeeded and no more are queued &mdash; there's no explicit <code>commit()</code> call.</li>
+      </ul>
+      <div class="admonition warning">
+        <div class="admonition-title">It's event-based, not Promise-based</div>
+        <p>
+          IndexedDB predates widespread Promise support, so its asynchronous
+          operations return a <em>request object</em> with
+          <code>onsuccess</code>/<code>onerror</code> callback properties
+          rather than returning a Promise. It does <strong>not</strong> work
+          with <code>async</code>/<code>await</code> directly. Opening a
+          database, and reading or writing an object store, are asynchronous;
+          creating a transaction and looking up a store or index by name from
+          it are synchronous. In real projects, reach for a small Promise-wrapping
+          library (e.g. <code>idb</code>) rather than hand-writing callback
+          chains for every query &mdash; but it's worth understanding the raw
+          event-based shape at least once, since that's what such libraries
+          wrap.
+        </p>
+      </div>
+
+      <h3 id="indexeddb-upgradeneeded">Schema setup: the version-upgrade pattern</h3>
+      <p>
+        Object stores and indexes can only be created or modified inside a
+        special event handler: <code>onupgradeneeded</code>. This event fires
+        exactly once, the first time a database is opened, and again any time
+        you open it with a <em>higher version number</em> than what's
+        currently stored on disk. This is IndexedDB's migration mechanism:
+        bump the version argument to <code>indexedDB.open()</code>, and your
+        <code>onupgradeneeded</code> handler runs to bring the schema up to date.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let request = indexedDB.open("myapp", 1);   // name, version
+
+request.onupgradeneeded = () => {
+  let db = request.result;
+  // Object stores and indexes can ONLY be created/altered in here.
+  let store = db.createObjectStore("notes", { keyPath: "id" });
+  store.createIndex("byDate", "createdAt");   // secondary, non-unique key
+};
+
+request.onerror = () => console.error("could not open database:", request.error);
+
+request.onsuccess = () => {
+  let db = request.result;
+  let tx = db.transaction("notes", "readwrite");   // create a transaction
+  let store = tx.objectStore("notes");              // look up the store (sync)
+  store.put({ id: 1, text: "Hello", createdAt: Date.now() });  // write (async)
+  tx.oncomplete = () => console.log("saved");
+};</code></pre>
+      </div>
+
+      <h3 id="indexeddb-full-example">Worked example: a zip-code lookup database</h3>
+      <p>
+        A more complete example ties the pieces together: a database that
+        maps US postal codes to city/state, queryable in both directions
+        &mdash; by zip code (the primary key) and by city name (a secondary
+        index). It demonstrates initialization from a network fetch,
+        populating a store inside a write transaction, and querying by both
+        the primary key and an index:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Get (and lazily create/populate) the database, then hand it to a callback.
+function withDB(callback) {
+  let request = indexedDB.open("zipcodes", 1);
+  request.onerror = console.error;
+  request.onsuccess = () => callback(request.result);
+  request.onupgradeneeded = () => initdb(request.result, callback);
+}
+
+// Runs only the first time — creates the schema and loads seed data.
+function initdb(db, callback) {
+  let store = db.createObjectStore("zipcodes", { keyPath: "zipcode" });
+  store.createIndex("cities", "city");   // query by city name too
+
+  fetch("zipcodes.json")
+    .then(response => response.json())
+    .then(zipcodes => {
+      let tx = db.transaction(["zipcodes"], "readwrite");
+      tx.onerror = console.error;
+      let store = tx.objectStore("zipcodes");
+      for (let record of zipcodes) store.put(record);   // { zipcode, city, state }
+      tx.oncomplete = () => callback(db);                 // ready once all writes land
+    });
+}
+
+// Look up a city by zip code — a primary-key query.
+function lookupCity(zip, callback) {
+  withDB(db => {
+    let tx = db.transaction(["zipcodes"]);        // read-only by default
+    let request = tx.objectStore("zipcodes").get(zip);
+    request.onerror = console.error;
+    request.onsuccess = () => {
+      let record = request.result;
+      callback(record ? `${record.city}, ${record.state}` : null);
+    };
+  });
+}
+
+// Look up every zip code for a given city name — a secondary-index query.
+function lookupZipcodes(city, callback) {
+  withDB(db => {
+    let tx = db.transaction(["zipcodes"]);
+    let index = tx.objectStore("zipcodes").index("cities");
+    let request = index.getAll(city);
+    request.onerror = console.error;
+    request.onsuccess = () => callback(request.result);
+  });
+}</code></pre>
+      </div>
+      <p>
+        For range queries &mdash; "everything between these two keys" &mdash;
+        construct an <code>IDBKeyRange</code> and pass it to
+        <code>getAll()</code> or <code>openCursor()</code> on either an
+        object store or an index, in place of a single key value. A cursor is
+        the right tool when there may be too many matching rows to
+        materialize into an array all at once; <code>getAll()</code> is
+        simpler when you know the result set is small.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Wrap it, don't fight it</div>
+        <p>
+          Every request is a fresh object with its own <code>onsuccess</code>/<code>onerror</code>
+          handlers &mdash; verbose for anything beyond a couple of queries. A
+          thin Promise wrapper (roll your own, or use a library like
+          <code>idb</code>) turns this into ordinary <code>async</code>/<code>await</code>
+          code without changing the underlying transaction semantics.
+        </p>
+      </div>
+
+      <h2 id="workers">Worker Threads and Messaging</h2>
+      <p>
+        JavaScript in a tab is fundamentally single-threaded: the browser
+        never runs two event handlers concurrently, and never fires a timer
+        while a handler is still running. That's what makes client-side
+        JavaScript approachable &mdash; there's no shared-memory race
+        condition to reason about &mdash; but it has a sharp corollary:
+        a function that runs too long freezes <em>everything</em>, including
+        scrolling, clicking, and rendering, because it's holding the one and
+        only thread that does all of that work. This is exactly why
+        <code>fetch()</code> and friends are asynchronous rather than
+        blocking (see <a href="19-navigation-networking.html">Navigation &amp; Networking</a>
+        for the async networking APIs themselves).
+      </p>
+      <p>
+        The <code>Worker</code> class is the browser's one carefully
+        controlled exception to single-threadedness. A <code>Worker</code>
+        runs on a genuinely separate OS thread, with its own independent
+        global object (a <code>WorkerGlobalScope</code>, not a
+        <code>Window</code>) &mdash; no access to <code>window</code>,
+        <code>document</code>, or any variable from the script that created
+        it. The <em>only</em> connection between a worker and the thread that
+        spawned it is asynchronous message passing. Concurrent DOM mutation
+        is therefore still impossible (only the main thread ever touches the
+        DOM), but a worker can run a computation for as long as it needs
+        without ever stalling the event loop or freezing the page.
+      </p>
+      <p>
+        Creating a worker isn't as heavy as opening a new browser window, but
+        it isn't free either &mdash; it's not a lightweight "fiber" you should
+        spin up for trivial work. Tens of workers in a complex app is
+        reasonable; hundreds or thousands is not.
+      </p>
+
+      <h3 id="creating-workers">Creating a worker</h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.js — the page that creates the worker
+let worker = new Worker("cruncher.js");   // URL, resolved like any other script URL
+
+worker.postMessage({ command: "process", data: bigArray });
+worker.onmessage = (event) => console.log("result:", event.data);
+worker.onerror = (event) =>
+  console.error(`worker error at ${event.filename}:${event.lineno}: ${event.message}`);
+
+worker.terminate();   // force-stop the worker thread at any time
+
+// cruncher.js — runs on its own thread, in its own WorkerGlobalScope
+self.onmessage = (event) => {
+  let result = heavyComputation(event.data.data);
+  self.postMessage(result);
+};</code></pre>
+      </div>
+      <p>
+        A relative URL passed to <code>Worker()</code> is resolved against
+        the document that created the worker; an absolute URL must share the
+        document's origin (protocol, host, and port). Inside the worker
+        file, <code>self</code> refers to the worker's own global object
+        (there is no <code>window</code>), and <code>postMessage()</code>/<code>onmessage</code>
+        appear as a global function and global property, working in the
+        opposite direction from the outside: calling <code>postMessage()</code>
+        inside the worker delivers a message to the <code>Worker</code>
+        object outside it, and vice versa.
+      </p>
+      <p>
+        A worker's global scope still has a useful subset of what a
+        <code>Window</code> offers: <code>setTimeout</code>/<code>setInterval</code>
+        and their clear-counterparts, a read-only <code>location</code>, a
+        <code>navigator</code> with the usual identification properties,
+        <code>fetch()</code>, the <code>Console</code> object, and even
+        IndexedDB access &mdash; plus the <code>Worker</code> constructor
+        itself, so a worker can spawn its own sub-workers. Older,
+        pre-ES-module worker code loads dependencies with the synchronous
+        global <code>importScripts("a.js", "b.js")</code> rather than
+        <code>import</code>; modern code can instead pass
+        <code>{ type: "module" }</code> as a second argument to
+        <code>Worker()</code> and use ordinary <code>import</code> declarations.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Dedicated vs. shared workers</div>
+        <p>
+          Everything above describes a <strong>dedicated worker</strong>
+          &mdash; owned by exactly one script, and terminated when that
+          script's page goes away. A <strong>shared worker</strong>
+          (<code>SharedWorker</code>) is reachable from multiple tabs or
+          iframes of the same origin at once, communicating over a
+          <code>MessagePort</code> per connecting document rather than a
+          single implicit channel. Shared workers are useful for coordinating
+          state across tabs (a single WebSocket connection shared by every
+          open tab, for instance) but are less commonly needed than dedicated
+          workers and have weaker cross-browser support; reach for a
+          dedicated worker unless you specifically need one worker instance
+          serving several documents simultaneously.
+        </p>
+      </div>
+
+      <h3 id="structured-clone-messaging">Deep dive: structured clone and transferable objects <span class="badge hard">Hard</span></h3>
+      <p>
+        Every value passed to <code>postMessage()</code> &mdash; on a
+        <code>Worker</code>, from inside a worker, or over a
+        <code>MessageChannel</code> &mdash; is copied using the
+        <strong>structured clone algorithm</strong>, the same serialization
+        mechanism IndexedDB uses internally to store objects. It is strictly
+        more capable than <code>JSON.stringify</code>/<code>parse</code>: it
+        correctly handles <code>Map</code>, <code>Set</code>, <code>Date</code>,
+        <code>RegExp</code>, typed arrays, <code>ArrayBuffer</code>, and
+        circular references within the object graph. What it <em>cannot</em>
+        clone: functions, DOM nodes, and anything with a prototype chain the
+        algorithm doesn't specifically know about (class instances lose
+        their prototype and come back as plain objects with the same
+        properties).
+      </p>
+      <p>
+        The critical consequence: the receiving side gets an
+        <strong>independent copy</strong>, never a live reference. Mutating
+        the original object after calling <code>postMessage()</code> has
+        absolutely no effect on what the other side already received (or
+        will receive) &mdash; there is no shared memory involved at all.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.js
+let payload = { items: [1, 2, 3], label: "batch-1" };
+worker.postMessage(payload);
+
+// Mutating payload right after posting does NOT affect what the worker
+// receives — the clone already happened synchronously inside postMessage().
+payload.label = "MUTATED";
+payload.items.push(999);
+
+// worker.js
+self.onmessage = (event) => {
+  console.log(event.data.label);        // => "batch-1", NOT "MUTATED"
+  console.log(event.data.items.length); // => 3, the push() never reached here
+};</code></pre>
+      </div>
+      <p>
+        That copy has a cost: for a large payload &mdash; say, a multi-megabyte
+        <code>ArrayBuffer</code> holding raw image or audio data &mdash; cloning
+        it on every message is real, measurable overhead. <code>postMessage()</code>
+        accepts an optional second argument, an array of <strong>transferable
+        objects</strong> (currently <code>ArrayBuffer</code> and
+        <code>MessagePort</code>) that should be <em>moved</em> rather than
+        copied. A transferred <code>ArrayBuffer</code> is handed to the
+        receiving side with zero copying, but the sending side's reference
+        becomes immediately unusable &mdash; its byte length drops to 0 and any
+        attempt to read it throws. This eliminates the copy cost entirely
+        while guaranteeing there's never a moment where both threads could
+        read or write the same bytes concurrently.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// main.js
+let buffer = new ArrayBuffer(8 * 1024 * 1024);  // 8 MB
+let view = new Uint8Array(buffer);
+view[0] = 42;
+
+// Second argument lists which objects inside the message to TRANSFER
+// instead of clone. The buffer must be reachable from the first argument.
+worker.postMessage({ buffer }, [buffer]);
+
+console.log(buffer.byteLength);   // => 0 — this thread no longer owns it!
+// view[0] would throw now; the buffer has been moved, not copied.
+
+// worker.js
+self.onmessage = (event) => {
+  let view = new Uint8Array(event.data.buffer);
+  console.log(view[0]);   // => 42 — the worker now owns the memory
+};</code></pre>
+      </div>
+      <p>
+        This transfer technique is exactly how a worker hands back the
+        results of an image-processing task without a copy: compute into an
+        <code>ImageData</code>'s backing <code>ArrayBuffer</code>, then
+        transfer that buffer to the main thread instead of cloning
+        potentially tens of megabytes of pixel data. It's precisely the
+        approach used to parallelize the book's Mandelbrot Set renderer
+        (&sect;15.14) across several worker threads &mdash; each worker computes
+        one tile of the image into its own pixel buffer and transfers it
+        back rather than copying it, which matters a great deal when you're
+        moving many large buffers per second.
+      </p>
+
+      <h3 id="worker-errors">Error handling in workers</h3>
+      <p>
+        An uncaught exception inside a worker fires an <code>error</code>
+        event, first on the worker's own global scope, then &mdash; unless
+        <code>preventDefault()</code> was called there &mdash; on the
+        <code>Worker</code> object back on the main thread. If nothing
+        handles it there either, the error is logged to the console just
+        like any other uncaught error.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Handle it from inside the worker:
+self.onerror = (e) => {
+  console.log(`worker error at ${e.filename}:${e.lineno}: ${e.message}`);
+  e.preventDefault();   // stop it from also propagating to the main thread
+};
+
+// Or handle it from the main thread instead:
+worker.onerror = (e) => {
+  console.log(`worker error at ${e.filename}:${e.lineno}: ${e.message}`);
+  e.preventDefault();
+};</code></pre>
+      </div>
+      <p>
+        Workers also support <code>unhandledrejection</code>, for a Promise
+        that rejects with no <code>.catch()</code> anywhere in the chain
+        &mdash; register it with <code>self.onunhandledrejection</code> or
+        <code>addEventListener("unhandledrejection", ...)</code>; the event
+        object carries both the rejected <code>promise</code> and the
+        rejection <code>reason</code>.
+      </p>
+
+      <h3 id="message-channels">MessageChannel: extra ports, and window-to-window messaging</h3>
+      <p>
+        A worker's default communication path is a single implicit channel.
+        If you need more &mdash; say, a separate high-priority channel
+        alongside ordinary data traffic, or direct communication between two
+        sibling workers without relaying every message through the main
+        thread &mdash; create a <code>MessageChannel</code> explicitly. It
+        produces a connected pair of <code>MessagePort</code> objects; a
+        message posted on one port fires a <code>message</code> event on the other:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let channel = new MessageChannel();
+let myPort = channel.port1;
+let yourPort = channel.port2;
+
+myPort.postMessage("can you hear me?");
+yourPort.onmessage = (e) => console.log(e.data);   // => "can you hear me?"
+
+// A port can itself be transferred to a worker, becoming that worker's
+// end of the channel (and unusable on this side, just like ArrayBuffer):
+let worker = new Worker("worker.js");
+worker.postMessage({ command: "setUrgentPort", value: yourPort }, [yourPort]);
+myPort.addEventListener("message", handleUrgentReply);
+myPort.start();   // required when using addEventListener rather than onmessage —
+                   // messages queue silently until the port is "started"</code></pre>
+      </div>
+      <p>
+        The same <code>postMessage()</code>/structured-clone model, minus
+        the worker-specific parts, is also how a document safely talks to a
+        cross-origin <code>&lt;iframe&gt;</code>: <code>window.postMessage(message, targetOrigin)</code>
+        takes a required origin string as its second argument so the browser
+        can refuse delivery if the target window turns out to hold content
+        from an unexpected origin, and the receiving <code>message</code>
+        event carries a <code>source</code> (the sending <code>Window</code>,
+        useful for replying) and an unforgeable <code>origin</code> you
+        should always check before trusting the payload.
+      </p>
+
+      <h3 id="when-to-use-workers">When workers are (and aren't) worth it</h3>
+      <p>
+        Good candidates: parsing or crunching a large dataset, image or audio
+        processing, and &mdash; a case worth calling out because it's easy to
+        underestimate &mdash; work that's individually cheap but runs on
+        every keystroke, like live syntax highlighting in an in-browser code
+        editor. Run that parse on the main thread and it competes with the
+        keypress handler for the same thread, and typing starts to feel
+        laggy even though no single parse is slow in isolation.
+      </p>
+      <p>
+        Not good candidates: anything quick enough that the round trip of
+        posting a message, structured-cloning the payload, and posting the
+        result back costs more than just doing the work inline would have.
+        Spinning up a <code>Worker</code> itself also has nontrivial startup
+        cost &mdash; reuse one long-lived worker for repeated small jobs
+        rather than creating and terminating a fresh worker per task.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Node has the same idea</div>
+        <p>
+          Node.js exposes an almost identical model for CPU-bound work off
+          its own single thread &mdash; see <a href="21-nodejs.html#worker-threads">Node's worker_threads</a>,
+          which uses the same <code>postMessage()</code>/structured-clone
+          approach described here.
+        </p>
+      </div>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

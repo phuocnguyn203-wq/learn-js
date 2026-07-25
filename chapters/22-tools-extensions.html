@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tools & Extensions — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="22-tools-extensions.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 17</span>
+      <h1>Tools &amp; Extensions</h1>
+      <p class="lede">
+        Almost nobody ships plain, unprocessed JavaScript anymore. A real
+        project sits inside a pipeline: a linter flags likely bugs, a
+        formatter normalizes style, a test runner proves the code still
+        works, a package manager tracks what the code depends on, a bundler
+        squashes a tree of modules into something a browser can load
+        efficiently, a transpiler rewrites new syntax for older engines, and
+        — increasingly — a type checker catches a whole category of mistakes
+        before the code ever runs. None of this is part of the JavaScript
+        language itself, but you cannot read someone else's project, follow a
+        tutorial, or work on a team without running into all of it. This
+        chapter is a tour of that surrounding ecosystem: what each tool
+        actually does under the hood, why it exists, and where the rough
+        edges are.
+      </p>
+
+      <h2 id="eslint">17.1 Linting with ESLint</h2>
+      <p>
+        The word <strong>lint</strong> describes code that runs correctly but
+        is nevertheless a problem: a variable that's declared and never used,
+        a loose <code>==</code> comparison where a strict <code>===</code>
+        was clearly intended, a <code>var</code> in code that should use
+        <code>let</code> or <code>const</code>. None of this stops the
+        program from executing, which is exactly what makes it dangerous —
+        nothing crashes to tell you about it. A <strong>linter</strong> is a
+        static-analysis tool that reads your source code without executing it
+        and reports on patterns like these. <strong>ESLint</strong> is the
+        linter almost every JavaScript project uses today.
+      </p>
+      <p>
+        It's worth being precise about the difference between a linter and a
+        formatter (the subject of the next section): a formatter rewrites
+        <em>whitespace and punctuation</em> — indentation, quote style, line
+        breaks — without changing what the code does. A linter looks for
+        things that are more substantive than whitespace: correctness risks,
+        dead code, and API misuse that a formatter has no opinion about.
+        Historically ESLint did both jobs (it has rules for quote style and
+        indentation too), but in most modern setups those stylistic rules are
+        switched off and delegated entirely to Prettier, leaving ESLint to
+        focus on the bugs a formatter can't see.
+      </p>
+      <p>Take this small, syntactically valid, buggy function:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">var x = 'unused';
+export function factorial(x) {
+  if (x == 1) {
+    return 1;
+  } else {
+      return x * factorial(x-1)
+  }
+}</code></pre>
+      </div>
+      <p>Running ESLint against it surfaces several distinct problems at once:</p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ eslint linty.js
+linty.js
+  1:1   error    Unexpected var, use let or const instead      no-var
+  1:5   error    'x' is assigned a value but never used        no-unused-vars
+  1:9   warning  Strings must use doublequote                  quotes
+  4:11  error    Expected '===' and instead saw '=='            eqeqeq
+  5:1   error    Expected indentation of 8 spaces but found 6   indent
+  7:28  error    Missing semicolon                              semi
+
+✖ 6 problems (5 errors, 1 warning)
+  3 errors and 1 warning potentially fixable with the `--fix` option.</code></pre>
+      </div>
+      <p>
+        Each line names the specific <strong>rule</strong> that fired
+        (<code>no-var</code>, <code>eqeqeq</code>, <code>no-unused-vars</code>,
+        and so on) — ESLint ships with a large built-in rule set, and an
+        ecosystem of plugins layers on more rules for specific frameworks
+        (<code>eslint-plugin-react</code>, <code>eslint-plugin-vue</code>) or
+        concerns (accessibility, import ordering, security-sensitive
+        patterns). Every rule can be individually turned off, set to
+        <code>"warn"</code>, or set to <code>"error"</code> in a config file
+        — historically <code>.eslintrc.json</code>, though newer ESLint
+        versions favor a flat <code>eslint.config.js</code>.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Severity</th><th>Effect</th></tr>
+          <tr><td><code>"off"</code> / <code>0</code></td><td>Rule is disabled entirely</td></tr>
+          <tr><td><code>"warn"</code> / <code>1</code></td><td>Reported, but doesn't fail a CI run (exit code stays 0)</td></tr>
+          <tr><td><code>"error"</code> / <code>2</code></td><td>Reported and fails the run (nonzero exit code)</td></tr>
+        </table>
+      </div>
+      <p>
+        Rather than hand-picking hundreds of individual rules, most projects
+        <strong>extend a shareable config</strong> — a curated bundle of rule
+        settings published as a package, such as <code>eslint:recommended</code>,
+        Airbnb's popular style guide config, or the "standard" config — and
+        then layer a handful of project-specific overrides on top:
+      </p>
+      <div class="code-block" data-lang="JSON">
+<pre><code class="language-json">{
+  "extends": ["eslint:recommended", "plugin:react/recommended"],
+  "rules": {
+    "no-console": "warn",
+    "eqeqeq": "error"
+  }
+}</code></pre>
+      </div>
+      <p>
+        Finally, notice the last line of the ESLint output above: several of
+        those problems are <strong>auto-fixable</strong>. Running
+        <code>eslint --fix</code> mechanically rewrites the file to correct
+        anything ESLint can safely correct on its own — missing semicolons,
+        quote style, indentation — while leaving semantic issues like the
+        unused variable or the <code>==</code> comparison for you to fix by
+        hand, since fixing those could change program behavior and ESLint
+        won't guess at your intent.
+      </p>
+
+      <h2 id="prettier">17.2 JavaScript Formatting with Prettier</h2>
+      <p>
+        Enforcing a consistent visual style across a codebase used to mean
+        configuring dozens of ESLint stylistic rules and arguing about tabs
+        versus spaces in a pull request. <strong>Prettier</strong> replaces
+        that entire argument: it's an opinionated formatter that parses your
+        code into a syntax tree and reprints it from scratch in one canonical
+        style, with almost no configuration surface. You don't tell Prettier
+        <em>how</em> to format things — you just run it, and it decides.
+      </p>
+      <p>Given deliberately mangled but functioning code:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function factorial(x)
+{
+         if(x===1){return 1}
+           else{return x*factorial(x-1)}
+}</code></pre>
+      </div>
+      <p>Prettier rewrites it into the conventional form the whole team will now share:</p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ prettier factorial.js</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function factorial(x) {
+  if (x === 1) {
+    return 1;
+  } else {
+    return x * factorial(x - 1);
+  }
+}</code></pre>
+      </div>
+      <p>
+        Run plain, Prettier prints the reformatted file to stdout; pass
+        <code>--write</code> and it rewrites the file in place instead. The
+        options it does expose are deliberately few — maximum line length,
+        indent width, whether to add semicolons, single versus double quotes
+        — and the defaults are considered good enough that most teams never
+        touch them. That's the whole philosophy: adopt it once, agree to stop
+        having opinions about formatting, and let the tool decide every time.
+      </p>
+      <p>
+        Prettier earns its keep through integration rather than through
+        manual invocation. Editors can be configured to run it automatically
+        on every save, so you write sloppy, quickly-typed code and watch it
+        snap into shape. Teams commonly go further and wire it into a Git
+        pre-commit hook (with tools like <code>husky</code> and
+        <code>lint-staged</code>) so that nobody can commit code that hasn't
+        been formatted, regardless of their editor setup:
+      </p>
+      <div class="code-block" data-lang="JSON">
+<pre><code class="language-json">{
+  "lint-staged": {
+    "*.js": ["prettier --write", "eslint --fix"]
+  }
+}</code></pre>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title">Prettier and ESLint, together</div>
+        <p>
+          Because ESLint's own stylistic rules can conflict with what
+          Prettier decides, most projects install
+          <code>eslint-config-prettier</code>, which simply turns off every
+          ESLint rule that overlaps with Prettier's job. The result is a
+          clean split: ESLint watches for bugs, Prettier owns formatting, and
+          the two tools never fight over the same line of code.
+        </p>
+      </div>
+
+      <h2 id="jest">17.3 Unit Testing with Jest</h2>
+      <p>
+        Writing tests is what turns "it worked when I tried it" into a
+        repeatable guarantee. <strong>Jest</strong> is a popular all-in-one
+        testing framework for JavaScript — it bundles a test runner, an
+        assertion library, and a mocking system into a single dependency, so
+        you don't have to assemble one yourself out of smaller pieces.
+      </p>
+      <p>Suppose this function exists, with a suspicious unverified TODO in it:</p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const getJSON = require("./getJSON.js");
+
+// getTemperature() looks up a city's current temperature (in Fahrenheit)
+// via a web service that reports temperatures in Celsius.
+module.exports = async function getTemperature(city) {
+  let c = await getJSON(
+    `https://globaltemps.example.com/api/city/${city.toLowerCase()}`
+  );
+  return (c * 5 / 9) + 32; // TODO: double-check this formula
+};</code></pre>
+      </div>
+      <p>
+        A Jest test file groups related tests with <code>describe()</code>,
+        defines each individual test with <code>test()</code> (an alias,
+        <code>it()</code>, is equally common), and makes assertions with
+        <code>expect(actual).toBe(expected)</code> and its many related
+        matchers (<code>toEqual</code>, <code>toThrow</code>,
+        <code>toHaveBeenCalledWith</code>, and so on). Because
+        <code>getTemperature()</code> depends on a real network call through
+        <code>getJSON()</code>, the test replaces that dependency with a
+        <strong>mock</strong> using <code>jest.mock()</code>, so the test
+        suite runs instantly and deterministically instead of hitting a real
+        server:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const getTemperature = require("./getTemperature.js");
+
+// Replace the getJSON module with an auto-mocked version
+jest.mock("./getJSON");
+const getJSON = require("./getJSON.js");
+
+describe("getTemperature()", () => {
+  test("invokes the correct API", async () => {
+    getJSON.mockResolvedValue(0);
+    let expectedURL = "https://globaltemps.example.com/api/city/vancouver";
+    await getTemperature("Vancouver");
+    // Jest mocks remember every call they received, so we can assert on them
+    expect(getJSON).toHaveBeenCalledWith(expectedURL);
+  });
+
+  test("converts C to F correctly", async () => {
+    getJSON.mockResolvedValue(0);                 // pretend the API said 0°C
+    expect(await getTemperature("x")).toBe(32);
+    getJSON.mockResolvedValue(100);                // pretend the API said 100°C
+    expect(await getTemperature("x")).toBe(212);
+  });
+});</code></pre>
+      </div>
+      <p>
+        Note that both tests are declared <code>async</code> and
+        <code>await</code> the function under test — testing asynchronous
+        code (see <a href="14-async-javascript.html">Asynchronous
+        JavaScript</a> for the underlying Promise mechanics) works naturally
+        in Jest as long as the test function itself returns a Promise that
+        the runner can wait on. Running this suite catches the TODO's bug
+        immediately:
+      </p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ jest getTemperature
+ FAIL  getTemperature.test.js
+  getTemperature()
+    ✓ invokes the correct API (4ms)
+    ✕ converts C to F correctly (3ms)
+
+  ● getTemperature() › converts C to F correctly
+
+    expect(received).toBe(expected)
+    Expected: 212
+    Received: 87.55555555555556</code></pre>
+      </div>
+      <p>
+        The formula was multiplying by 5 and dividing by 9, backward. Once
+        that's fixed, adding <code>--coverage</code> reports exactly which
+        statements, branches, functions, and lines were actually executed by
+        the test run:
+      </p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">$ jest --coverage getTemperature
+------------------|--------|---------|---------|---------|
+File              | % Stmts| % Branch|  % Funcs|  % Lines|
+------------------|--------|---------|---------|---------|
+All files         |   71.43|      100|    33.33|    83.33|
+ getJSON.js       |   33.33|      100|        0|       50|
+ getTemperature.js|     100|      100|      100|      100|
+------------------|--------|---------|---------|---------|</code></pre>
+      </div>
+      <p>
+        100% coverage of <code>getTemperature.js</code> is exactly what was
+        wanted; the partial coverage of <code>getJSON.js</code> is expected
+        and fine, since that module was mocked out rather than exercised for
+        real.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">Vitest <span class="badge new">common alternative</span></div>
+        <p>
+          A newer test runner, <strong>Vitest</strong>, has become a very
+          common alternative to Jest, especially in projects already built
+          on Vite. It deliberately mirrors Jest's API almost line for line —
+          <code>describe</code>, <code>test</code>/<code>it</code>,
+          <code>expect().toBe()</code>, <code>vi.mock()</code> in place of
+          <code>jest.mock()</code> — so switching between the two is mostly a
+          matter of changing an import and a config file rather than
+          relearning how to write a test.
+        </p>
+      </div>
+
+      <h2 id="npm">17.4 Package Management with npm</h2>
+      <p>
+        Almost no nontrivial project is self-contained: a Node server likely
+        depends on a framework like Express, and a browser UI likely depends
+        on a frontend library. A <strong>package manager</strong> finds and
+        installs third-party code, and — just as importantly — records
+        exactly which packages and versions your project depends on, so that
+        anyone else can clone your repository and reconstruct an identical
+        set of dependencies. <strong>npm</strong> is the package manager
+        bundled with Node (see <a href="21-nodejs.html">Node.js</a>), and it's
+        used just as heavily for browser-targeted frontend code as for
+        server-side Node code.
+      </p>
+      <div class="code-block" data-lang="Shell">
+<pre><code class="language-bash">npm install               # (no args) install everything package.json lists
+npm install express         # add a runtime dependency, and record it
+npm install --save-dev jest   # add a dev-only tool, and record it separately
+npm install -g eslint          # install a tool globally, usable outside any project
+npx eslint src/                  # run a locally-installed tool without a global install
+npm uninstall express             # remove a dependency
+npm update                          # bump dependencies within their allowed ranges
+npm audit --fix                       # find (and try to fix) known vulnerabilities</code></pre>
+      </div>
+      <p>
+        Every installed package is recorded in <code>package.json</code>, split
+        into two lists that matter for very different reasons:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Field</th><th>Meaning</th></tr>
+          <tr><td><code>"dependencies"</code></td><td>Needed to <em>run</em> the shipped code — e.g. Express, React</td></tr>
+          <tr><td><code>"devDependencies"</code></td><td>Needed only to <em>develop</em> the project — e.g. ESLint, Prettier, Jest, a bundler</td></tr>
+        </table>
+      </div>
+      <p>
+        Both dependency lists specify version numbers using <strong>semantic
+        versioning</strong> (semver) ranges rather than exact pins, so that
+        installs can pick up compatible bug-fix and feature releases
+        automatically:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Range</th><th>Means</th></tr>
+          <tr><td><code>"1.2.3"</code></td><td>Exactly this version, nothing else</td></tr>
+          <tr><td><code>"^1.2.3"</code></td><td>Any 1.x.y release &gt;= 1.2.3 (no breaking major bump)</td></tr>
+          <tr><td><code>"~1.2.3"</code></td><td>Any 1.2.x release &gt;= 1.2.3 (patch releases only)</td></tr>
+          <tr><td><code>"*"</code> / <code>"latest"</code></td><td>Whatever the newest published version is</td></tr>
+        </table>
+      </div>
+      <p>
+        A second file, <code>package-lock.json</code>, is generated
+        automatically and records the exact resolved version (and often a
+        content hash) of every package actually installed, transitively
+        included dependencies and all. This is what makes builds
+        reproducible: two different machines running <code>npm install</code>
+        against the same <code>package.json</code> could, in principle,
+        resolve slightly different versions from the same semver ranges over
+        time, but they'll resolve identically if a lockfile is present and
+        respected.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>npm install</code> vs. <code>npm ci</code></div>
+        <p>
+          <code>npm install</code> reads <code>package.json</code>, may
+          <em>update</em> the lockfile if a range now resolves to something
+          new, and merges into whatever's already in
+          <code>node_modules/</code>. <code>npm ci</code> instead deletes
+          <code>node_modules/</code> entirely and installs the exact versions
+          frozen in <code>package-lock.json</code>, failing outright if the
+          lockfile and <code>package.json</code> disagree. That determinism
+          is exactly why CI pipelines and Docker builds should use
+          <code>npm ci</code>, not <code>npm install</code>.
+        </p>
+      </div>
+      <p>
+        <code>npx</code>, bundled with npm, runs a command-line tool without
+        requiring a global install or a manual reference to
+        <code>./node_modules/.bin/</code> — and if you point it at a package
+        that isn't installed yet, it will fetch and run it on the fly. npm's
+        own registry at <a href="https://npmjs.com">npmjs.com</a> hosts
+        hundreds of thousands of packages, but npm isn't the only client that
+        can install from it: <strong>yarn</strong> and <strong>pnpm</strong>
+        are widely used alternatives, both compatible with the same
+        <code>package.json</code> format, offering their own take on install
+        speed, disk usage (pnpm famously hard-links a single shared package
+        store instead of duplicating files per project), and lockfile
+        behavior.
+      </p>
+
+      <h2 id="bundlers">17.5 Code Bundling</h2>
+      <p>
+        Browsers today support ES modules natively (see
+        <a href="09-modules.html">Modules</a>), yet production web code is
+        still almost always shipped through a <strong>bundler</strong> first.
+        A bundler starts at your program's entry point (or points), follows
+        every <code>import</code> statement it finds to discover the full
+        graph of modules the program depends on, and combines all of that
+        into a small number of optimized output files. The practical reason
+        this remains standard practice even though the browser could load
+        modules directly is performance: loading one well-optimized bundle is
+        typically faster for a first-time visitor than loading dozens or
+        hundreds of small module files individually, each with its own
+        request overhead.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">The one variable you fully control</div>
+        <p>
+          Web performance is genuinely hard to reason about in general —
+          network conditions, caching, and browser internals all move the
+          numbers around. But code size is the one variable entirely under
+          your control: less JavaScript always loads and runs faster than
+          more JavaScript, regardless of which bundler or browser is involved.
+        </p>
+      </div>
+      <p>Beyond the basic module-graph-to-bundle transformation, bundlers commonly add:</p>
+      <ul>
+        <li><strong>Multiple entry points</strong> — a multi-page app can produce one bundle per page, or one shared bundle covering several entry points.</li>
+        <li><strong>Code splitting</strong> — using the functional, dynamic form of <code>import()</code> (rather than the static form) lets a bundler defer part of the graph into a separate chunk that's fetched only when actually needed, improving initial load time.</li>
+        <li><strong>Source maps</strong> — a generated mapping from bundled/minified line and column positions back to the original source, so browser DevTools can show you your real file and line number when an error is thrown in a bundle.</li>
+        <li><strong>Non-JS module plugins</strong> — a plugin architecture that lets you write <code>import data from "./widgets.json"</code> or import a <code>.css</code> file directly. This is convenient but nonstandard: it works only because your bundler specifically supports it, not because it's part of JavaScript.</li>
+        <li><strong>Filesystem watching and dev servers with HMR</strong> — a watcher rebuilds affected bundles the instant a source file changes; "hot module replacement" goes further and pushes the updated module into the still-running page in the browser without a full reload, preserving in-memory app state.</li>
+      </ul>
+
+      <h3 id="tree-shaking">Tree-shaking, precisely <span class="badge hard">hard part</span></h3>
+      <p>
+        "Tree-shaking" is the whimsical name for a bundler eliminating code
+        you imported but never actually use, so it doesn't bloat the final
+        bundle. The mechanism behind it is worth understanding precisely,
+        because it explains a gotcha that trips people up constantly: tree
+        shaking is reliable with ES modules and fundamentally unreliable with
+        CommonJS, and the reason is structural, not a tooling limitation that
+        will eventually get fixed.
+      </p>
+      <p>
+        ES module <code>import</code>/<code>export</code> declarations are
+        <strong>static</strong>: they must appear at the top level of a file
+        (never inside an <code>if</code> or a function body), the module
+        specifier must be a fixed string literal, and the set of named
+        exports is fully known just by parsing the text — without running
+        any of it. That means a bundler can build a precise graph of exactly
+        which exported bindings are imported anywhere, and mechanically
+        delete any export (and anything it exclusively depends on) that
+        no importer ever references:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// math.js — an ES module
+export function add(a, b) { return a + b; }
+export function multiply(a, b) { return a * b; } // never imported anywhere
+
+// main.js
+import { add } from "./math.js";
+console.log(add(2, 3));
+// A bundler can statically prove `multiply` is unreachable and drop it
+// from the output bundle entirely — it never has to execute math.js to know that.</code></pre>
+      </div>
+      <p>
+        CommonJS's <code>require()</code>, by contrast, is an ordinary
+        function call, not a special syntax form (see
+        <a href="21-nodejs.html">Node.js</a> for the full CommonJS picture).
+        Because it's just a function, it can be called conditionally, inside
+        a loop, with a string built at runtime, and its result — the entire
+        <code>module.exports</code> object — can be destructured, passed
+        around, or mutated arbitrarily:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// This is completely legal CommonJS, and completely opaque to static analysis
+const moduleName = condition ? "./featureA" : "./featureB";
+const mod = require(moduleName);
+const fn = mod[computeKeyAtRuntime()];</code></pre>
+      </div>
+      <p>
+        A bundler has no way to know, just by reading the text, which key of
+        <code>mod</code> will actually be accessed, or even which file
+        <code>require()</code> will resolve to — that information only
+        exists once the code actually runs. So a tool would have to either
+        keep the entire module (safe, but no tree-shaking benefit at all) or
+        guess (unsafe, and liable to silently strip code that's actually
+        used). This is precisely why the modern JavaScript build tooling
+        story pushes so hard toward ES modules even in Node-targeted code:
+        static <code>import</code>/<code>export</code> isn't just cleaner
+        syntax, it's the thing that makes tree-shaking possible at all.
+      </p>
+
+      <h3 id="bundler-landscape">The bundler landscape</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Tool</th><th>Known for</th></tr>
+          <tr><td>webpack</td><td>The longest-established option; enormous plugin ecosystem, highly configurable, can bundle older non-module code too — but configuration can get complex</td></tr>
+          <tr><td>Rollup</td><td>Popular specifically for bundling <em>libraries</em>, thanks to especially clean ES-module tree-shaking and small output</td></tr>
+          <tr><td>esbuild <span class="badge new">since the book</span></td><td>Written in Go; prioritizes raw build speed, often used as a fast building block inside other tools rather than configured directly</td></tr>
+          <tr><td>Vite <span class="badge new">since the book</span></td><td>A dev server that serves ES modules natively (no bundling) during development for near-instant startup and HMR, then uses Rollup under the hood to bundle for production</td></tr>
+        </table>
+      </div>
+      <p>
+        The original edition of this material also highlighted Parcel as a
+        zero-configuration option; that spirit lives on today mostly in Vite,
+        which has become the default starting point for most new frontend
+        projects.
+      </p>
+
+      <h2 id="babel">17.6 Transpilation with Babel</h2>
+      <p>
+        <strong>Babel</strong> compiles JavaScript that uses newer language
+        features (or nonstandard language extensions) into JavaScript that
+        doesn't need those features — because it turns JS into JS, it's
+        usually called a <em>transpiler</em> rather than a compiler. Babel
+        exists because browser support for new syntax has always lagged
+        behind the language specification, and it lets developers write
+        against the latest syntax while still shipping code that runs on
+        whatever engines they actually need to support.
+      </p>
+      <p>
+        Some transformations are mechanical and cheap: the <code>**</code>
+        exponentiation operator becomes a call to <code>Math.pow()</code>,
+        arrow functions become ordinary <code>function</code> expressions
+        (with some care around lexical <code>this</code>). Others, like
+        compiling away the <code>class</code> keyword into prototype-based
+        constructor functions, are considerably more involved, and the
+        output Babel produces for those cases is not meant to be
+        human-readable — which is exactly why Babel, like bundlers, can emit
+        source maps that point DevTools back at your real source.
+      </p>
+      <p>
+        Babel is configured through <code>.babelrc</code> or
+        <code>babel.config.js</code>, and its behavior is composed from
+        <strong>plugins</strong> (each handling one specific syntax
+        transformation) grouped into <strong>presets</strong> — a bundle of
+        plugins for a coherent goal, such as "compile for these target
+        browsers" or "strip JSX." A bundler will typically be configured to
+        run Babel automatically on each module as part of the build — for
+        example, webpack's <code>babel-loader</code> — so the transpilation
+        step disappears into the normal build pipeline rather than being a
+        separate manual command.
+      </p>
+      <p>
+        Browser engines have gotten dramatically better at keeping up with
+        the language specification since Babel was first created, so there's
+        far less day-to-day need today to compile away arrow functions or
+        <code>class</code> declarations for baseline browser support. But
+        Babel hasn't become irrelevant — it remains the standard way to
+        compile syntax that plain browsers will <em>never</em> understand no
+        matter how modern they are, because it isn't standard JavaScript at
+        all: JSX, decorators, and (via a preset) stripped TypeScript type
+        annotations all still routinely go through Babel today.
+      </p>
+
+      <h2 id="jsx">17.7 JSX: Markup Expressions in JavaScript</h2>
+      <p>
+        JSX is a syntax extension, most closely associated with the React
+        UI framework, that lets you write HTML-like markup directly as a
+        JavaScript expression. It's worth being clear that this section
+        describes the <em>syntax</em>, not React itself: JSX is just a
+        literal notation that a compiler (typically Babel) turns into
+        ordinary function calls, and understanding that transformation is
+        enough to read JSX-based code even if you never touch React.
+      </p>
+      <p>
+        You can think of angle brackets in JSX the way you think of quotation
+        marks for a string literal or slashes for a regular expression
+        literal: they delimit a new kind of expression.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let line = &lt;hr/&gt;;
+// Babel compiles that expression to an ordinary function call:
+let line = React.createElement("hr", null);</code></pre>
+      </div>
+      <p>
+        Attributes on a JSX element become properties of an object passed as
+        <code>createElement()</code>'s second argument:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let image = &lt;img src="logo.png" alt="The JSX logo" hidden/&gt;;
+
+// compiles to:
+let image = React.createElement("img", {
+  src: "logo.png",
+  alt: "The JSX logo",
+  hidden: true
+});</code></pre>
+      </div>
+      <p>
+        JSX elements nest, just as HTML elements do, and nested JSX compiles
+        into nested <code>createElement()</code> calls, with each child
+        passed as a third-and-beyond argument:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let sidebar = (
+  &lt;div className="sidebar"&gt;
+    &lt;h1&gt;Title&lt;/h1&gt;
+    &lt;hr/&gt;
+    &lt;p&gt;This is the sidebar content&lt;/p&gt;
+  &lt;/div&gt;
+);</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">React.createElement(
+  "div", { className: "sidebar" },
+  React.createElement("h1", null, "Title"),
+  React.createElement("hr", null),
+  React.createElement("p", null, "This is the sidebar content")
+);</code></pre>
+      </div>
+      <p>
+        The single most important thing to understand about JSX is that
+        <strong>curly braces drop you back into plain JavaScript</strong>.
+        Anything between <code>{</code> and <code>}</code>, whether it's an
+        attribute value or a child, is evaluated as an ordinary expression —
+        conceptually similar to <code>${}</code> inside a template literal.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function sidebar(className, title, content, drawLine = true) {
+  return (
+    &lt;div className={className}&gt;
+      &lt;h1&gt;{title}&lt;/h1&gt;
+      { drawLine &amp;&amp; &lt;hr/&gt; }
+      &lt;p&gt;{content}&lt;/p&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+      </div>
+      <p>
+        which compiles to:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function sidebar(className, title, content, drawLine = true) {
+  return React.createElement("div", { className: className },
+    React.createElement("h1", null, title),
+    drawLine &amp;&amp; React.createElement("hr", null),
+    React.createElement("p", null, content));
+}</code></pre>
+      </div>
+      <p>
+        The <code>drawLine &amp;&amp; &lt;hr/&gt;</code> idiom is exactly the
+        <a href="03-expressions-operators.html#logical-expressions">short-circuit
+        evaluation</a> the <code>&amp;&amp;</code> operator has always had —
+        there is no special "conditional rendering" syntax in JSX. If
+        <code>drawLine</code> is falsy, the fourth argument to the outer
+        <code>createElement()</code> call simply evaluates to <code>false</code>,
+        and React is defined to silently render nothing for
+        <code>false</code>/<code>null</code>/<code>undefined</code> children.
+        Because it's ordinary JavaScript inside the braces, arbitrarily
+        complex expressions are fair game — including array methods that
+        produce a list of child elements:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function List(items, callback) {
+  return (
+    &lt;ul style={ {padding: 10, border: "solid red 4px"} }&gt;
+      {items.map((item, index) =&gt;
+        &lt;li onClick={() =&gt; callback(index)} key={index}&gt;{item}&lt;/li&gt;
+      )}
+    &lt;/ul&gt;
+  );
+}</code></pre>
+      </div>
+      <p>
+        Note the doubled braces on <code>style</code> — the outer pair enters
+        JS-expression mode, and the inner pair is an ordinary object literal.
+        React flattens array children automatically, so an element whose only
+        child is an array (here, the array <code>map()</code> produces) is
+        equivalent to that element having each array entry as its own child.
+      </p>
+      <p>
+        Two more pieces of JSX syntax are worth knowing. First, the object
+        spread operator (see <a href="05-objects.html">Objects</a>) can
+        spread a whole object's properties in as attributes at once, handy
+        when a set of attributes is reused across many elements:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let hebrew = { lang: "he", dir: "rtl" };
+let shalom = &lt;span className="emphasis" {...hebrew}&gt;שלום&lt;/span&gt;;</code></pre>
+      </div>
+      <p>
+        Second — and this is the mechanism that makes React
+        <strong>components</strong> work — the capitalization of a JSX tag
+        name changes what gets compiled. A lowercase tag name (<code>div</code>,
+        <code>hr</code>, <code>li</code>) compiles to a plain string, the
+        first argument you've seen in every example so far. An
+        <strong>uppercase</strong> tag name compiles to a reference to an
+        actual JavaScript identifier in scope, whose value is passed as
+        <code>createElement()</code>'s first argument instead of a string:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function Sidebar(props) {
+  return (
+    &lt;div&gt;
+      &lt;h1&gt;{props.title}&lt;/h1&gt;
+      { props.drawLine &amp;&amp; &lt;hr/&gt; }
+      &lt;p&gt;{props.content}&lt;/p&gt;
+    &lt;/div&gt;
+  );
+}
+
+let sidebar = &lt;Sidebar title="Something snappy" content="Something wise"/&gt;;
+// compiles to:
+let sidebar = React.createElement(Sidebar, {
+  title: "Something snappy",
+  content: "Something wise"
+});</code></pre>
+      </div>
+      <p>
+        A component, in other words, is just a function that accepts a
+        single "props" object and returns a JSX expression — naming it with
+        an initial capital letter is what tells the JSX compiler (and, by
+        convention, other developers) to treat it as a reference rather than
+        a literal tag string.
+      </p>
+
+      <h2 id="types">17.8 Type Checking: Flow, and TypeScript Today</h2>
+      <p>
+        JavaScript itself has no static type system — every type check
+        happens at runtime, which is exactly why <code>TypeError</code>
+        exceptions can surface deep into a program's execution, far from the
+        mistake that caused them. The book covers <strong>Flow</strong>,
+        Facebook's type-annotation language extension and checker, as the
+        representative tool for this idea: you annotate your code with types
+        using Flow's syntax, run the <code>flow</code> tool to find type
+        errors statically, and then use Babel to strip the annotations back
+        out before the code ships, since none of it is real JavaScript syntax.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">In current practice: TypeScript, overwhelmingly</div>
+        <p>
+          Flow was a reasonable bet at the time, but the years since have
+          settled this decisively: <strong>TypeScript</strong> is, by a very
+          wide margin, the dominant static type checker for JavaScript today.
+          Flow still exists and a handful of legacy codebases still use it,
+          but essentially all new typed-JavaScript work — and the surrounding
+          tooling, editor integration, and library ecosystem (published
+          <code>.d.ts</code> type declaration files) — targets TypeScript.
+          The rest of this section covers TypeScript directly as the modern
+          answer to "how do I add types to JavaScript," rather than teaching
+          Flow's now-niche syntax.
+        </p>
+      </div>
+      <p>
+        TypeScript is a superset language: essentially all valid JavaScript
+        is valid TypeScript, plus a layer of optional type annotations and a
+        few extra constructs (<code>interface</code>, <code>enum</code>) that
+        don't exist in plain JS. Its own compiler, <code>tsc</code>, checks
+        your annotations for consistency and then compiles everything down to
+        plain JavaScript — it is a standalone compiler, not a Babel plugin,
+        though Babel can also strip TypeScript's type syntax via a preset
+        when you only want the syntax removed without full type-checking as
+        part of the build.
+      </p>
+      <div class="code-block" data-lang="TypeScript">
+<pre><code class="language-typescript">interface User {
+  name: string;
+  age: number;
+  email?: string;      // optional property
+}
+
+function greet(user: User): string {
+  return `Hello, ${user.name}!`;
+}
+
+greet({ name: "Ada", age: 30 });         // OK — email is optional
+greet({ name: "Ada", age: "thirty" });   // compile-time error: age must be a number
+greet({ age: 30 });                        // compile-time error: name is required</code></pre>
+      </div>
+      <p>
+        This is TypeScript's core value proposition: mistakes like a
+        misspelled property name, a swapped argument order, or a value that
+        might unexpectedly be <code>null</code> get caught by the compiler
+        (and, in practice, live in your editor as you type) instead of
+        surfacing as a runtime crash — or worse, silently propagating wrong
+        data — after the code has shipped.
+      </p>
+
+      <h3 id="type-erasure">Types are erased: zero runtime cost <span class="badge hard">hard part</span></h3>
+      <p>
+        A detail that's easy to get wrong in your mental model: TypeScript's
+        type annotations, <code>interface</code> declarations, and generic
+        parameters are a <strong>compile-time-only</strong> layer. None of it
+        exists in the emitted JavaScript, and none of it costs anything at
+        runtime — there is no hidden type-checking code running in
+        production, because by production there's no type information left
+        to check. Compiling the snippet above (roughly what
+        <code>tsc</code> produces, module wrapper details aside) makes this
+        concrete:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function greet(user) {
+  return `Hello, ${user.name}!`;
+}
+
+greet({ name: "Ada", age: 30 });
+greet({ name: "Ada", age: "thirty" }); // ← no longer an error; this is now just JS
+greet({ age: 30 });</code></pre>
+      </div>
+      <p>
+        The <code>interface User</code> declaration doesn't appear anywhere
+        in the output at all — interfaces are a pure compile-time construct
+        with no runtime representation whatsoever, unlike a
+        <code>class</code>, which really does produce a constructor
+        function. The <code>: string</code>, <code>: number</code>,
+        <code>?</code>, and the whole <code>interface</code> block are simply
+        deleted; what's left is exactly the JavaScript you'd have written by
+        hand without ever knowing TypeScript existed. This is why TypeScript
+        can be adopted incrementally on an existing project and why it adds
+        no runtime dependency: the type checker is strictly a development-time
+        tool that happens to also emit your JavaScript for you.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Not everything TypeScript adds is erased</div>
+        <p>
+          This "purely erased" rule has real exceptions worth knowing before
+          they surprise you. TypeScript's <code>enum</code> keyword compiles
+          to an actual object that exists at runtime (a reverse-mapping
+          lookup object, by default) — it is not erased. Decorators, where
+          supported, likewise compile to real function calls that run when
+          the class is defined. If you want the "purely erased, zero runtime
+          footprint" guarantee to hold without exception, stick to type
+          annotations, <code>interface</code>, and generics, and reach for a
+          plain object literal or a union of string literals instead of
+          <code>enum</code> when it matters.
+        </p>
+      </div>
+      <p>
+        Type annotations aren't limited to simple named types — TypeScript
+        supports union types (<code>string | number</code>), array and tuple
+        types, generic type parameters on functions and classes, and
+        structural typing (an object satisfies an interface as long as its
+        shape matches, with no explicit "implements" declaration required).
+        All of that machinery exists purely to let <code>tsc</code> reason
+        about your code before it runs; all of it disappears the moment
+        compilation finishes.
+      </p>
+
+      <h2 id="summary">17.9 Summary</h2>
+      <p>
+        None of the tools in this chapter are part of the JavaScript
+        language as defined by the ECMAScript specification, and yet it's
+        hard to find a serious JavaScript project that skips all of them.
+        ESLint and Prettier keep a codebase correct-looking and
+        consistent-looking, respectively; Jest (or Vitest) turns "it should
+        work" into a repeatable, automated check; npm tracks and reproduces
+        your dependency tree; bundlers and Babel bridge the gap between the
+        code you want to write and the runtimes that have to execute it; and
+        JSX and TypeScript both extend the language itself — one to describe
+        UI trees as expressions, the other to describe and check the shapes
+        of your data before a single line of it runs. Understanding what each
+        piece actually does — rather than treating config files as magic
+        incantations to copy from a starter template — is what turns this
+        whole ecosystem from a wall of unfamiliar acronyms into a toolbox you
+        can reach into deliberately.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

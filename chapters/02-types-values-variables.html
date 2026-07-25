@@ -1,0 +1,1433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Types, Values & Variables — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="02-types-values-variables.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 3</span>
+      <h1>Types, Values &amp; Variables</h1>
+      <p class="lede">
+        Every JavaScript value is either a primitive or an object, and almost
+        every "weird" behavior beginners run into — strings that don't mutate,
+        arrays that compare unequal to identical arrays, <code>0.1 + 0.2</code>
+        not being <code>0.3</code>, <code>==</code> doing things you didn't ask
+        for — traces back to that one split. This chapter builds up the full
+        type system from the ground up: numbers and their binary-floating-point
+        quirks, text and its UTF-16 encoding, booleans, the null/undefined
+        distinction, symbols, the global object, and then the two topics that
+        cause the most real-world bugs — implicit type conversion and variable
+        scoping — in enough depth to stop guessing and start reasoning.
+      </p>
+
+      <h2 id="overview-and-definitions">Overview and definitions</h2>
+      <p>
+        JavaScript's values split into two categories, and which category a
+        value belongs to determines how it's copied, compared, and stored:
+      </p>
+      <ul>
+        <li>
+          <strong>Primitive types</strong>: numbers, strings, booleans, plus
+          three special-purpose types — <code>null</code>, <code>undefined</code>,
+          and (since ES6) <code>Symbol</code> — each of which is really the
+          sole member of its own tiny type. As of ES2020, BigInt is a second
+          numeric primitive type alongside Number.
+        </li>
+        <li>
+          <strong>Object types</strong>: everything else. A plain object is an
+          unordered bag of named properties; an array is a specialized object
+          with an ordered, numbered set of properties; and JavaScript defines
+          further specialized object types on top of these basics — <code>Map</code>,
+          <code>Set</code>, typed arrays, <code>RegExp</code>, <code>Date</code>,
+          <code>Error</code> and its subtypes (see
+          <a href="10-collections-typed-arrays.html">Collections &amp; Typed Arrays</a>,
+          <a href="11-regular-expressions.html">Regular Expressions</a>, and
+          <a href="12-dates-json-intl-utilities.html">Dates, JSON &amp; Intl</a>).
+          Functions and classes are themselves objects too — a specialized,
+          callable kind — which is why they can be passed around, stored in
+          variables, and attached to other objects just like any other value
+          (see <a href="07-functions.html">Functions</a> and
+          <a href="08-classes.html">Classes</a>).
+        </li>
+      </ul>
+      <p>
+        The most consequential difference between the two categories is
+        mutability: <strong>object types are mutable, primitive types are
+        immutable</strong>. It doesn't even make sense to ask to "change" the
+        number <code>3</code> into some other value in place — you can only
+        make a variable refer to a different number. Strings look like they
+        might be mutable, since you can index into them like an array of
+        characters, but JavaScript gives you no way to alter the characters of
+        an existing string; every string-producing method returns a brand new
+        string. Objects and arrays, by contrast, really can be changed after
+        creation: you can reassign a property, push a new array element, or
+        delete a key, all without creating a new object identity. This
+        distinction has a second, equally important consequence for how
+        values are copied and compared, which gets its own deep dive in
+        <a href="#mutability">§3.8 below</a>.
+      </p>
+      <p>
+        JavaScript is also extremely liberal about converting values from one
+        type to another — pass a number where a string is expected and it
+        becomes a string; pass anything where a boolean is expected and it
+        becomes <code>true</code> or <code>false</code>. This flexibility is
+        convenient but it is also the source of some of the language's most
+        notorious gotchas, and it gets the full treatment in
+        <a href="#type-conversions">§3.9</a>.
+      </p>
+      <p>
+        Two more housekeeping notes before diving into the individual types.
+        First, JavaScript is <strong>garbage collected</strong>: you never
+        explicitly free memory. Once nothing in your running program can reach
+        a value anymore, the engine is free to reclaim it; your only
+        responsibility is to avoid accidentally keeping references alive
+        longer than you mean to (a stale entry in a long-lived cache or event
+        listener list, for example). Second, JavaScript variables and
+        constants are <strong>untyped</strong> — a <code>let</code> or
+        <code>const</code> declaration says nothing about what kind of value
+        may be assigned, and a single variable can legally hold a number at
+        one point in a program and a string later (though doing so on purpose
+        is usually a sign of a design problem, not a feature to lean on).
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Object-oriented, even for primitives</div>
+        <p>
+          JavaScript favors calling methods on values (<code>a.sort()</code>)
+          over passing them to free functions (<code>sort(a)</code>).
+          Technically only true objects have methods, but numbers, strings,
+          booleans, and symbols behave <em>as if</em> they have methods too —
+          the engine briefly wraps them in an object when you call
+          <code>(3).toString()</code> or <code>"x".toUpperCase()</code>, then
+          discards the wrapper. <code>null</code> and <code>undefined</code>
+          are the only values with no methods at all; calling anything on them
+          throws a <code>TypeError</code>.
+        </p>
+      </div>
+
+      <h2 id="numbers">Numbers</h2>
+      <p>
+        JavaScript has exactly one everyday numeric type: <code>Number</code>,
+        a 64-bit IEEE&nbsp;754 double — the same representation Java and C++
+        call <code>double</code>. There is no separate integer type, and no
+        distinction in the language between <code>3</code> and <code>3.0</code>.
+        The format can represent magnitudes up to roughly
+        ±1.7976931348623157 × 10³⁰⁸ and as small as ±5 × 10⁻³²⁴, and it
+        represents every integer <em>exactly</em> between
+        −9,007,199,254,740,992 (−2⁵³) and 9,007,199,254,740,992 (2⁵³)
+        inclusive — beyond that range, integers start silently losing
+        precision in their low bits. (Bitwise operators and array indices,
+        covered in <a href="03-expressions-operators.html">Expressions &amp; Operators</a>,
+        additionally coerce down to 32-bit integers for the duration of the
+        operation.) If you need exact integers beyond 2⁵³, reach for
+        <a href="#bigint">BigInt</a>.
+      </p>
+
+      <h3 id="integer-literals">Integer literals</h3>
+      <p>
+        A base-10 integer literal is just a run of digits. JavaScript also
+        recognizes hexadecimal (<code>0x</code>/<code>0X</code>) literals, and,
+        since ES6, binary (<code>0b</code>/<code>0B</code>) and octal
+        (<code>0o</code>/<code>0O</code>) literals. Any numeric literal may be
+        preceded by a unary minus to negate it, and, informally supported
+        since ES2021 but already implemented everywhere well before that,
+        underscores may be inserted between digits purely for readability —
+        the engine strips them before parsing:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">0             // Zero
+3
+10000000
+
+0xff          // => 255   (15*16 + 15)
+0xBADCAFE     // => 195939070
+
+0b10101       // => 21    (1*16 + 0*8 + 1*4 + 0*2 + 1*1)
+0o377         // => 255   (3*64 + 7*8 + 7*1)
+
+let billion = 1_000_000_000;   // Underscore as a thousands separator
+let bytes   = 0x89_AB_CD_EF;   // ...or a byte separator
+let bits    = 0b0001_1101_0111; // ...or a nibble separator
+let frac    = 0.123_456_789;    // Works in the fractional part too</code></pre>
+      </div>
+
+      <h3 id="floating-point-literals">Floating-point literals</h3>
+      <p>
+        A floating-point literal may include a decimal point and/or an
+        exponent: a mantissa followed by <code>e</code> or <code>E</code>, an
+        optional sign, and an integer power of ten to multiply by. Formally,
+        the grammar is <code>[digits][.digits][(E|e)[(+|-)]digits]</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">3.14
+2345.6789
+.333333333333333333
+6.02e23         // 6.02 × 10²³
+1.4738223E-32   // 1.4738223 × 10⁻³²</code></pre>
+      </div>
+
+      <h3 id="arithmetic">Arithmetic and the Math object</h3>
+      <p>
+        The familiar operators <code>+</code>, <code>-</code>, <code>*</code>,
+        <code>/</code>, and <code>%</code> (remainder) all work as expected;
+        ES2016 added <code>**</code> for exponentiation
+        (<span class="badge new">ES2016</span>). Operator details, including
+        precedence, live in
+        <a href="03-expressions-operators.html">Expressions &amp; Operators</a>.
+        Beyond the operators, the built-in <code>Math</code> object supplies
+        everything else you'd expect from a scientific calculator:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Math.pow(2, 53)          // => 9007199254740992
+Math.round(.6)           // => 1     Math.ceil(.6)  // => 1
+Math.floor(.6)           // => 0     Math.abs(-5)   // => 5
+Math.max(1, 2, 3)        // => 3     Math.min(1,2,3) // => 1
+Math.random()            // 0 <= x < 1
+Math.PI                  // π       Math.E          // e
+Math.sqrt(3)             // Math.pow(3, 0.5)
+Math.sin(0)              // Also Math.cos, Math.atan, ...
+Math.log(10)             // Natural log; Math.log(100)/Math.LN10 for base 10
+
+// ES6 additions:
+Math.cbrt(27)     // => 3      cube root
+Math.hypot(3, 4)  // => 5      sqrt of sum of squares
+Math.log10(100)   // => 2      Math.log2(1024) // => 10
+Math.sign(x)      // -1, 0, or 1
+Math.trunc(3.9)   // => 3      drop the fraction, no rounding at all
+Math.clz32(0xf)   // => 28     leading zero bits in a 32-bit int
+Math.imul(2, 3)   // => 6      optimized 32-bit integer multiply
+Math.sinh(x), Math.cosh(x), Math.tanh(x)          // Hyperbolic trig
+Math.asinh(x), Math.acosh(x), Math.atanh(x)       // ...and their inverses</code></pre>
+      </div>
+      <p>
+        Note that <code>Math.trunc()</code> and <code>Math.floor()</code>
+        disagree on negative numbers: <code>Math.trunc(-3.9)</code> is
+        <code>-3</code> (toward zero), while <code>Math.floor(-3.9)</code> is
+        <code>-4</code> (toward negative infinity).
+      </p>
+
+      <h3 id="special-numeric-values">Overflow, underflow, and the special numeric values</h3>
+      <p>
+        JavaScript arithmetic never throws for overflow, underflow, or
+        division by zero — it produces one of three special sentinel values
+        instead:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Value</th><th>How you get it</th><th>Notes</th></tr>
+          <tr><td><code>Infinity</code></td><td>A result bigger than the largest representable number, e.g. <code>1/0</code> or <code>Number.MAX_VALUE * 2</code></td><td>Arithmetic with infinity behaves as you'd expect (still infinite, sign flips as needed)</td></tr>
+          <tr><td><code>-Infinity</code></td><td><code>-1/0</code>, <code>-Number.MAX_VALUE * 2</code></td><td>Same idea, negative</td></tr>
+          <tr><td><code>NaN</code></td><td><code>0/0</code>, <code>Infinity/Infinity</code>, <code>Math.sqrt(-1)</code>, any arithmetic operator with a non-numeric operand that can't convert</td><td><strong>Never equal to anything, including itself</strong></td></tr>
+          <tr><td><code>-0</code> ("negative zero")</td><td>Underflow of a negative value, e.g. <code>-Number.MIN_VALUE / 2</code> or <code>-1 / Infinity</code></td><td><code>-0 === 0</code> is <code>true</code>, but <code>1/-0 !== 1/0</code></td></tr>
+        </table>
+      </div>
+      <p>
+        <code>Infinity</code> and <code>NaN</code> are available as global
+        constants and also as <code>Number.POSITIVE_INFINITY</code> /
+        <code>Number.NEGATIVE_INFINITY</code> / <code>Number.NaN</code>. ES6
+        adds a cluster of useful <code>Number</code> static methods and
+        constants for inspecting values without accidentally triggering
+        global-function quirks (see the warning below):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Number.isNaN(x)          // Is x exactly the NaN value? (the ONLY reliable check)
+Number.isFinite(x)       // Is x a number and neither NaN, Infinity, nor -Infinity?
+Number.isInteger(x)      // Is x a whole number?
+Number.isSafeInteger(x)  // Is x an integer strictly between -(2**53) and 2**53?
+Number.MIN_SAFE_INTEGER  // => -(2**53 - 1)
+Number.MAX_SAFE_INTEGER  // => 2**53 - 1
+Number.EPSILON           // => 2**-52: smallest representable gap between two numbers
+Number.parseInt(), Number.parseFloat()  // Same as the global functions, namespaced</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Global <code>isNaN()</code>/<code>isFinite()</code> are looser than the <code>Number.*</code> versions</div>
+        <p>
+          The legacy global <code>isNaN(x)</code> first tries to convert
+          <code>x</code> to a number and returns <code>true</code> if
+          <em>that</em> is NaN — so <code>isNaN("hello")</code> is
+          <code>true</code>, which is rarely what you want. Prefer
+          <code>Number.isNaN(x)</code>, which only returns <code>true</code> if
+          <code>x</code> is already, literally, the NaN value. The same caveat
+          applies to <code>isFinite()</code> vs. <code>Number.isFinite()</code>.
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let zero = 0, negz = -0;
+zero === negz          // => true: 0 and -0 are equal by ===
+1 / zero === 1 / negz  // => false: Infinity !== -Infinity — the only way to tell them apart
+
+let x = NaN;
+x === NaN         // => false — NaN never equals anything, not even itself!
+x !== x           // => true — a classic (if cryptic) NaN test
+Number.isNaN(x)   // => true — the clear, intention-revealing way to ask</code></pre>
+      </div>
+
+      <h3 id="rounding-errors">Binary floating-point and rounding errors <span class="badge hard">Hard</span></h3>
+      <p>
+        There are infinitely many real numbers but only a finite number of
+        64-bit patterns, so most decimal fractions cannot be stored exactly —
+        this is a property of binary floating point itself, not a JavaScript
+        bug, and it affects Python, Java, C, and every other IEEE&nbsp;754
+        language equally. Binary floating point represents fractions whose
+        denominator is a power of two exactly (<code>1/2</code>,
+        <code>1/8</code>, <code>1/1024</code>), but the fractions people
+        actually write down — tenths, hundredths, the stuff of money and
+        percentages — are decimal fractions like <code>1/10</code>, which have
+        no exact binary representation. JavaScript stores the closest
+        available double instead, and every arithmetic operation performed on
+        that already-approximate value can compound the error further.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let x = 0.3 - 0.2;   // "thirty cents minus twenty cents"
+let y = 0.2 - 0.1;   // "twenty cents minus ten cents"
+x === y              // => false! Both LOOK like they should be 0.1
+x === 0.1            // => false: 0.3 - 0.2 is actually 0.09999999999999998
+y === 0.1            // => true:  0.2 - 0.1 happens to land exactly on 0.1's approximation
+
+0.1 + 0.2            // => 0.30000000000000004, not 0.3
+0.1 + 0.2 === 0.3    // => false</code></pre>
+      </div>
+      <p>
+        The values above are all extremely close to mathematically correct —
+        close enough for almost any purpose — and the trouble arises
+        specifically when you compare floating-point results for exact
+        equality. A second, equally common trap is accumulation: summing many
+        imprecise values compounds the error further than a single
+        subtraction does.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 2: error compounds across repeated operations
+let total = 0;
+for (let i = 0; i < 10; i++) {
+  total += 0.1;
+}
+total          // => 0.9999999999999999, not 1
+total === 1    // => false
+
+// A robust equality check uses a small tolerance ("epsilon") instead
+function nearlyEqual(a, b, epsilon = Number.EPSILON * 8) {
+  return Math.abs(a - b) < epsilon;
+}
+nearlyEqual(total, 1)   // => true</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Never compare floating-point results with <code>===</code></div>
+        <p>
+          For money, store integer cents (or use <code>BigInt</code>) instead
+          of fractional dollars — <code>1050</code> cents instead of
+          <code>10.50</code> dollars sidesteps the whole problem for addition
+          and subtraction. For general numeric comparisons where fractional
+          values are unavoidable, compare against a small epsilon rather than
+          for exact equality, as in the <code>nearlyEqual</code> helper above.
+        </p>
+      </div>
+
+      <h3 id="bigint">BigInt for arbitrary precision <span class="badge new">ES2020</span></h3>
+      <p>
+        <code>BigInt</code> is a second numeric primitive type, added
+        specifically so JavaScript could represent 64-bit integers exactly
+        (for interoperability with other languages and binary formats) and,
+        more generally, integers of any size — potentially thousands or
+        millions of digits. A BigInt literal is a string of digits (in any of
+        the same four bases as regular integer literals) followed by a
+        lowercase <code>n</code>. BigInt is not appropriate for cryptography:
+        implementations make no attempt to run in constant time, so they can
+        leak information via timing attacks.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">1234n                  // A modest BigInt literal
+0b111111n              // Binary
+0o7777n                // Octal
+0x8000000000000000n    // => 2n ** 63n, a 64-bit integer
+
+BigInt(Number.MAX_SAFE_INTEGER)      // => 9007199254740991n: convert a Number
+BigInt("1" + "0".repeat(100))        // => 10n**100n, one googol, from a string
+
+1000n + 2000n   // => 3000n
+2000n * 3000n   // => 6000000n
+3000n / 997n    // => 3n  — integer division: the remainder is dropped, toward zero
+3000n % 997n    // => 9n  — and the remainder is available separately
+(2n ** 131071n) - 1n   // A Mersenne prime with 39,457 decimal digits</code></pre>
+      </div>
+      <p>
+        BigInt and Number deliberately refuse to mix in arithmetic — not as
+        an arbitrary restriction, but because neither type can losslessly
+        represent everything the other can: BigInt can't hold fractions, and
+        Number can't hold huge integers exactly, so there's no single
+        "obviously correct" type to promote a mixed expression to.
+        Comparison operators are the one exception, since ordering two values
+        doesn't require picking a common representation:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">1 + 1n         // TypeError: Cannot mix BigInt and other types
+1n * 2.5       // TypeError: same reason
+
+1 < 2n         // => true  — relational operators DO compare across types
+2 > 1n         // => true
+0 == 0n        // => true  — == converts before comparing
+0 === 0n       // => false — === also checks the type, and BigInt !== Number</code></pre>
+      </div>
+      <p>
+        Bitwise operators generally work fine with BigInt operands, but no
+        method of the <code>Math</code> object accepts them — <code>Math.sqrt(4n)</code>
+        throws.
+      </p>
+
+      <h3 id="number-conversions">Converting between numbers and strings, and choosing a base</h3>
+      <p>
+        Beyond the automatic conversions covered in <a href="#type-conversions">§3.9</a>,
+        the <code>Number</code> type exposes methods for precise, deliberate
+        control over formatting and parsing — essential once you need a
+        specific number of decimal places, a specific base, or to avoid
+        exponential notation creeping into output.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Number.prototype.toString() accepts an optional radix (2-36), default 10
+let n = 17;
+n.toString(2)    // => "10001"
+n.toString(8)    // => "21"
+n.toString(16)   // => "11"
+let hex = "0x" + n.toString(16);  // "0x11"
+
+// Fixed decimal places, exponential notation, and significant digits:
+let big = 123456.789;
+big.toFixed(0)         // => "123457"   never uses exponential notation
+big.toFixed(2)         // => "123456.79"
+big.toExponential(1)   // => "1.2e+5"   one digit before the decimal
+big.toExponential(3)   // => "1.235e+5"
+big.toPrecision(4)     // => "1.235e+5" switches to exponential if it must
+big.toPrecision(7)     // => "123456.8"
+big.toPrecision(10)    // => "123456.7890"</code></pre>
+      </div>
+      <p>
+        Parsing strings back into numbers has three tools with different
+        strictness. <code>Number(str)</code> requires the <em>entire</em>
+        string (aside from surrounding whitespace) to be a valid numeric
+        literal in base 10, or it fails to <code>NaN</code>.
+        <code>parseInt()</code> and <code>parseFloat()</code> are more
+        forgiving global functions: they skip leading whitespace, parse as
+        many valid characters as they can, and silently ignore whatever comes
+        after — and <code>parseInt()</code> accepts an explicit radix as its
+        second argument for parsing non-decimal input.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Number("3 blind mice")     // => NaN: Number() needs the WHOLE string to be numeric
+parseInt("3 blind mice")   // => 3:   parses a prefix, ignores the rest
+parseFloat(" 3.14 meters") // => 3.14
+parseInt("-12.34")         // => -12: parseInt stops at the decimal point
+parseInt("0xFF")           // => 255: auto-detects the hex prefix
+parseFloat(".1")           // => 0.1
+parseInt(".1")             // => NaN: an integer literal can't start with "."
+parseFloat("$72.47")       // => NaN: numbers can't start with "$"
+
+// Explicit radix as the second argument:
+parseInt("11", 2)    // => 3    (1*2 + 1)
+parseInt("ff", 16)   // => 255  (15*16 + 15)
+parseInt("zz", 36)   // => 1295 (35*36 + 35)
+parseInt("077", 8)   // => 63   (7*8 + 7)  -- WITHOUT a radix, leading zero does NOT mean octal
+parseInt("077")      // => 77   (parsed as base 10 in modern JS)</code></pre>
+      </div>
+      <p>
+        JavaScript also has a simple built-in <code>Date</code> class for
+        working with calendar dates and timestamps — <code>Date.now()</code>
+        returns the current time as a millisecond count since the Unix epoch,
+        and <code>new Date()</code> gives you a full <code>Date</code> object.
+        Dates matter for type conversion too, since (as covered in
+        <a href="#object-to-primitive">§3.9</a>) they're the one built-in type
+        that prefers a string representation over a numeric one. Full
+        coverage is in <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; Utilities</a>.
+      </p>
+
+      <h2 id="text">Text: strings</h2>
+      <p>
+        A JavaScript string is an immutable, ordered sequence of 16-bit
+        values, most of which correspond to a single Unicode character. Like
+        arrays, strings are zero-indexed, and <code>.length</code> gives you
+        the number of 16-bit code units — <em>not</em> necessarily the number
+        of visible characters, which is the source of a subtle gotcha covered
+        below. There is no separate "character" type — a single character is
+        just represented as a string of length&nbsp;1.
+      </p>
+
+      <h3 id="string-literals">String literals and quoting</h3>
+      <p>
+        A string literal is delimited by single quotes, double quotes, or (as
+        of ES6) backticks. A string delimited by one quote style can freely
+        contain the other quote characters unescaped, which is handy when
+        mixing JavaScript with HTML — pick one quote style for your
+        JavaScript strings and the other for your HTML attributes so neither
+        needs escaping:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">""                                     // The empty string
+'testing'
+"Wouldn't you prefer O'Reilly's book?" // Double quotes let ' through unescaped
+`"She said 'hi'", he said.`            // Backticks let both through unescaped</code></pre>
+      </div>
+      <div class="code-block" data-lang="HTML">
+<pre><code class="language-xml">&lt;!-- Single quotes for the JS string, double quotes for the HTML attribute --&gt;
+&lt;button onclick="alert('Thank you')"&gt;Click Me&lt;/button&gt;</code></pre>
+      </div>
+      <p>
+        Historically, string literals had to fit on one line; a trailing
+        backslash before a line break lets you continue a single-quoted or
+        double-quoted literal onto the next line without inserting a newline
+        character into the string (the backslash and the following line
+        terminator are simply dropped). Backtick-delimited literals are the
+        exception: they may span multiple lines directly, and any newlines
+        you type inside them become real newline characters in the resulting
+        string.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">'two\nlines'      // A string representing 2 lines, written on one line
+
+"one\
+ long\
+ line"            // A one-line string written across 3 source lines
+
+`the newline character at the end of this line
+is included literally in this string`   // A genuine two-line string</code></pre>
+      </div>
+
+      <div class="admonition note">
+        <div class="admonition-title">"Characters," codepoints, and JavaScript strings</div>
+        <p>
+          JavaScript strings use the UTF-16 encoding, and every element of a
+          string is one 16-bit code unit. Characters from the Unicode "Basic
+          Multilingual Plane" (the overwhelming majority of characters people
+          type day to day) fit in one 16-bit unit, but characters outside it —
+          many emoji, some rarer scripts — are represented as a pair of two
+          16-bit units called a <strong>surrogate pair</strong>. That means
+          <code>.length</code> can report more units than there are visible
+          characters:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let euro = "€";
+let love = "❤️" ; // presentation-selector emoji, multiple code units
+euro.length     // => 1: this character fits in one 16-bit unit
+"😀".length     // => 2: a surrogate pair, not one character!
+
+// Most string methods operate on 16-bit units, not "characters" —
+// they don't special-case surrogate pairs or normalize anything.
+// for/of and the spread operator, however, iterate actual Unicode
+// characters (ES6):
+[..."😀"].length     // => 1
+for (const ch of "😀") { console.log(ch); }  // Logs one iteration, not two</code></pre>
+        </div>
+      </div>
+
+      <h3 id="escape-sequences">Escape sequences</h3>
+      <p>
+        A backslash inside a string literal introduces an escape sequence —
+        a way to represent a character that can't (or shouldn't) be typed
+        literally. Three of these are "generic": they let you specify any
+        Unicode character by its numeric code point in hex.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Sequence</th><th>Character</th></tr>
+          <tr><td><code>\0</code></td><td>NUL, the null character (<code>\u0000</code>)</td></tr>
+          <tr><td><code>\b</code></td><td>Backspace</td></tr>
+          <tr><td><code>\t</code></td><td>Horizontal tab</td></tr>
+          <tr><td><code>\n</code></td><td>Newline</td></tr>
+          <tr><td><code>\v</code></td><td>Vertical tab</td></tr>
+          <tr><td><code>\f</code></td><td>Form feed</td></tr>
+          <tr><td><code>\r</code></td><td>Carriage return</td></tr>
+          <tr><td><code>\"</code> / <code>\'</code> / <code>\`</code></td><td>Literal quote character, whichever delimiter you're inside</td></tr>
+          <tr><td><code>\\</code></td><td>A literal backslash</td></tr>
+          <tr><td><code>\x<em>nn</em></code></td><td>The character with hex code <code>nn</code> (exactly 2 hex digits), e.g. <code>\xA9</code> for ©</td></tr>
+          <tr><td><code>\u<em>nnnn</em></code></td><td>The character with hex code <code>nnnn</code> (exactly 4 hex digits), e.g. <code>π</code> for π</td></tr>
+          <tr><td><code>\u{<em>n</em>}</code></td><td>ES6: the character at codepoint <code>n</code>, 1-6 hex digits, e.g. <code>\u{1f600}</code> for 😀 — this is the only escape that can produce codepoints outside the BMP directly</td></tr>
+        </table>
+      </div>
+      <p>
+        A backslash before any other character is simply ignored — <code>\#</code>
+        is the same as <code>#</code> — but relying on that is fragile, since a
+        future language version could give that sequence meaning.
+      </p>
+
+      <h3 id="string-methods">Comparing, searching, and manipulating strings</h3>
+      <p>
+        Strings concatenate with <code>+</code> and compare with
+        <code>===</code>/<code>!==</code> (equal only if same length and every
+        code unit matches) as well as the relational operators
+        <code>&lt; &lt;= &gt; &gt;=</code>, which compare code-unit values
+        directly — not a linguistically aware ordering (for locale-aware
+        comparison and sorting, see <code>Intl.Collator</code> in
+        <a href="12-dates-json-intl-utilities.html">Dates, JSON, Intl &amp; Utilities</a>).
+        Beyond that, the string prototype defines a large, useful API:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let s = "Hello, world";
+
+// Extracting a portion
+s.substring(1, 4)     // => "ell"
+s.slice(1, 4)         // => "ell": same result, but slice() accepts negative indices
+s.slice(-3)           // => "rld": last 3 characters, only slice() can do this
+s.split(", ")         // => ["Hello", "world"]
+
+// Searching
+s.indexOf("l")        // => 2:  first occurrence
+s.indexOf("l", 3)     // => 3:  first occurrence at or after index 3
+s.lastIndexOf("l")    // => 10: last occurrence
+s.indexOf("zz")       // => -1: not found
+s.startsWith("Hell")  // => true   (ES6)
+s.endsWith("!")       // => false  (ES6)
+s.includes("or")      // => true   (ES6)
+
+// Producing modified copies (never mutates s)
+s.replace("llo", "ya")  // => "Heya, world"
+s.toLowerCase()         // => "hello, world"
+s.toUpperCase()         // => "HELLO, WORLD"
+s.normalize()           // Unicode NFC normalization (ES6); also "NFD","NFKC","NFKD"
+
+// Individual code units
+s.charAt(0)           // => "H"
+s.charCodeAt(0)        // => 72: the 16-bit code unit at that index
+s.codePointAt(0)       // => 72: like charCodeAt but correct for surrogate pairs (ES6)
+s[0]                   // => "H": strings can be read like arrays with []
+
+// Padding and trimming
+"x".padStart(3)        // => "  x"   (ES2017)
+"x".padStart(3, "*")   // => "**x"
+"x".padEnd(3, "-")     // => "x--"
+" hi ".trim()          // => "hi"
+" hi ".trimStart()     // => "hi "   (ES2019; also trimLeft alias)
+" hi ".trimEnd()       // => " hi"   (ES2019; also trimRight alias)
+
+// Misc
+"<>".repeat(3)         // => "<><><>"  (ES6)</code></pre>
+      </div>
+      <p>
+        Every method above returns a <em>new</em> string; none of them alter
+        <code>s</code>. That's not an implementation detail — it's a direct
+        consequence of strings being an immutable primitive type (see
+        <a href="#mutability">§3.8</a>).
+      </p>
+
+      <h3 id="template-literals">Template literals and tagged templates <span class="badge new">ES6</span></h3>
+      <p>
+        Backtick-delimited strings do more than allow multi-line text — they
+        support interpolated expressions. Anything between <code>${</code>
+        and the matching <code>}</code> is parsed as a full JavaScript
+        expression, evaluated, converted to a string, and spliced into the
+        result in place of the placeholder:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let name = "Bill";
+let greeting = `Hello ${name}, ${2 + 2} is 4.`;
+// => "Hello Bill, 4 is 4."
+
+// Multiple expressions, escape sequences, and multiple lines all work:
+let errorMessage = `\
+✘ Test failure at ${filename}:${linenumber}:
+${exception.message}
+Stack trace:
+${exception.stack}
+`;
+// The leading backslash swallows the newline right after it, so the string
+// begins with the ✘ character rather than a blank line.</code></pre>
+      </div>
+      <p>
+        A less-often-used but powerful feature: if an expression (called a
+        "tag") immediately precedes the opening backtick — with no
+        parentheses — the literal's raw text chunks and interpolated values
+        are passed to that function instead of being combined automatically.
+        The tag function's return value (which need not even be a string)
+        becomes the value of the whole expression. This is how libraries
+        implement things like automatic SQL/HTML escaping or the
+        <code>css</code>/<code>html</code> tags used by some templating
+        systems. The one built-in tag is <code>String.raw</code>,
+        which returns the text between the backticks with escape sequences
+        left <em>unprocessed</em>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">`\n`.length            // => 1: a single newline character
+String.raw`\n`.length  // => 2: a literal backslash followed by the letter n</code></pre>
+      </div>
+
+      <h3 id="pattern-matching">Pattern matching with regular expressions</h3>
+      <p>
+        JavaScript defines a <code>RegExp</code> type for describing textual
+        patterns. Regular expressions aren't a primitive type, but they have
+        their own literal syntax — text between a pair of slashes, optionally
+        followed by flag letters — which makes them feel almost as
+        fundamental as strings and numbers:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">/^HTML/            // Match "HTML" at the start of a string
+/[1-9][0-9]*/      // A nonzero digit followed by any number of digits
+/\bjavascript\b/i  // "javascript" as a whole word, case-insensitive
+
+let text = "testing: 1, 2, 3";
+let pattern = /\d+/g;
+pattern.test(text)          // => true: a match exists
+text.search(pattern)        // => 9: index of the first match
+text.match(pattern)         // => ["1", "2", "3"]
+text.replace(pattern, "#")  // => "testing: #, #, #"
+text.split(/\D+/)           // => ["", "1", "2", "3"]: split on non-digit runs</code></pre>
+      </div>
+      <p>
+        The full grammar and API — capture groups, lookaround, sticky and
+        Unicode flags, and every string/RegExp method that consumes a pattern
+        — is covered in <a href="11-regular-expressions.html">Regular Expressions</a>.
+      </p>
+
+      <h2 id="boolean-values">Boolean values</h2>
+      <p>
+        There are exactly two boolean values, <code>true</code> and
+        <code>false</code>, most often produced by comparisons like
+        <code>a === 4</code> and consumed by control-flow statements such as
+        <code>if</code> (see <a href="04-statements.html">Statements</a>).
+        Since any value can be converted to boolean, JavaScript defines
+        exactly seven <strong>falsy</strong> values — everything else,
+        including every object and array, no matter how "empty," is
+        <strong>truthy</strong>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">false, 0, -0, 0n, NaN, "", null, undefined  // The complete list of falsy values
+
+Boolean([])    // => true: an empty array is still an object, hence truthy
+Boolean({})    // => true: same story for an empty object
+Boolean(" ")   // => true: a non-empty string, even just whitespace</code></pre>
+      </div>
+      <p>
+        The three boolean operators are <code>&amp;&amp;</code> (true only if
+        both operands are truthy), <code>||</code> (true if either operand is
+        truthy), and unary <code>!</code> (flips truthy/falsy to the opposite
+        boolean). Full operator semantics, including short-circuiting, are in
+        <a href="03-expressions-operators.html">Expressions &amp; Operators</a>.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title"><code>if (o)</code> vs. <code>if (o !== null)</code></div>
+        <p>
+          <code>if (o)</code> is perfectly fine when you truly want to treat
+          <code>0</code>, <code>""</code>, and <code>null</code>/<code>undefined</code>
+          the same way — as "nothing here." If you need to distinguish a
+          legitimate <code>0</code> or <code>""</code> from "no value at all,"
+          use an explicit <code>o !== null &amp;&amp; o !== undefined</code>
+          check, or more idiomatically the nullish coalescing operator
+          <code>??</code> described next.
+        </p>
+      </div>
+
+      <h2 id="null-and-undefined">null and undefined</h2>
+      <p>
+        Both <code>null</code> and <code>undefined</code> represent "no
+        value," both are falsy, and neither has any properties or methods —
+        accessing one throws a <code>TypeError</code>. They are loosely equal
+        to each other (<code>null == undefined</code> is <code>true</code>)
+        but not strictly equal (<code>null === undefined</code> is
+        <code>false</code>), and <code>typeof null</code> famously (if
+        confusingly) returns <code>"object"</code> — a decades-old bug baked
+        permanently into the language — while <code>typeof undefined</code>
+        returns <code>"undefined"</code>.
+      </p>
+      <p>The book's convention for which one to use is worth adopting:</p>
+      <ul>
+        <li>
+          <strong><code>undefined</code></strong> is the "system-level"
+          absence of value: the value of a declared-but-unassigned variable,
+          of a missing object property or array element, of a function called
+          with too few arguments, and of a function that falls off the end
+          without an explicit <code>return</code>.
+        </li>
+        <li>
+          <strong><code>null</code></strong> is the "program-level" absence
+          you assign deliberately, to say "this variable holds no object right
+          now" as an intentional, expected state.
+        </li>
+      </ul>
+      <p>
+        Because the two overlap so much in practice, ES2020 added the
+        <strong>nullish coalescing operator</strong> <code>??</code>
+        (<span class="badge new">ES2020</span>), which evaluates its right
+        operand only when the left is <code>null</code> or <code>undefined</code>
+        — critically different from <code>||</code>, which also falls through
+        on any other falsy value:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let count = 0;
+count || 10   // => 10: WRONG if 0 is a valid value — || treats 0 as "missing"
+count ?? 10   // => 0:  RIGHT — ?? only falls through on null/undefined
+
+let userInput = "";
+userInput || "default"  // => "default": probably not what you want
+userInput ?? "default"  // => ""       : the empty string is preserved</code></pre>
+      </div>
+
+      <h2 id="symbols">Symbols <span class="badge new">ES6</span></h2>
+      <p>
+        A <code>Symbol</code> is a unique, unforgeable primitive value with no
+        literal syntax — you obtain one by calling the <code>Symbol()</code>
+        function, optionally passing a descriptive string that shows up when
+        the symbol is stringified but otherwise has no effect on identity.
+        Symbols exist mainly to serve as object property keys that are
+        guaranteed never to collide with a string key or with another
+        symbol — useful both for keeping a library's internal properties out
+        of a user's way, and for extending the language itself without
+        breaking backward compatibility (this is exactly how <code>Symbol.iterator</code>
+        was introduced for the <code>for/of</code> protocol — see
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>
+        — without claiming any string method name that existing code might
+        already be using).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let strname = "string name";
+let symname = Symbol("propname");
+typeof strname   // => "string"
+typeof symname   // => "symbol"
+
+let o = {};
+o[strname] = 1;
+o[symname] = 2;
+o[strname]   // => 1
+o[symname]   // => 2
+
+let s1 = Symbol("id");
+let s2 = Symbol("id");
+s1 === s2         // => false — Symbol() NEVER returns the same value twice,
+                  //            even with an identical description string
+s1.toString()     // => "Symbol(id)"</code></pre>
+      </div>
+      <p>
+        For the opposite need — a symbol you deliberately want to
+        <em>share</em> across independent parts of a program — use the global
+        symbol registry via <code>Symbol.for()</code>, which returns the same
+        symbol every time it's called with the same key (creating it on first
+        use), and <code>Symbol.keyFor()</code> to recover the key from a
+        registry symbol:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let shared1 = Symbol.for("app.id");
+let shared2 = Symbol.for("app.id");
+shared1 === shared2       // => true — Symbol.for() reuses the registry entry
+Symbol.keyFor(shared1)    // => "app.id"</code></pre>
+      </div>
+
+      <h2 id="global-object">The global object</h2>
+      <p>
+        Every JavaScript environment maintains one special object — the
+        <strong>global object</strong> — whose properties are exactly the
+        identifiers available globally to every script: constants like
+        <code>undefined</code>, <code>NaN</code>, and <code>Infinity</code>;
+        global functions like <code>isNaN()</code>, <code>parseInt()</code>,
+        and <code>eval()</code>; constructors like <code>Date</code>,
+        <code>RegExp</code>, <code>Array</code>, and <code>Object</code>; and
+        global namespace objects like <code>Math</code> and <code>JSON</code>.
+        None of these are technically reserved words, but treating them as if
+        they were — never shadowing <code>Math</code> or <code>Date</code>
+        with a local variable, for instance — will save you real confusion.
+      </p>
+      <p>
+        Historically, referring to "the" global object required different
+        syntax in different environments: in browsers it's the
+        <code>window</code> object (which also has a self-referential
+        <code>window</code> property), Node exposes it as <code>global</code>,
+        and a web worker (see <a href="20-storage-workers.html">Storage &amp; Workers</a>)
+        refers to its own global object as <code>self</code>, since it isn't
+        associated with any <code>window</code>. ES2020 finally unified all of
+        this with <code>globalThis</code>
+        (<span class="badge new">ES2020</span>), a single standard name that
+        refers to the global object in whatever environment your code is
+        running in.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">globalThis.isNaN === isNaN   // => true: same function, referenced two ways
+var leaked = 1;
+globalThis.leaked            // => 1: top-level `var` really does create a
+                              //      property on the global object (see §3.10.2)</code></pre>
+      </div>
+
+      <h2 id="mutability">Immutable primitives vs. mutable object references <span class="badge hard">Hard</span></h2>
+      <p>
+        This is the single distinction that explains the largest share of
+        confusing JavaScript behavior, so it's worth being precise about it.
+        Primitive values — <code>undefined</code>, <code>null</code>,
+        booleans, numbers, BigInts, strings, and symbols — are
+        <strong>immutable</strong> and are always copied and compared
+        <strong>by value</strong>. Objects — including arrays and functions —
+        are <strong>mutable</strong> and are always copied and compared
+        <strong>by reference</strong>. Two variables can never secretly share
+        a primitive value in a way that lets mutating through one affect the
+        other, because primitives can't be mutated at all; two variables
+        absolutely can share an object, and mutating through either one is
+        visible through both.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 1: primitives are copied by value, always independent
+let a = "hello";
+let b = a;      // b gets its OWN copy of the value "hello"
+b = "world";    // reassigning b cannot possibly affect a
+a               // => "hello": completely unaffected
+
+let s = "hello";
+s.toUpperCase();  // Returns "HELLO" as a NEW string...
+s                 // => "hello": ...but never alters s itself — strings can't be altered</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 2: objects are copied by reference, so aliases share state
+let o = { x: 1 };
+let p = o;       // p is not a copy — p and o refer to the SAME object
+p.x = 2;
+o.x              // => 2: mutating through p is visible through o!
+
+o === p          // => true: same underlying object identity
+let q = { x: 2 }; // a DIFFERENT object that happens to have equal contents
+o === q          // => false: distinct objects are never equal, no matter what they contain
+
+let arr1 = [], arr2 = [];   // two distinct, both empty, arrays
+arr1 === arr2               // => false: never equal by reference alone</code></pre>
+      </div>
+      <p>
+        A direct, practical consequence: passing an object into a function, or
+        storing it in a second variable, never "copies" it — you get a second
+        handle onto the exact same mutable value. To make a real, independent
+        copy you must explicitly copy every property (or element), for
+        instance with a loop, <code>Array.from()</code>, the spread operator,
+        or <code>structuredClone()</code>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let original = ["a", "b", "c"];
+let copy = [...original];              // shallow copy: new array, same-value elements
+let copy2 = { ...someObject };         // shallow copy of a plain object
+let deep = structuredClone(original);  // deep copy (modern browsers & Node 17+)
+
+// Shallow copies still share nested objects/arrays:
+let nested = { list: [1, 2, 3] };
+let shallow = { ...nested };
+shallow.list.push(4);
+nested.list          // => [1, 2, 3, 4] — the inner array was shared, not copied!
+
+// Comparing two arrays/objects for equal CONTENT requires comparing
+// element-by-element or property-by-property; === alone only tells you
+// about identity:
+function equalArrays(a, b) {
+  if (a === b) return true;                  // identical arrays trivially "equal"
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Mental model</div>
+        <p>
+          Think of a variable holding an object not as "containing" the
+          object, but as holding a sticky note with the object's address
+          written on it. Copying the variable copies the sticky note, not the
+          object — both notes still point at the one object. Assigning to
+          <code>const point = {}</code> locks the ink on the sticky note (you
+          can't write a new address on it), but says nothing about the object
+          at that address, which can still be freely edited.
+        </p>
+      </div>
+
+      <h2 id="type-conversions">Type conversions <span class="badge hard">Hard</span></h2>
+      <p>
+        JavaScript converts values between types automatically almost
+        everywhere a specific type is expected — arithmetic, string
+        concatenation, <code>if</code> conditions, and more. Understanding the
+        actual rules turns "wait, why is that true?" into something
+        predictable instead of magical:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">10 + " objects"    // => "10 objects": the number 10 converts to a string
+"7" * "4"          // => 28: both strings convert to numbers for *
+let n = 1 - "x";   // n is NaN: "x" can't convert to a number
+n + " objects"     // => "NaN objects": NaN converts to the string "NaN"</code></pre>
+      </div>
+
+      <h3 id="conversion-table">The full conversion table</h3>
+      <p>
+        Every value converts to a string and to a boolean without exception;
+        conversion to a number can fail, producing <code>NaN</code>. Entries
+        in bold below are the ones people find genuinely surprising:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Value</th><th>→ String</th><th>→ Number</th><th>→ Boolean</th></tr>
+          <tr><td><code>undefined</code></td><td>"undefined"</td><td>NaN</td><td>false</td></tr>
+          <tr><td><code>null</code></td><td>"null"</td><td>0</td><td>false</td></tr>
+          <tr><td><code>true</code></td><td>"true"</td><td>1</td><td>—</td></tr>
+          <tr><td><code>false</code></td><td>"false"</td><td>0</td><td>—</td></tr>
+          <tr><td><code>""</code> (empty string)</td><td>—</td><td>0</td><td>false</td></tr>
+          <tr><td><code>"1.2"</code> (numeric string)</td><td>—</td><td>1.2</td><td>true</td></tr>
+          <tr><td><code>"one"</code> (non-numeric string)</td><td>—</td><td><strong>NaN</strong></td><td>true</td></tr>
+          <tr><td><code>0</code> / <code>-0</code></td><td>"0"</td><td>—</td><td>false</td></tr>
+          <tr><td>any other finite number</td><td>decimal text</td><td>—</td><td>true</td></tr>
+          <tr><td><code>Infinity</code> / <code>-Infinity</code></td><td>"Infinity"/"-Infinity"</td><td>—</td><td>true</td></tr>
+          <tr><td><code>NaN</code></td><td>"NaN"</td><td>—</td><td>false</td></tr>
+          <tr><td><code>{}</code> (any object)</td><td>see object-to-primitive below</td><td>see below</td><td><strong>true, always</strong> — even <code>new Boolean(false)</code></td></tr>
+          <tr><td><code>[]</code> (empty array)</td><td>""</td><td><strong>0</strong></td><td>true</td></tr>
+          <tr><td><code>[9]</code> (one numeric element)</td><td>"9"</td><td><strong>9</strong></td><td>true</td></tr>
+          <tr><td><code>['a', 'b']</code> (any other array)</td><td>uses <code>join()</code> — "a,b"</td><td><strong>NaN</strong></td><td>true</td></tr>
+          <tr><td><code>function(){}</code> (any function)</td><td>its source code</td><td>NaN</td><td>true</td></tr>
+        </table>
+      </div>
+      <p>
+        Two rows are worth memorizing precisely because they look like typos
+        but aren't: <code>Number([])</code> is <code>0</code>, and
+        <code>Number([99])</code> is <code>99</code>. Both go through the same
+        pipeline — the array converts to a primitive via its
+        <code>toString()</code> (which comma-joins elements: an empty array
+        joins to <code>""</code>, a one-element array joins to that one
+        element's string form), and <em>then</em> that string is parsed as a
+        number. It has nothing to do with array length as a number and
+        everything to do with string conversion happening first.
+      </p>
+      <p>
+        Converting a string to a number tolerates surrounding whitespace but
+        not anything else: any leading or trailing non-space character that
+        isn't part of a valid numeric literal causes the whole conversion to
+        fail to <code>NaN</code> — this is what makes <code>Number()</code>
+        stricter than <code>parseInt()</code>/<code>parseFloat()</code>,
+        covered in <a href="#number-conversions">§3.2.7</a> above.
+      </p>
+
+      <h3 id="object-to-primitive">How an object becomes a primitive</h3>
+      <p>
+        Converting an object to a string or number is a two-step process:
+        first the object is converted to <em>some</em> primitive value, then
+        (if needed) that primitive is converted again using the ordinary
+        rules from the table above. The first step is the interesting one,
+        because some objects — <code>Date</code> especially — have more than
+        one reasonable primitive representation (a timestamp number, or a
+        human-readable string). JavaScript resolves the ambiguity with three
+        named algorithms:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Algorithm</th><th>Tries, in order</th><th>Used by</th></tr>
+          <tr><td><strong>prefer-string</strong></td><td><code>toString()</code>, then <code>valueOf()</code></td><td>Template-literal interpolation, <code>String(obj)</code></td></tr>
+          <tr><td><strong>prefer-number</strong></td><td><code>valueOf()</code>, then <code>toString()</code></td><td><code>Number(obj)</code>; relational operators <code>&lt; &gt; &lt;= &gt;=</code> (the result is <em>not</em> converted to a number afterward, unlike ordinary number conversion)</td></tr>
+          <tr><td><strong>no-preference</strong></td><td>Same as prefer-number for every built-in type <em>except</em> <code>Date</code>, which behaves as prefer-string</td><td>The <code>+</code> operator and the <code>==</code>/<code>!=</code> operators, whenever one operand is an object and the other a primitive</td></tr>
+        </table>
+      </div>
+      <p>
+        Two methods every object inherits drive all three algorithms.
+        <code>toString()</code> returns a string representation — the default
+        is the unhelpful <code>"[object Object]"</code>, but built-ins
+        override it usefully: arrays join their elements with commas,
+        functions return their own source text, <code>Date</code> returns a
+        human-readable date/time string, and <code>RegExp</code> returns
+        literal-like source (<code>/\d+/g</code>). <code>valueOf()</code> is
+        supposed to return a primitive that meaningfully represents the whole
+        object, if one exists — the default just returns the object itself
+        (not a primitive, so it's skipped), but the numeric wrapper types
+        (<code>Number</code>, <code>Boolean</code>, <code>String</code>) return
+        their wrapped primitive, and <code>Date</code> returns its millisecond
+        timestamp.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">({ x: 1, y: 2 }).toString()          // => "[object Object]"
+[1, 2, 3].toString()                 // => "1,2,3"
+(function(x) { return x; }).toString() // => "function(x) { return x; }"
+/\d+/g.toString()                    // => "/\\d+/g"
+
+let d = new Date(2020, 0, 1);
+d.toString()   // => "Wed Jan 01 2020 00:00:00 GMT-0800 (...)" — prefer-string wins
+d.valueOf()    // => 1577865600000 — the millisecond timestamp
++d             // => 1577865600000: unary + forces prefer-number, using valueOf()
+`${d}`         // => the toString() text: template literals use prefer-string
+d + ""         // => the toString() text too: no-preference is prefer-string FOR DATES</code></pre>
+      </div>
+      <p>
+        You can override this behavior for your own classes by defining
+        <code>toString()</code>, <code>valueOf()</code>, or, for full control
+        over all three algorithms at once, a <code>Symbol.toPrimitive</code>
+        method — see <a href="15-metaprogramming.html">Metaprogramming</a>.
+      </p>
+
+      <h3 id="equality"><code>==</code> vs. <code>===</code> <span class="badge hard">Hard</span></h3>
+      <p>
+        <code>===</code>, the strict equality operator, never converts
+        types: two values of different types are simply never
+        <code>===</code>-equal, full stop. <code>==</code>, by contrast,
+        performs one of the object-to-primitive conversions above and then a
+        cascade of further conversions whenever its two operands have
+        different types, hunting for a way to consider them equal.
+        Internalizing that cascade — rather than memorizing individual
+        surprising cases — is the only way to actually predict what
+        <code>==</code> will do.
+      </p>
+      <p>The (simplified) rules <code>==</code> applies, in order, when the operand types differ:</p>
+      <ul>
+        <li><code>null == undefined</code> is special-cased to <code>true</code> — and neither one is ever <code>==</code> to anything else, including <code>0</code>, <code>false</code>, or <code>""</code>.</li>
+        <li>number vs. string: the string converts to a number.</li>
+        <li>boolean vs. anything: the boolean converts to a number (<code>true</code> → 1, <code>false</code> → 0) and the comparison is retried.</li>
+        <li>object vs. primitive (number, string, or BigInt): the object converts to a primitive via the no-preference algorithm, and the comparison is retried.</li>
+        <li>BigInt vs. number or string: converted and compared numerically, as long as the string/number is a valid integer value.</li>
+      </ul>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 1: chasing the cascade one step at a time
+"0" == 0        // => true:  "0" converts to the number 0, then 0 == 0
+0 == false      // => true:  false converts to 0, then 0 == 0
+"0" == false    // => true:  BOTH sides convert to 0 before comparing — two hops!
+null == undefined  // => true: special-cased, no conversion happens at all
+null == 0          // => false: null is ONLY == to undefined, never to 0
+undefined == 0     // => false: same rule, other spelling
+
+// Worked example 2: the object case
+"1,2,3" == [1, 2, 3]  // => true: the array's no-preference conversion
+                      //          calls toString(), joining to "1,2,3",
+                      //          then both sides are equal strings
+0 == []               // => true: [] converts (via "" then Number("")) to 0
+0 == [0]              // => true: [0] converts (via "0" then Number("0")) to 0
+"" == []              // => true: [] stringifies to ""</code></pre>
+      </div>
+      <p>
+        Crucially, "value X converts to false in a boolean context" does
+        <strong>not</strong> mean <code>X == false</code> — different
+        operators trigger different conversion targets, and <code>==</code>
+        never converts either operand to boolean as part of its own
+        algorithm:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">if (undefined) { /* never runs: undefined is falsy in a boolean context */ }
+undefined == false   // => false! == does not convert undefined to a boolean here</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Default to <code>===</code>/<code>!==</code></div>
+        <p>
+          The one broadly accepted idiomatic use of <code>==</code> is
+          <code>x == null</code>, which conveniently tests for
+          <code>null</code> <em>or</em> <code>undefined</code> in a single
+          comparison — everywhere else, prefer <code>===</code> and
+          <code>!==</code> so that a type mismatch is a bug you notice
+          immediately rather than a silent conversion.
+        </p>
+      </div>
+
+      <h3 id="explicit-conversions">Explicit conversion idioms</h3>
+      <p>
+        Sometimes you want a conversion to happen visibly rather than as a
+        side effect of some other operation. The clearest way is calling
+        <code>Boolean()</code>, <code>Number()</code>, or <code>String()</code>
+        as plain functions (not with <code>new</code> — that instead
+        produces a boxed wrapper object, a historical wart with essentially
+        no legitimate modern use). A handful of shorthand idioms rely on
+        operators' implicit conversions and show up often enough in real code
+        to be worth recognizing:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">Number("3")     // => 3
+String(false)   // => "false"       (or: false.toString())
+Boolean([])     // => true
+
+x + ""    // => String(x): + with a string operand forces string conversion
++x        // => Number(x): unary + forces prefer-number conversion
+x - 0     // => Number(x): same idea, using subtraction instead
+!!x       // => Boolean(x): the double-negate idiom</code></pre>
+      </div>
+
+      <h2 id="variable-declaration">Variable declaration and assignment</h2>
+      <p>
+        Modern JavaScript declares variables with <code>let</code> and
+        constants with <code>const</code>; both were introduced in ES6 to
+        replace the older, quirkier <code>var</code> (still legal, and still
+        common in code written before ES6 — or by developers who haven't
+        caught up). None of the three declaration forms specify a type: a
+        JavaScript variable can hold a number at one point in the program and
+        a string moments later, for better or worse.
+      </p>
+
+      <h3 id="let-and-const">Declaring with let and const</h3>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let i;                    // Declared, value is undefined until assigned
+let sum;
+let i, sum;               // Multiple declarations in one statement
+let message = "hello";    // Initialize at declaration — good practice when possible
+let x = 2, y = x * x;     // Later initializers may reference earlier ones
+
+const H0 = 74;            // Hubble constant — MUST be initialized...
+const AU = 1.496e8;
+H0 = 100;                 // ...and TypeError: cannot reassign a constant
+
+const point = { x: 1 };
+point.x = 2;              // Fine! const only locks the BINDING, not the object's contents
+point = {};               // TypeError: Assignment to constant variable</code></pre>
+      </div>
+      <p>
+        Loop variables can be declared right in the loop header, and — a
+        detail that surprises people — <code>const</code> works there too, as
+        long as the loop body doesn't try to reassign it; a fresh binding is
+        created each iteration, so declaring it <code>const</code> only
+        promises "not reassigned <em>within</em> this iteration," not "the
+        same value across iterations":
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">for (let i = 0, len = data.length; i < len; i++) console.log(data[i]);
+for (const datum of data) console.log(datum);       // legal: no reassignment inside
+for (const key in someObject) console.log(key);     // also legal, same reason</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Which default should you reach for?</div>
+        <p>
+          Two reasonable conventions exist. One camp uses <code>const</code>
+          only for values that are fundamentally, conceptually unchanging
+          (physical constants, version strings). The other defaults to
+          <code>const</code> for <em>everything</em> and only switches a given
+          declaration to <code>let</code> once it turns out to actually need
+          reassignment — this catches accidental reassignment bugs early. The
+          book favors the first approach, but either is defensible; what
+          matters is picking one and being consistent.
+        </p>
+      </div>
+      <p>
+        It's a <code>SyntaxError</code> to declare the same name twice with
+        <code>let</code>/<code>const</code> in the same scope — but perfectly
+        legal (if often confusing) to declare a new variable with the same
+        name in a <em>nested</em> scope, which temporarily shadows the outer
+        one:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const x = 1;          // global x
+if (x === 1) {
+  let x = 2;           // a DIFFERENT x, scoped to this block
+  console.log(x);      // => 2
+}
+console.log(x);        // => 1: back in the outer scope
+
+let x = 3;             // SyntaxError: Identifier 'x' has already been declared</code></pre>
+      </div>
+
+      <h3 id="scope-hoisting-tdz">Scope, hoisting, and the temporal dead zone: let/const vs. var <span class="badge hard">Hard</span></h3>
+      <p>
+        <code>var</code> predates block scope in JavaScript entirely, and the
+        differences between it and <code>let</code>/<code>const</code> are
+        not cosmetic — they change which bugs are even possible to write:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th></th><th><code>let</code> / <code>const</code></th><th><code>var</code></th></tr>
+          <tr><td>Scope</td><td>The nearest enclosing block <code>{ }</code> — <code>if</code>, loop body, function body, or bare block</td><td>The nearest enclosing <em>function</em>, completely ignoring block boundaries</td></tr>
+          <tr><td>Redeclaring the same name in the same scope</td><td><code>SyntaxError</code></td><td>Legal and harmless — common with loop counters named <code>i</code> across sibling loops</td></tr>
+          <tr><td>Using the variable before its declaration line runs</td><td><code>ReferenceError</code> — the "temporal dead zone"</td><td>Evaluates to <code>undefined</code>, no error at all</td></tr>
+          <tr><td>As a top-level global</td><td>Not added as a property of the global object</td><td>Becomes a real property of <code>globalThis</code> (and can't be <code>delete</code>d)</td></tr>
+        </table>
+      </div>
+      <p>
+        <code>var</code> is <strong>hoisted</strong>: wherever a <code>var</code>
+        declaration appears in a function, the <em>declaration</em> — but not
+        the initializer — is conceptually moved to the very top of that
+        function. This is what lets <code>var</code> variables be referenced
+        anywhere in their enclosing function without error, even textually
+        "above" the line that declares them; if the initializing assignment
+        hasn't run yet, you simply get <code>undefined</code> rather than an
+        error.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 1: var leaks out of blocks; let/const don't
+if (true) {
+  var legacy = "I exist outside this block";
+}
+console.log(legacy);   // => "I exist outside this block": var ignored the block
+
+if (true) {
+  let modern = "I do not";
+}
+console.log(modern);   // ReferenceError: modern is not defined — block-scoped correctly
+
+// Worked example 2: hoisting gives var a silent "undefined" phase;
+// let/const give you a hard error instead (the temporal dead zone)
+console.log(hoisted);  // => undefined: the declaration was hoisted, not the value
+var hoisted = 5;
+
+console.log(inTDZ);    // ReferenceError: Cannot access 'inTDZ' before initialization
+let inTDZ = 5;         // "inTDZ" is unusable from the top of its scope until this line runs</code></pre>
+      </div>
+      <p>
+        That second example is the important mental model: <code>let</code>
+        and <code>const</code> variables <em>are</em> technically hoisted too
+        (their name is known throughout the enclosing block from the start),
+        but unlike <code>var</code> they remain in an unusable "temporal dead
+        zone" from the top of the block until the declaration statement
+        itself executes — accessing them early is treated as a real error
+        instead of quietly handing back <code>undefined</code>. This is
+        exactly the class of bug <code>let</code>/<code>const</code> were
+        designed to catch at the source instead of at 3&nbsp;a.m. in
+        production.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Accidentally-global variables</div>
+        <p>
+          Outside of strict mode, assigning to a name that was never
+          declared with <code>let</code>, <code>const</code>, or
+          <code>var</code> silently creates a new <em>global</em> variable —
+          no matter how deeply nested inside functions and blocks the
+          assignment is. In strict mode (the default inside ES modules and
+          classes; see <a href="04-statements.html">Statements</a>), the same
+          code throws a <code>ReferenceError</code> instead, which is one of
+          the best reasons to always write in strict mode.
+        </p>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Practical rule</div>
+        <p>
+          Default to <code>const</code>, switch to <code>let</code> only when
+          a binding genuinely needs reassignment, and treat <code>var</code>
+          as legacy syntax you need to be able to <em>read</em> in old code
+          but should not write in new code.
+        </p>
+      </div>
+
+      <h2 id="destructuring">Destructuring assignment</h2>
+      <p>
+        Destructuring unpacks values out of an array or object into
+        individual variables in a single statement, using syntax on the
+        left-hand side of <code>=</code> that mirrors array/object literal
+        syntax on the right. It's most commonly combined with a
+        <code>let</code>/<code>const</code>/<code>var</code> declaration, but
+        it also works as a plain assignment to already-declared variables,
+        and — covered in <a href="07-functions.html">Functions</a> — directly
+        in a function's parameter list.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Array destructuring
+let [x, y] = [1, 2];              // Same as let x = 1, y = 2
+[x, y] = [x + 1, y + 1];          // Ordinary assignment works too
+[x, y] = [y, x];                  // The classic swap idiom — no temp variable needed
+
+// Extra variables on the left become undefined; extra values on the right
+// are silently ignored; commas skip values you don't care about:
+let [a] = [1, 2, 3];              // a == 1; 2 and 3 are dropped
+let [, second, , fourth] = [1, 2, 3, 4]; // second == 2; fourth == 4
+
+// Rest pattern collects everything left over into a real array:
+let [first, ...rest] = [1, 2, 3, 4];  // first == 1; rest == [2, 3, 4]
+
+// Works with ANY iterable, not just arrays — including strings:
+let [firstChar, ...restChars] = "Hello"; // firstChar == "H"; restChars == ["e","l","l","o"]
+
+// Nesting mirrors the shape of the data:
+let [p, [q, r]] = [1, [2, 2.5]];  // p == 1; q == 2; r == 2.5
+
+// A function that "returns multiple values" via an array reads naturally:
+function toPolar(x, y) {
+  return [Math.sqrt(x * x + y * y), Math.atan2(y, x)];
+}
+let [radius, theta] = toPolar(1.0, 1.0);</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Object destructuring: pattern mirrors an object literal
+let { r, g, b } = { r: 0, g: 128, b: 255, a: 1 }; // extra props (a) simply ignored
+
+// Rename while destructuring with a colon: "propertyName: localVariableName"
+let { cos: cosine, tan: tangent } = Math;  // cosine === Math.cos, tangent === Math.tan
+
+// Default values kick in only when the source property is undefined/missing:
+let { width = 100, height = 100 } = { width: 320 }; // width == 320; height == 100
+
+// Nested object/array combinations, however unwieldy, are legal:
+let points = [{ x: 1, y: 2 }, { x: 3, y: 4 }];
+let [{ x: x1, y: y1 }, { x: x2, y: y2 }] = points;
+(x1 === 1 && y1 === 2 && x2 === 3 && y2 === 4)  // => true
+
+let byArrays = { p1: [1, 2], p2: [3, 4] };
+let { p1: [px1, py1], p2: [px2, py2] } = byArrays; // destructure an object OF arrays
+
+// A common, very readable pattern: iterating an object's entries
+let obj = { x: 1, y: 2 };
+for (const [name, value] of Object.entries(obj)) {
+  console.log(name, value); // "x 1" then "y 2"
+}</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Sanity-checking complex destructuring</div>
+        <p>
+          When a destructuring pattern gets hard to read, there's a reliable
+          trick: after the assignment runs, the left-hand side — used
+          unmodified as an ordinary expression — should reconstruct something
+          equivalent to the original right-hand side. If flipping it around
+          that way doesn't look right, the pattern is probably wrong too:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let points = [{ x: 1, y: 2 }, { x: 3, y: 4 }];
+let [{ x: x1, y: y1 }, { x: x2, y: y2 }] = points;
+
+// Sanity check: rebuild something equal to `points` using x1,y1,x2,y2
+let points2 = [{ x: x1, y: y1 }, { x: x2, y: y2 }]; // deep-equal to points</code></pre>
+        </div>
+        <p>
+          If a pattern is genuinely this deep in practice, it's often clearer
+          to just write out <code>points[0].x</code> explicitly instead.
+        </p>
+      </div>
+
+      <h2 id="summary">Summary</h2>
+      <p>Key ideas to carry forward from this chapter:</p>
+      <ul>
+        <li>Every value is a primitive (number, string, boolean, BigInt, symbol, <code>null</code>, <code>undefined</code>) or an object — and that split determines mutability and copy/comparison semantics.</li>
+        <li>Numbers are a single 64-bit floating-point type with well-defined but sometimes surprising rounding behavior; BigInt exists specifically for exact large integers.</li>
+        <li>Strings are immutable sequences of UTF-16 code units; template literals and tagged templates (ES6) make string-building far more ergonomic than concatenation.</li>
+        <li><code>null</code> and <code>undefined</code> both mean "no value" but conventionally signal different things; <code>??</code> lets you supply a default only for genuinely missing values.</li>
+        <li>Primitives are copied/compared by value; objects are copied/compared by reference — the root cause of most "why did my variable change?!" bugs.</li>
+        <li>Type conversion is pervasive and rule-governed, not magical — and <code>==</code>'s conversions are exactly why <code>===</code> should be your default.</li>
+        <li><code>let</code>/<code>const</code> give you block scope and a temporal dead zone that turns a whole class of <code>var</code>-era bugs into immediate errors; destructuring lets you unpack structured data in one expressive statement.</li>
+      </ul>
+      <p>
+        With the type system established, the next stop is the operators and
+        expressions that combine these values — see
+        <a href="03-expressions-operators.html">Expressions &amp; Operators</a>.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dates, JSON, Intl & Utilities — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="12-dates-json-intl-utilities.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 11, &sect;11.4&ndash;11.11</span>
+      <h1>Dates, JSON, Intl &amp; Utilities</h1>
+      <p class="lede">
+        This page finishes the standard library tour begun in
+        <a href="10-collections-typed-arrays.html">Collections &amp; Typed Arrays</a>
+        and <a href="11-regular-expressions.html">Regular Expressions</a>: the
+        <code>Date</code> class and the surprisingly sharp edges around parsing
+        and time zones, the built-in <code>Error</code> hierarchy, JSON
+        serialization and its two customization hooks, the locale-aware
+        <code>Intl</code> formatting classes, the console API beyond
+        <code>console.log()</code>, the <code>URL</code>/<code>URLSearchParams</code>
+        classes and their legacy predecessors, and the timer functions that
+        every asynchronous program is built on.
+      </p>
+
+      <h2 id="dates-and-times">Dates and times</h2>
+      <p>
+        JavaScript represents a single instant in time with the <code>Date</code>
+        class. Internally, a <code>Date</code> is nothing more than a signed
+        integer counting milliseconds since (or before) midnight on January 1,
+        1970, UTC &mdash; the same "Unix epoch" convention used by most other
+        languages. Values as large as 8,640,000,000,000,000 are legal, so
+        JavaScript has enough range to represent dates roughly 273,000 years
+        into the past or future. Everything else the class does &mdash;
+        formatting, arithmetic, component extraction &mdash; is built on top of
+        that single millisecond count.
+      </p>
+
+      <h3 id="constructing-dates">Constructing a Date</h3>
+      <p>
+        The <code>Date()</code> constructor is overloaded based on how many
+        arguments (and of what type) you pass it:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let now = new Date();               // Zero args: the current date and time
+let epoch = new Date(0);            // One number: milliseconds since 1/1/1970 UTC
+let ms = new Date(1_700_000_000_000); // Any millisecond timestamp works
+
+// Two or more integers: year, month, day, hours, minutes, seconds, ms
+// interpreted in the LOCAL time zone of the machine running the code
+let century = new Date(2100,        // year 2100
+                        0,           // January (months are 0-based!)
+                        1,          // 1st of the month
+                        2, 3, 4, 5); // 02:03:04.005, local time
+
+// A string: parsed by the same rules as Date.parse() (see below &mdash; risky!)
+let parsed = new Date("2100-01-01T00:00:00Z");</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Months are 0-indexed; days-of-month are 1-indexed</div>
+        <p>
+          <code>new Date(2020, 0, 1)</code> is January 1st &mdash; month
+          <code>0</code> means January, month <code>11</code> means December.
+          This inconsistency (day-of-month starts at <code>1</code>, month
+          starts at <code>0</code>) is a permanent historical wart in the API
+          and a perennial off-by-one bug source. If you omit the time fields
+          entirely, the constructor defaults them all to <code>0</code>,
+          giving you midnight.
+        </p>
+      </div>
+      <p>
+        Multi-argument construction always uses whatever time zone the host
+        machine is configured with. To build a date in a specific instant of
+        UTC instead, use the static <code>Date.UTC()</code> method, which
+        accepts the same argument list but returns a millisecond timestamp
+        (not a <code>Date</code>) that you then feed back into the
+        constructor:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Midnight in England, January 1, 2100 &mdash; regardless of local time zone
+let centuryUTC = new Date(Date.UTC(2100, 0, 1));
+
+// Printing a Date always uses the LOCAL time zone by default
+console.log(centuryUTC);            // shows local-time representation
+console.log(centuryUTC.toUTCString()); // explicit UTC rendering</code></pre>
+      </div>
+
+      <h3 id="components-local-vs-utc">Getting and setting components: local time vs. UTC</h3>
+      <p>
+        Once you hold a <code>Date</code> object, a family of get/set methods
+        lets you read and modify its year, month, day-of-month, hour, minute,
+        second, and millisecond fields. Every one of these methods has
+        <strong>two forms</strong>: a local-time form and a UTC form, and the
+        naming convention just inserts <code>UTC</code> after <code>get</code>
+        or <code>set</code>:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Local-time method</th><th>UTC method</th><th>Field</th></tr>
+          <tr><td><code>getFullYear()</code> / <code>setFullYear()</code></td><td><code>getUTCFullYear()</code> / <code>setUTCFullYear()</code></td><td>Year (4 digits)</td></tr>
+          <tr><td><code>getMonth()</code> / <code>setMonth()</code></td><td><code>getUTCMonth()</code> / <code>setUTCMonth()</code></td><td>Month, 0&ndash;11</td></tr>
+          <tr><td><code>getDate()</code> / <code>setDate()</code></td><td><code>getUTCDate()</code> / <code>setUTCDate()</code></td><td>Day of month, 1&ndash;31</td></tr>
+          <tr><td><code>getHours()</code> / <code>setHours()</code></td><td><code>getUTCHours()</code> / <code>setUTCHours()</code></td><td>Hour, 0&ndash;23</td></tr>
+          <tr><td><code>getMinutes()</code> / <code>setMinutes()</code></td><td><code>getUTCMinutes()</code> / <code>setUTCMinutes()</code></td><td>Minute</td></tr>
+          <tr><td><code>getSeconds()</code> / <code>setSeconds()</code></td><td><code>getUTCSeconds()</code> / <code>setUTCSeconds()</code></td><td>Second</td></tr>
+          <tr><td><code>getMilliseconds()</code> / <code>setMilliseconds()</code></td><td><code>getUTCMilliseconds()</code> / <code>setUTCMilliseconds()</code></td><td>Millisecond</td></tr>
+          <tr><td><code>getDay()</code> (read-only)</td><td><code>getUTCDay()</code> (read-only)</td><td>Day of week, 0 (Sunday) &ndash; 6 (Saturday)</td></tr>
+        </table>
+      </div>
+      <div class="admonition note">
+        <div class="admonition-title"><code>getDate()</code> vs. <code>getDay()</code></div>
+        <p>
+          The method for querying day-of-month is <code>getDate()</code>. The
+          more natural-sounding <code>getDay()</code> instead returns the
+          <em>day of the week</em>. There is deliberately no
+          <code>setDay()</code> &mdash; day-of-week is a derived, read-only
+          value.
+        </p>
+      </div>
+      <p>
+        Several setters accept more than one field at once:
+        <code>setFullYear()</code>/<code>setUTCFullYear()</code> optionally
+        take the month and day-of-month as second and third arguments, and
+        <code>setHours()</code>/<code>setUTCHours()</code> optionally take
+        minutes, seconds, and milliseconds as additional arguments.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let d = new Date();                 // Start with the current moment
+d.setFullYear(d.getFullYear() + 1); // Bump the year by one, everything else unchanged
+d.setHours(9, 0, 0, 0);             // 9:00:00.000, same day &mdash; local time</code></pre>
+      </div>
+
+      <h3 id="timestamps">Timestamps</h3>
+      <p>
+        <code>getTime()</code> returns a <code>Date</code>'s internal
+        millisecond count, and <code>setTime()</code> replaces it wholesale.
+        Because everything reduces to this single number, timestamp
+        arithmetic is the simplest way to shift a date by a fixed duration:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">d.setTime(d.getTime() + 30_000);   // Add exactly 30 seconds
+
+// Date.now() is a static method: current timestamp, no Date object created
+let startTime = Date.now();
+reticulateSplines();                // some time-consuming operation
+let endTime = Date.now();
+console.log(`Spline reticulation took ${endTime - startTime}ms.`);</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Sub-millisecond timing: <code>performance.now()</code></div>
+        <p>
+          A millisecond is a long time for a CPU. When you need finer-grained
+          elapsed-time measurement, <code>performance.now()</code> (part of
+          the Performance API, standardized outside ECMAScript, available in
+          browsers and in Node via <code>const { performance } =
+          require("perf_hooks")</code>) returns a non-integer millisecond
+          value with sub-millisecond precision. Unlike <code>Date.now()</code>,
+          it is <em>not</em> an absolute timestamp &mdash; it measures elapsed
+          time since page load or process start. Browsers (Firefox
+          especially) may deliberately reduce its precision to defend against
+          timing-based fingerprinting.
+        </p>
+      </div>
+
+      <h3 id="date-arithmetic">Date arithmetic</h3>
+      <p>
+        <code>Date</code> objects support the ordinary relational operators
+        <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>,
+        <code>&gt;=</code> directly, and subtracting one <code>Date</code>
+        from another yields the millisecond difference between them &mdash;
+        this works because <code>Date</code> defines a <code>valueOf()</code>
+        method returning its timestamp, so the arithmetic operators coerce
+        both sides to numbers automatically.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let msElapsed = new Date() - startDate;   // implicit valueOf() coercion
+let sameInstant = d1.getTime() === d2.getTime(); // correct equality check
+d1 < d2   // works too &mdash; but use === on getTime(), never == or === on Dates themselves</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>===</code> on two Date objects compares identity, not time</div>
+        <p>
+          <code>new Date(2020, 0, 1) === new Date(2020, 0, 1)</code> is
+          <code>false</code> &mdash; they are two distinct objects. To compare
+          the instants they represent, compare <code>.getTime()</code> values
+          (or just subtract, or use <code>&lt;</code>/<code>&gt;</code>, which
+          coerce via <code>valueOf()</code>).
+        </p>
+      </div>
+      <p>
+        Adding or subtracting a fixed number of seconds, minutes, or hours is
+        easiest done by adjusting the timestamp directly, as shown above. That
+        approach breaks down for days, months, and years, since those units
+        don't have a fixed millisecond length (months vary from 28 to 31 days;
+        years vary with leap years). For those, use <code>setDate()</code>,
+        <code>setMonth()</code>, and <code>setFullYear()</code>, which
+        <strong>overflow correctly</strong>:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Add 3 months and 14 days to today, in one call:
+let d = new Date();
+d.setMonth(d.getMonth() + 3, d.getDate() + 14);
+
+// If the current month is October (9) and we add 3, we get 12 &mdash;
+// setMonth() rolls that over into next year automatically (month 0, year+1).
+// Likewise, setting day-of-month past the end of a month rolls into the
+// following month: new Date(2024, 0, 32) silently becomes February 1, 2024.</code></pre>
+      </div>
+
+      <h3 id="date-parsing-deep-dive">
+        Formatting and parsing date strings
+        <span class="badge hard">Hard parts</span>
+      </h3>
+      <p>
+        <code>Date</code> defines several string-conversion methods, ordered
+        here roughly from "fixed machine format" to "user-facing":
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Method</th><th>Time zone</th><th>Locale-aware?</th><th>Typical output</th></tr>
+          <tr><td><code>toISOString()</code></td><td>UTC</td><td>No (fixed ISO-8601)</td><td><code>"2020-01-02T01:10:30.000Z"</code></td></tr>
+          <tr><td><code>toUTCString()</code></td><td>UTC</td><td>No</td><td><code>"Thu, 02 Jan 2020 01:10:30 GMT"</code></td></tr>
+          <tr><td><code>toString()</code></td><td>Local</td><td>No</td><td><code>"Wed Jan 01 2020 17:10:30 GMT-0800 (Pacific Standard Time)"</code></td></tr>
+          <tr><td><code>toDateString()</code></td><td>Local</td><td>No</td><td>Date portion only, fixed format</td></tr>
+          <tr><td><code>toTimeString()</code></td><td>Local</td><td>No</td><td>Time portion only, fixed format</td></tr>
+          <tr><td><code>toLocaleString()</code></td><td>Local</td><td>Yes</td><td>Full date+time, user's locale</td></tr>
+          <tr><td><code>toLocaleDateString()</code></td><td>Local</td><td>Yes</td><td><code>"1/1/2020"</code> in en-US</td></tr>
+          <tr><td><code>toLocaleTimeString()</code></td><td>Local</td><td>Yes</td><td><code>"5:10:30 PM"</code> in en-US</td></tr>
+        </table>
+      </div>
+      <p>
+        None of the plain <code>toLocale*</code> methods give you control over
+        <em>which</em> fields appear or how they're formatted &mdash; for that
+        you need <code>Intl.DateTimeFormat</code>, covered in
+        <a href="#intl-datetimeformat">the Intl section below</a>. For
+        machine-readable storage or API payloads, <code>toISOString()</code>
+        is almost always the right choice: it's unambiguous, sorts
+        lexicographically in chronological order, and every environment can
+        parse it back reliably.
+      </p>
+      <p>
+        The reverse direction &mdash; turning a string into a <code>Date</code>
+        &mdash; goes through either the <code>Date()</code> constructor (when
+        called with a single string argument) or the static
+        <code>Date.parse()</code> method, which both use the same parsing
+        rules and return a timestamp. <code>Date.parse()</code> is guaranteed
+        to correctly parse anything produced by <code>toISOString()</code>,
+        <code>toUTCString()</code>, or <code>toString()</code> &mdash; but
+        <strong>that is the only guarantee the specification makes</strong>.
+        Everything else about string parsing is a minefield.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">Date-only ISO strings parse as UTC midnight; spelled-out strings parse as local time</div>
+        <p>
+          This is the single most common date bug in JavaScript. The
+          ECMAScript spec mandates that a <em>date-only</em> ISO-8601 string
+          (no time component) is interpreted as <strong>UTC</strong> midnight,
+          while a full ISO date-time string with no explicit offset is
+          interpreted as <strong>local</strong> time. Non-ISO formats
+          ("January 15, 2024") are entirely implementation-defined and are
+          conventionally parsed as local time by browsers &mdash; but nothing
+          requires that, and different engines can disagree.
+        </p>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 1: date-only ISO string vs. spelled-out string
+// Run this in a browser whose system time zone is, say, US Pacific (UTC-8):
+
+let isoDateOnly = new Date("2024-01-15");
+console.log(isoDateOnly.toString());
+// "Sun Jan 14 2024 16:00:00 GMT-0800 (Pacific Standard Time)"
+// Surprise: it's the 14th locally! The string was parsed as UTC midnight
+// on the 15th, then *displayed* by shifting into local time, which in a
+// negative UTC-offset zone rolls the calendar date backward.
+
+let spelled = new Date("January 15, 2024");
+console.log(spelled.toString());
+// "Mon Jan 15 2024 00:00:00 GMT-0800 (Pacific Standard Time)"
+// This one WAS parsed as local midnight on the 15th &mdash; a full day
+// "later" than the ISO string above, even though a human reads both
+// strings as "the same date."</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 2: why "parse arbitrary strings" is unreliable across
+// environments, and the fix.
+
+new Date("2024-01-15 10:00:00");   // NOT valid ISO-8601 (space instead of "T")
+// Some engines accept this as local time; others as invalid (Invalid Date).
+// Never rely on it.
+
+new Date("01/15/2024");            // US month/day/year order assumed by
+                                    // Chrome/Node, but Date.parse() does not
+                                    // guarantee this format at all &mdash;
+                                    // a different engine could read it as
+                                    // day/month/year and silently produce a
+                                    // different date with no error.
+
+// The fix: always construct dates explicitly, or parse with a fixed,
+// specified format, instead of trusting Date.parse()/new Date(string)
+// with anything except ISO-8601 with an explicit "T" and offset/"Z".
+let safe = new Date(2024, 0, 15);              // explicit components, local
+let safeUTC = new Date(Date.UTC(2024, 0, 15)); // explicit components, UTC
+let safeISO = new Date("2024-01-15T00:00:00Z"); // unambiguous ISO with zone</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Rule of thumb</div>
+        <p>
+          For storage, logging, and APIs, always serialize with
+          <code>toISOString()</code> and always parse full ISO-8601 strings
+          that include a <code>T</code> and either <code>Z</code> or an
+          explicit <code>&plusmn;HH:MM</code> offset. Never feed a
+          human-typed or ambiguous date string straight into
+          <code>Date.parse()</code>/<code>new Date(string)</code> in
+          production code &mdash; validate and normalize it first, or use a
+          dedicated parsing library.
+        </p>
+      </div>
+
+      <h3 id="comparing-dates">Comparing dates and Date.parse()</h3>
+      <p>
+        Because <code>Date</code> instances compare by identity under
+        <code>===</code>, "is this the same moment?" checks should always go
+        through <code>getTime()</code> or the relational operators shown
+        earlier. Sorting an array of dates is just <code>array.sort((a, b)
+        =&gt; a - b)</code>, again relying on the implicit
+        <code>valueOf()</code> coercion to timestamps.
+      </p>
+
+      <h3 id="temporal">The future: Temporal</h3>
+      <p>
+        The <code>Date</code> class has no notion of time zones beyond "local"
+        and "UTC," conflates timestamps with calendar dates, and has an
+        awkward, mutation-heavy API. A newer <code>Temporal</code> API (a
+        TC39 proposal, not yet part of this book's edition of the language and
+        not the same thing as any of the classes above) is designed as its
+        eventual replacement: it offers immutable objects, explicit
+        distinctions between plain dates, plain times, zoned instants, and
+        durations, and first-class IANA time zone support. Until
+        <code>Temporal</code> is universally available, <code>Date</code>
+        plus careful discipline around parsing (as above) and
+        <code>Intl.DateTimeFormat</code> for display remains the practical
+        toolkit.
+      </p>
+
+      <h2 id="error-classes">Error classes</h2>
+      <p>
+        <code>throw</code> and <code>catch</code> accept and catch any
+        JavaScript value at all &mdash; there is no required "exception type."
+        By convention, though, code throws instances of <code>Error</code> or
+        a subclass. The main reason: constructing an <code>Error</code>
+        captures a snapshot of the call stack at that moment, which is
+        invaluable when an exception goes uncaught and you need to debug it.
+      </p>
+      <p>
+        Every <code>Error</code> instance carries a <code>message</code>
+        property (whatever you passed to the constructor, stringified if
+        necessary) and a <code>name</code> property (<code>"Error"</code> for
+        the base class). Its <code>toString()</code> method returns
+        <code>name + ": " + message</code>. Although not part of the
+        ECMAScript standard itself, Node and every modern browser also attach
+        a <code>stack</code> property: a multi-line string with the captured
+        call-stack trace, extremely useful to log for unexpected errors.
+      </p>
+      <div class="admonition tip">
+        <div class="admonition-title">The stack trace reflects construction, not <code>throw</code></div>
+        <p>
+          The captured stack shows where the <code>Error</code> object was
+          <em>created</em> with <code>new Error(...)</code>, not where the
+          <code>throw</code> statement executed. If you always write
+          <code>throw new Error(...)</code> as a single expression, the two
+          locations coincide and this distinction never causes confusion.
+          Constructing an error object early and throwing it much later, from
+          a different call site, is the scenario to avoid.
+        </p>
+      </div>
+      <p>
+        JavaScript ships several built-in subclasses of <code>Error</code>,
+        used internally by the language and the engine to signal particular
+        failure categories. Each has a constructor taking a single
+        <code>message</code> argument, and each instance's <code>name</code>
+        matches its constructor's name:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Subclass</th><th>Typically thrown when&hellip;</th></tr>
+          <tr><td><code>RangeError</code></td><td>A number is outside its allowed range (e.g. invalid array length, invalid <code>toFixed()</code> precision)</td></tr>
+          <tr><td><code>ReferenceError</code></td><td>Reading a variable that doesn't exist / isn't in scope</td></tr>
+          <tr><td><code>SyntaxError</code></td><td><code>eval()</code> or <code>JSON.parse()</code> is given unparsable text</td></tr>
+          <tr><td><code>TypeError</code></td><td>A value is used in a way its type doesn't support (calling a non-function, reading a property of <code>null</code>)</td></tr>
+          <tr><td><code>URIError</code></td><td><code>encodeURI()</code>/<code>decodeURI()</code> and friends receive malformed input</td></tr>
+          <tr><td><code>EvalError</code></td><td>Historical; modern engines no longer throw this</td></tr>
+        </table>
+      </div>
+      <p>
+        You are free &mdash; encouraged, even &mdash; to define your own
+        <code>Error</code> subclasses that carry whatever extra detail your
+        program's failure modes need. A parser might want <code>line</code>
+        and <code>column</code> properties; an HTTP client might want a
+        <code>status</code> code:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">class HTTPError extends Error {
+  constructor(status, statusText, url) {
+    super(`${status} ${statusText}: ${url}`);
+    this.status = status;
+    this.statusText = statusText;
+    this.url = url;
+  }
+  get name() { return "HTTPError"; }
+}
+
+let error = new HTTPError(404, "Not Found", "http://example.com/");
+error.status;   // => 404
+error.message;  // => "404 Not Found: http://example.com/"
+error.name;     // => "HTTPError"
+throw error;</code></pre>
+      </div>
+      <p>
+        <span class="badge new">ES2022</span> The <code>Error</code>
+        constructor (and every built-in subclass constructor) also accepts an
+        options object as a final argument with a <code>cause</code>
+        property, letting you chain a lower-level error underneath a
+        higher-level one without losing the original:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">try {
+  parseConfigFile(path);
+} catch (err) {
+  throw new Error("Failed to load application configuration", { cause: err });
+}
+// Later, a catch block (or an uncaught-exception logger) can inspect:
+//   caught.cause  ===  the original parse error, with its own stack trace</code></pre>
+      </div>
+
+      <h2 id="json">JSON serialization and parsing</h2>
+      <p>
+        JSON ("JavaScript Object Notation") is a text serialization format
+        borrowed directly from JavaScript's own object and array literal
+        syntax. It supports objects, arrays, strings, finite numbers,
+        <code>true</code>/<code>false</code>, and <code>null</code> &mdash;
+        and nothing else. Notably, it has no native representation for
+        <code>Map</code>, <code>Set</code>, <code>RegExp</code>,
+        <code>Date</code>, typed arrays, or any other JavaScript-specific
+        type. Despite that narrowness, it has become the default
+        interchange format even between non-JavaScript systems.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { s: "", n: 0, a: [true, false, null] };
+let s = JSON.stringify(o);   // s === '{"s":"","n":0,"a":[true,false,null]}'
+let copy = JSON.parse(s);    // copy deep-equals the original o
+
+// A common (if inefficient) deep-clone idiom for JSON-safe data:
+function deepcopy(o) {
+  return JSON.parse(JSON.stringify(o));
+}</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Never <code>eval()</code> untrusted "JSON"</div>
+        <p>
+          Because serialized JSON is valid JavaScript expression syntax, it's
+          tempting to restore it with <code>eval()</code> instead of
+          <code>JSON.parse()</code>. Don't. If an attacker can inject
+          arbitrary text into what you believe is a JSON payload,
+          <code>eval()</code> will execute it as code. <code>JSON.parse()</code>
+          is both faster and immune to this. Also note that JSON is a strict
+          <em>subset</em> of JavaScript object-literal syntax: comments are
+          never allowed, and property names must always be double-quoted,
+          even where a JS object literal wouldn't require it &mdash; keep this
+          in mind if you ever hand-edit a JSON config file.
+        </p>
+      </div>
+      <p>
+        <code>JSON.stringify()</code> accepts an optional third argument for
+        human-readable, indented output: a number of spaces per indent level,
+        or a whitespace string such as <code>"\t"</code>. This purely
+        cosmetic argument has no effect on <code>JSON.parse()</code>, which
+        ignores whitespace entirely.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { s: "test", n: 0 };
+JSON.stringify(o, null, 2);
+// => '{\n  "s": "test",\n  "n": 0\n}'</code></pre>
+      </div>
+
+      <h3 id="json-customization-deep-dive">
+        Customizing serialization: <code>toJSON()</code>, replacers, revivers
+        <span class="badge hard">Hard parts</span>
+      </h3>
+      <p>
+        When <code>JSON.stringify()</code> encounters a value it doesn't
+        natively understand, it first checks whether that value has a
+        <code>toJSON()</code> method. If so, it calls that method and
+        stringifies <em>its</em> return value instead of the original.
+        <code>Date.prototype.toJSON()</code> is defined exactly this way,
+        returning the same string <code>toISOString()</code> would. This is
+        why a <code>Date</code> embedded in an object serializes cleanly
+        &mdash; but note that <code>JSON.parse()</code> gives you back a plain
+        <em>string</em> where the original had a <code>Date</code> object.
+        Round-tripping through JSON is lossy unless you do something about it.
+      </p>
+      <p>
+        <code>JSON.parse()</code>'s second argument is a <strong>reviver</strong>
+        function that lets you undo exactly this kind of loss. It's invoked
+        once for every primitive value parsed (not for the containing objects
+        or arrays themselves), with the property name (or array index, as a
+        string) and the parsed primitive value as arguments, and is called as
+        a method of the object/array that contains that value, so
+        <code>this</code> refers to the container. Whatever the reviver
+        returns becomes the new value at that key; returning
+        <code>undefined</code> deletes the property entirely.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Reviver: strip private-ish "_"-prefixed keys AND restore Dates
+let data = JSON.parse(text, function (key, value) {
+  if (key[0] === "_") return undefined;   // drop this property
+  if (typeof value === "string" &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return new Date(value);               // restore an ISO string to a Date
+  }
+  return value;                            // leave everything else alone
+});</code></pre>
+      </div>
+      <p>
+        Symmetrically, <code>JSON.stringify()</code>'s second argument
+        customizes the <em>output</em> side, and it comes in two flavors.
+        Pass an <strong>array</strong> of property names (or numbers,
+        coerced to strings) to whitelist exactly which properties get
+        serialized, and in exactly what order they appear in the output
+        &mdash; handy for producing deterministic output in tests. Pass a
+        <strong>function</strong> instead for a full replacer: it's invoked
+        for every value about to be stringified, as a method of the
+        containing object (so <code>this</code> works there too), with the
+        key and value as arguments; its return value is substituted for the
+        original before stringification, and returning <code>undefined</code>
+        (or nothing) omits that property/element from the output entirely.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Replacer ARRAY: whitelist + control property order
+JSON.stringify(address, ["city", "state", "country"]);
+
+// Replacer FUNCTION: drop any RegExp-valued property
+JSON.stringify(o, (key, value) => (value instanceof RegExp ? undefined : value));</code></pre>
+      </div>
+      <p>
+        Here is exactly what happens to values JSON has no native
+        representation for &mdash; some vanish silently, one throws:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Value</th><th>Behavior in <code>JSON.stringify()</code></th></tr>
+          <tr><td><code>undefined</code> as an object property value</td><td>Property is silently omitted from the output</td></tr>
+          <tr><td><code>undefined</code> as an array element</td><td>Becomes <code>null</code> (array length is preserved)</td></tr>
+          <tr><td>Function-valued object property</td><td>Silently omitted, exactly like <code>undefined</code></td></tr>
+          <tr><td>Function as an array element</td><td>Becomes <code>null</code></td></tr>
+          <tr><td>Symbol-valued property or symbol object keys</td><td>Silently omitted entirely, including symbol-keyed properties</td></tr>
+          <tr><td><code>NaN</code> / <code>Infinity</code> / <code>-Infinity</code></td><td>Silently become <code>null</code></td></tr>
+          <tr><td>Object with a <code>toJSON()</code> method (e.g. <code>Date</code>)</td><td><code>toJSON()</code>'s return value is stringified in its place</td></tr>
+          <tr><td>Circular reference (an object that (in)directly contains itself)</td><td><strong>Throws</strong> a <code>TypeError</code>: "Converting circular structure to JSON"</td></tr>
+          <tr><td><code>BigInt</code> value</td><td><strong>Throws</strong> a <code>TypeError</code>: "Do not know how to serialize a BigInt"</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 1: what silently disappears
+let obj = {
+  a: undefined,          // dropped
+  b: function () {},     // dropped
+  c: Symbol("x"),        // dropped (as a value)
+  [Symbol("y")]: "hi",   // dropped (symbol KEY, ignored entirely)
+  d: NaN,                // becomes null
+  arr: [undefined, function () {}, 1]  // => [null, null, 1] in an array!
+};
+JSON.stringify(obj);
+// => '{"d":null,"arr":[null,null,1]}'
+// Notice: no "a", "b", or "c" key ever appears &mdash; there is no trace
+// they existed. This is a common source of "why did my field disappear"
+// bugs when a value that started as a real number becomes NaN upstream.</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Worked example 2: what THROWS instead of silently dropping
+let node = { name: "root" };
+node.self = node;              // circular reference
+JSON.stringify(node);
+// => TypeError: Converting circular structure to JSON
+
+JSON.stringify({ big: 10n });  // a BigInt literal
+// => TypeError: Do not know how to serialize a BigInt
+
+// Fix for circularity: a replacer that tracks seen objects
+function safeStringify(value) {
+  const seen = new WeakSet();
+  return JSON.stringify(value, (key, val) => {
+    if (typeof val === "object" && val !== null) {
+      if (seen.has(val)) return "[Circular]";
+      seen.add(val);
+    }
+    return val;
+  });
+}
+
+// Fix for BigInt: give it a toJSON() method, or convert in a replacer
+BigInt.prototype.toJSON = function () { return this.toString(); };
+JSON.stringify({ big: 10n });   // => '{"big":"10"}'</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Prefer <code>structuredClone()</code> for deep copies</div>
+        <p>
+          <code>JSON.parse(JSON.stringify(x))</code> is a classic one-liner
+          deep-clone, but it's slow and silently mangles anything JSON can't
+          represent, per the table above. Modern runtimes provide
+          <code>structuredClone(x)</code> instead &mdash; faster, and correctly
+          handles <code>Date</code>, <code>Map</code>, <code>Set</code>,
+          typed arrays, and circular references (though it still cannot clone
+          functions or DOM nodes, and still throws on those).
+        </p>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Custom <code>toJSON()</code>/replacers create a private data format</div>
+        <p>
+          If a type defines <code>toJSON()</code>, or a replacer actively
+          rewrites nonserializable values into serializable ones, you'll
+          typically need a matching custom reviver to parse the result back
+          into the original shape. At that point you've defined your own
+          bespoke data format riding on top of JSON syntax, and you give up
+          the "any JSON tool anywhere can read this" portability that made
+          JSON attractive in the first place. Do it deliberately, not by
+          accident.
+        </p>
+      </div>
+
+      <h2 id="intl">The Internationalization API</h2>
+      <p>
+        Locale conventions for numbers, dates, and sort order vary far more
+        than most developers expect &mdash; decimal separators, digit
+        grouping, calendar systems, even which letter comes after which.
+        <code>Intl</code> (standardized separately as ECMA-402, not part of
+        core ECMAScript, but supported everywhere) exists so you never have
+        to hand-roll any of this for user-facing output.
+      </p>
+
+      <h3 id="intl-numberformat">Intl.NumberFormat</h3>
+      <p>
+        The constructor takes a locale (a BCP 47 tag like <code>"en-US"</code>,
+        <code>"fr"</code>, or <code>"zh-Hans-CN"</code>, an array of locales
+        to pick the best-supported one from, or <code>undefined</code> to use
+        the system locale) and an options object. Key options: <code>style</code>
+        (<code>"decimal"</code> default, <code>"percent"</code>, or
+        <code>"currency"</code>), <code>currency</code> (a 3-letter ISO code,
+        required when <code>style</code> is <code>"currency"</code>),
+        <code>currencyDisplay</code> (<code>"symbol"</code>/<code>"code"</code>/<code>"name"</code>),
+        <code>useGrouping</code> (set <code>false</code> to disable
+        thousands separators), and the digit-count controls
+        <code>minimumIntegerDigits</code>, <code>minimumFractionDigits</code>/
+        <code>maximumFractionDigits</code>, and
+        <code>minimumSignificantDigits</code>/<code>maximumSignificantDigits</code>
+        (the significant-digit pair overrides the integer/fraction ones when
+        both are given, and is useful for scientific data).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let euros = new Intl.NumberFormat("es", { style: "currency", currency: "EUR" });
+euros.format(10);     // => "10,00 &euro;"  (Spanish formatting)
+
+let pounds = new Intl.NumberFormat("en", { style: "currency", currency: "GBP" });
+pounds.format(1000);  // => "&pound;1,000.00"
+
+// Non-Latin digit scripts: add -u-nu-&lt;script&gt; to the locale tag
+let hindi = new Intl.NumberFormat("hi-IN-u-nu-deva").format;
+hindi(1234567890);    // => Devanagari-digit grouped output</code></pre>
+      </div>
+
+      <h3 id="intl-datetimeformat">Intl.DateTimeFormat</h3>
+      <p>
+        Where <code>Date.prototype.toLocaleDateString()</code> gives you no
+        control over which fields appear, <code>Intl.DateTimeFormat</code>
+        lets you request exactly the fields you want (<code>year</code>,
+        <code>month</code>, <code>day</code>, <code>weekday</code>,
+        <code>era</code>, <code>hour</code>, <code>minute</code>,
+        <code>second</code>, <code>timeZone</code>,
+        <code>timeZoneName</code>, <code>hour12</code>,
+        <code>hourCycle</code>) &mdash; though the formatter is free to pick
+        the closest locale-appropriate rendering rather than obeying you
+        literally (asking for hours and seconds without minutes still gets
+        you minutes).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let d = new Date("2020-01-02T13:14:15Z");
+new Intl.DateTimeFormat("en-US").format(d);   // => "1/2/2020"
+new Intl.DateTimeFormat("fr-FR").format(d);   // => "02/01/2020"
+
+let opts = { weekday: "long", month: "long", year: "numeric", day: "numeric" };
+new Intl.DateTimeFormat("en-US", opts).format(d);
+// => "Thursday, January 2, 2020"
+new Intl.DateTimeFormat("es-ES", opts).format(d);
+// => "jueves, 2 de enero de 2020"
+
+// Explicit IANA time zone, independent of the machine's local zone
+new Intl.DateTimeFormat("fr-CA", {
+  hour: "numeric", minute: "2-digit", timeZone: "America/New_York"
+}).format(d);
+// => "8 h 14"</code></pre>
+      </div>
+      <p>
+        Non-Gregorian calendars are available by adding <code>-u-ca-&lt;name&gt;</code>
+        to the locale (e.g. <code>"hebrew"</code>, <code>"islamic"</code>,
+        <code>"buddhist"</code>, <code>"japanese"</code>, <code>"chinese"</code>,
+        <code>"persian"</code>, <code>"indian"</code>).
+      </p>
+
+      <h3 id="intl-collator">Intl.Collator: locale-aware string comparison</h3>
+      <p>
+        Plain <code>Array.prototype.sort()</code> compares strings by raw
+        UTF-16 code unit, which is not the alphabetical order most locales
+        expect: Spanish treats <code>&ntilde;</code> as its own letter
+        between n and o, Lithuanian sorts Y before J, Welsh treats digraphs
+        like "ch" and "dd" as single letters. <code>Intl.Collator</code>'s
+        <code>compare()</code> method is a drop-in comparator for
+        <code>sort()</code> that does the locale-correct thing, and (like
+        every <code>Intl</code> formatter method) it's pre-bound, so you can
+        pass <code>collator.compare</code> directly without a wrapper.
+      </p>
+      <p>
+        Constructor options: <code>usage</code> (<code>"sort"</code> or
+        <code>"search"</code>), <code>sensitivity</code>
+        (<code>"base"</code> ignores case and accents,
+        <code>"accent"</code> considers accents only,
+        <code>"case"</code> considers case only, <code>"variant"</code>
+        &mdash; the default for sorting &mdash; considers both),
+        <code>ignorePunctuation</code>, <code>numeric</code> (sorts
+        <code>"page9"</code> before <code>"page10"</code> instead of
+        lexicographically), and <code>caseFirst</code>.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const collator = new Intl.Collator().compare;
+["a", "z", "A", "Z"].sort(collator);          // => ["a", "A", "z", "Z"]
+
+const filenameOrder = new Intl.Collator(undefined, { numeric: true }).compare;
+["page10", "page9"].sort(filenameOrder);      // => ["page9", "page10"]
+
+const fuzzy = new Intl.Collator(undefined, {
+  sensitivity: "base", ignorePunctuation: true
+}).compare;
+["food", "fool", "F&oslash;&oslash; Bar"].findIndex(s => fuzzy(s, "foobar") === 0);
+// => 2</code></pre>
+      </div>
+      <p>
+        Collation variants that can't be expressed via the options object
+        (German phonebook order, traditional pre-1994 Spanish order, Pinyin
+        ordering in Chinese) are selected with a <code>-u-co-&lt;variant&gt;</code>
+        locale suffix, e.g. <code>"de-DE-u-co-phonebk"</code> or
+        <code>"zh-TW-u-co-pinyin"</code>.
+      </p>
+
+      <h3 id="intl-other">Intl.PluralRules, Intl.ListFormat, and Intl.RelativeTimeFormat</h3>
+      <p>
+        Three smaller <code>Intl</code> classes round out common
+        internationalization needs beyond numbers, dates, and sorting.
+        <code>Intl.PluralRules</code> tells you which grammatical plural
+        category a number falls into for a given locale &mdash; essential
+        because pluralization rules vary wildly (English has two forms,
+        Russian has several, Japanese has none):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const pr = new Intl.PluralRules("en-US");
+pr.select(0);   // => "other"   (needs its own message: "0 items")
+pr.select(1);   // => "one"     ("1 item")
+pr.select(5);   // => "other"   ("5 items")
+
+function pluralize(n, forms) {
+  return `${n} ${forms[pr.select(n)]}`;
+}
+pluralize(1, { one: "item", other: "items" });  // => "1 item"</code></pre>
+      </div>
+      <p>
+        <code>Intl.ListFormat</code> joins an array of strings into a
+        grammatically correct localized list ("A, B, and C" vs. "A, B, or C"):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">new Intl.ListFormat("en", { type: "conjunction" }).format(["A", "B", "C"]);
+// => "A, B, and C"
+new Intl.ListFormat("en", { type: "disjunction" }).format(["A", "B", "C"]);
+// => "A, B, or C"</code></pre>
+      </div>
+      <p>
+        <code>Intl.RelativeTimeFormat</code> renders a signed numeric offset
+        as human phrasing ("3 days ago", "in 2 hours") without you needing to
+        hand-write locale-specific phrasing tables:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+rtf.format(-3, "day");   // => "3 days ago"
+rtf.format(2, "hour");   // => "in 2 hours"
+rtf.format(-1, "day");   // => "yesterday"  (numeric: "auto" prefers idioms)</code></pre>
+      </div>
+
+      <h2 id="console">The console API</h2>
+      <p>
+        <code>console.log()</code> is only the entry point. In a browser it
+        writes to the DevTools Console panel; in Node it writes to
+        <code>stdout</code>. The rest of the API (standardized outside
+        ECMAScript, at the WHATWG Console spec, but consistently available in
+        both environments) covers logging levels, structured output, timing,
+        counting, and grouping.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Function</th><th>Behavior</th></tr>
+          <tr><td><code>console.log()</code></td><td>Converts arguments to strings, space-joins them, prints a line</td></tr>
+          <tr><td><code>console.debug()</code>, <code>info()</code>, <code>warn()</code>, <code>error()</code></td><td>Near-aliases of <code>log()</code>; in Node, <code>error()</code> writes to <code>stderr</code>; in browsers, each gets a distinct icon and lets users filter by level</td></tr>
+          <tr><td><code>console.assert(cond, ...args)</code></td><td>Logs <code>args</code> (as if passed to <code>error()</code>, prefixed "Assertion failed") only when <code>cond</code> is falsy &mdash; unlike a real assert, it never throws</td></tr>
+          <tr><td><code>console.clear()</code></td><td>Clears the console, where supported (no-op if Node output is redirected to a file/pipe)</td></tr>
+          <tr><td><code>console.table(data, columns?)</code></td><td>Renders an array of same-shaped objects as rows/columns; an optional second argument restricts which properties become columns; a single object renders as name/value pairs</td></tr>
+          <tr><td><code>console.trace()</code></td><td>Logs like <code>log()</code> plus a stack trace (Node: to <code>stderr</code>)</td></tr>
+          <tr><td><code>console.count(label)</code> / <code>countReset(label)</code></td><td>Increments/resets a named call counter &mdash; handy inside event handlers</td></tr>
+          <tr><td><code>console.group(label)</code> / <code>groupCollapsed(label)</code> / <code>groupEnd()</code></td><td>Indents all subsequent output until the matching <code>groupEnd()</code>; browsers let users collapse/expand the group; <code>groupCollapsed</code> starts collapsed in browsers (in Node it behaves like <code>group()</code>)</td></tr>
+          <tr><td><code>console.time(label)</code> / <code>timeLog(label)</code> / <code>timeEnd(label)</code></td><td>Starts, mid-reports, and stops an elapsed-time measurement without touching <code>Date.now()</code> yourself</td></tr>
+        </table>
+      </div>
+
+      <h3 id="console-format-specifiers">Format specifiers</h3>
+      <p>
+        If the first argument to a logging function is a string containing
+        <code>%s</code>, <code>%i</code>, <code>%d</code>, <code>%f</code>,
+        <code>%o</code>, <code>%O</code>, or <code>%c</code>, it's treated as
+        a <code>printf</code>-style format string, and subsequent arguments
+        are substituted for those sequences in order.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Specifier</th><th>Meaning</th></tr>
+          <tr><td><code>%s</code></td><td>Convert argument to a string</td></tr>
+          <tr><td><code>%i</code> / <code>%d</code></td><td>Convert to a number, truncate to an integer</td></tr>
+          <tr><td><code>%f</code></td><td>Convert to a (floating-point) number</td></tr>
+          <tr><td><code>%o</code> / <code>%O</code></td><td>Show argument as an inspectable object (browsers make this interactive/expandable); <code>%O</code> uses the more developer-oriented display</td></tr>
+          <tr><td><code>%c</code></td><td>Browsers only: treat argument as CSS to style subsequent text until the next <code>%c</code> or end of string; Node ignores it</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">console.log("User %s has %d unread messages", user.name, count);
+console.table(rows, ["id", "name", "status"]);
+console.group("Fetching " + url);
+console.log("started");
+console.groupEnd();</code></pre>
+      </div>
+      <p>
+        Usually a format string isn't necessary at all &mdash; passing values
+        (including whole objects, or an <code>Error</code> object, which
+        prints with its stack trace automatically) directly to
+        <code>console.log()</code> gives a perfectly useful display without
+        any <code>%</code> sequences.
+      </p>
+
+      <h2 id="url">URL APIs</h2>
+      <p>
+        Because JavaScript runs so pervasively in browsers and servers, URL
+        manipulation is a routine need. The <code>URL</code> class (WHATWG
+        standard, not ECMAScript, but supported everywhere relevant) parses,
+        reads, and rewrites every component of a URL, and correctly handles
+        the fiddly business of escaping and unescaping each part.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let url = new URL("https://example.com:8000/path/name?q=term#fragment");
+url.href;      // => "https://example.com:8000/path/name?q=term#fragment"
+url.origin;    // => "https://example.com:8000"  (read-only)
+url.protocol;  // => "https:"
+url.host;      // => "example.com:8000"
+url.hostname;  // => "example.com"
+url.port;      // => "8000"
+url.pathname;  // => "/path/name"
+url.search;    // => "?q=term"
+url.hash;      // => "#fragment"
+
+// Username/password components are supported too:
+let ftp = new URL("ftp://admin:1337!@ftp.example.com/");
+ftp.username;  // => "admin"
+ftp.password;  // => "1337!"</code></pre>
+      </div>
+      <p>
+        You can pass a relative URL as the first argument and an absolute
+        base URL as the second. Every property besides <code>origin</code> is
+        read/write &mdash; assigning to it rewrites that part of the URL, and
+        <code>href</code> is special: reading it reassembles the canonical
+        string (equivalent to <code>toString()</code>); assigning to it
+        reruns the parser as if you'd called <code>new URL()</code> again.
+        Assignment also escapes special characters correctly:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let u = new URL("https://example.com");
+u.pathname = "path with spaces";
+u.search = "q=foo#bar";
+u.pathname;  // => "/path%20with%20spaces"
+u.search;    // => "?q=foo%23bar"
+u.href;      // => "https://example.com/path%20with%20spaces?q=foo%23bar"</code></pre>
+      </div>
+
+      <h3 id="urlsearchparams">URLSearchParams</h3>
+      <p>
+        <code>search</code> treats the whole query string as one opaque
+        piece. When the query encodes <code>application/x-www-form-urlencoded</code>
+        name/value pairs (as most API and form query strings do), the
+        read-only <code>searchParams</code> property gives you a
+        <code>URLSearchParams</code> object with a full get/set/append/delete
+        API, correct escaping, support for repeated keys, and iterability.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let url = new URL("https://example.com/search");
+url.searchParams.append("q", "term");
+url.search;                             // => "?q=term"
+url.searchParams.set("q", "x");         // replace the value
+url.searchParams.get("q");              // => "x"
+url.searchParams.has("p");              // => false
+url.searchParams.append("opts", "1");
+url.searchParams.append("opts", "&");   // same name, second value
+url.searchParams.getAll("opts");        // => ["1", "&"]
+url.search;                             // => "?q=x&opts=1&opts=%26"
+url.searchParams.sort();                // alphabetize by name
+[...url.searchParams];                  // iterable: [["opts","1"], ["opts","&"], ["q","x"]]
+url.searchParams.delete("opts");
+url.href;                               // => "https://example.com/search?q=x"
+
+// Building a query string from scratch:
+let params = new URLSearchParams();
+params.append("q", "term");
+params.append("opts", "exact");
+params.toString();                      // => "q=term&opts=exact"
+let u2 = new URL("http://example.com");
+u2.search = params;
+u2.href;                                 // => "http://example.com/?q=term&opts=exact"</code></pre>
+      </div>
+
+      <h3 id="legacy-url-functions">Legacy escaping functions</h3>
+      <p>
+        Before <code>URL</code> existed, JavaScript relied on global
+        functions. The original <code>escape()</code>/<code>unescape()</code>
+        pair is deprecated and should not be used. Their intended
+        replacements are still around and occasionally useful, but each
+        applies one encoding rule to an entire string, which doesn't match
+        how a URL's different parts actually need different escaping:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Function pair</th><th>Escapes</th><th>Leaves untouched</th></tr>
+          <tr><td><code>encodeURI()</code> / <code>decodeURI()</code></td><td>Non-ASCII characters and unsafe ASCII (e.g. space), via UTF-8 byte-by-byte <code>%xx</code> sequences</td><td>URL separator characters like <code>/</code>, <code>?</code>, <code>#</code> &mdash; intended for encoding a whole URL at once</td></tr>
+          <tr><td><code>encodeURIComponent()</code> / <code>decodeURIComponent()</code></td><td>Everything the above pair does, <em>plus</em> <code>/</code>, <code>?</code>, <code>#</code></td><td>Intended for encoding one component (e.g. a single query value) in isolation</td></tr>
+        </table>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title"><code>encodeURIComponent()</code> over-escapes for query values</div>
+        <p>
+          <code>encodeURIComponent()</code> is the more useful of the legacy
+          pair, but it converts spaces to <code>%20</code>, whereas the
+          <code>application/x-www-form-urlencoded</code> convention used in
+          query strings expects spaces as <code>+</code>. It will also escape
+          <code>/</code> inside a path segment where you likely didn't want
+          that. The reliable fix, for any nontrivial URL work, is simply to
+          build and modify URLs through the <code>URL</code>/<code>URLSearchParams</code>
+          classes rather than concatenating manually escaped pieces.
+        </p>
+      </div>
+
+      <h2 id="timers">Timers</h2>
+      <p>
+        <code>setTimeout()</code> and <code>setInterval()</code> have never
+        been part of core ECMAScript &mdash; they were a browser convention
+        long before Node existed &mdash; but every environment implements
+        them and they are, in practice, part of the standard library every
+        JavaScript program relies on for scheduling.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let id = setTimeout(() => console.log("once, later"), 1000);
+clearTimeout(id);   // cancel before it fires (no-op if it already fired)
+
+let intervalId = setInterval(() => console.log("tick"), 1000);
+clearInterval(intervalId);   // stop the repetition
+
+// A simple digital-clock example combining setInterval and setTimeout:
+let clock = setInterval(() => {
+  console.clear();
+  console.log(new Date().toLocaleTimeString());
+}, 1000);
+setTimeout(() => clearInterval(clock), 10_000);  // stop after 10 seconds</code></pre>
+      </div>
+      <p>
+        <code>setTimeout()</code>'s first argument is the callback and the
+        second is a millisecond delay; the call returns immediately &mdash;
+        it does not block waiting for the delay to elapse. The value it
+        returns (a number in browsers, an object in Node) is opaque and
+        useful only as an argument to <code>clearTimeout()</code>.
+        <code>setInterval()</code> takes the same two arguments but repeats
+        the callback every interval until <code>clearInterval()</code> is
+        called with the returned id.
+      </p>
+      <div class="admonition warning">
+        <div class="admonition-title">"Fires after N ms" means <em>at least</em> N ms, never exactly N ms</div>
+        <p>
+          Omitting the delay (or passing <code>0</code>) does not run the
+          callback synchronously or immediately &mdash; it schedules the
+          callback to run "as soon as possible," which still means after the
+          currently executing code and any already-queued work finishes.
+          More generally, the requested delay is always a <strong>minimum</strong>,
+          never a guarantee: if the thread is busy handling other callbacks,
+          rendering, or I/O, firing can slip well past the requested time. A
+          <code>setTimeout(fn, 1000)</code> can easily fire at 1010ms or
+          1100ms under load; it will never fire early, but it can fire
+          arbitrarily late. Nested timeouts and long-running intervals may
+          also be clamped to a minimum delay (commonly 4ms in browsers after
+          a nesting depth) that you cannot go below by requesting <code>0</code>
+          or a smaller number. None of this is a bug to work around &mdash;
+          it is the documented contract, and any code that depends on
+          millisecond-exact firing is relying on something the platform never
+          promised. The full mechanics of why "0ms" still queues rather than
+          runs immediately are explained by the event-loop model in
+          <a href="14-async-javascript.html">Asynchronous JavaScript</a>.
+        </p>
+      </div>
+      <p>
+        Repeated one-shot rescheduling (a callback that calls
+        <code>setTimeout()</code> again on each invocation) and
+        <code>setInterval()</code> are not quite equivalent: a self-rescheduling
+        <code>setTimeout()</code> chain waits for each callback to finish
+        before scheduling the next delay, so it can never "pile up" concurrent
+        invocations, whereas <code>setInterval()</code> keeps firing on its
+        own fixed schedule even if a previous invocation is still running
+        long callbacks, which can lead to overlapping or backed-up
+        executions under load.
+      </p>
+
+      <h2 id="summary">Summary</h2>
+      <p>
+        Across this page and its two siblings, Chapter 11 catalogs the
+        JavaScript standard library that ships alongside the core language
+        grammar:
+      </p>
+      <ul>
+        <li>The <code>Set</code>, <code>Map</code>, and typed array data
+          structures, and JavaScript's regular expression grammar and
+          <code>RegExp</code> class, covered in
+          <a href="10-collections-typed-arrays.html">Collections &amp; Typed Arrays</a>
+          and <a href="11-regular-expressions.html">Regular Expressions</a>.</li>
+        <li>The <code>Date</code> class for representing instants in time,
+          the sharp local-vs-UTC and string-parsing edges around it, and the
+          <code>URL</code>/<code>URLSearchParams</code> classes for working
+          with URLs.</li>
+        <li>The built-in <code>Error</code> hierarchy for signaling and
+          diagnosing failures, including custom subclasses and the
+          <code>cause</code> chaining option.</li>
+        <li><code>JSON.stringify()</code>/<code>JSON.parse()</code> for
+          serializing and restoring simple data structures, along with their
+          <code>toJSON()</code>, replacer, and reviver customization hooks
+          and the specific values (<code>undefined</code>, functions,
+          symbols, circular references, <code>BigInt</code>) that need
+          special handling.</li>
+        <li>The <code>Intl</code> internationalization classes for
+          locale-correct number, date, list, and relative-time formatting and
+          string collation.</li>
+        <li>The <code>console</code> object's full logging, timing,
+          counting, and grouping API beyond plain <code>console.log()</code>.</li>
+        <li><code>setTimeout()</code>/<code>setInterval()</code> and their
+          "minimum delay, not exact delay" scheduling contract, which sets up
+          the event-loop model explored next in
+          <a href="14-async-javascript.html">Asynchronous JavaScript</a>.</li>
+      </ul>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

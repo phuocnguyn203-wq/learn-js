@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Statements — JavaScript: The Definitive Guide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232dd4bf%22/><text x=%2250%22 y=%2268%22 font-size=%2258%22 font-family=%22monospace%22 font-weight=%22bold%22 fill=%22%2306231f%22 text-anchor=%22middle%22>JS</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-loc="chapter" data-file="04-statements.html">
+
+<header class="site-header">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">&#9776;</button>
+  <a class="brand" data-home-link href="../index.html"><span class="logo-mark">JS</span> The Definitive Guide</a>
+  <div class="header-search">
+    <button id="search-open" type="button">
+      <span>&#128269;</span><span>Search pages...</span><kbd>Ctrl K</kbd>
+    </button>
+  </div>
+  <nav class="header-links">
+    <a data-home-link href="../index.html">Home</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav id="sidebar-nav"></nav>
+  </aside>
+
+  <div class="content-wrap">
+    <main class="content">
+      <div class="chapter-badge" id="chapter-badge"></div>
+      <span class="eyebrow">Book Chapter 5</span>
+      <h1>Statements</h1>
+      <p class="lede">
+        If expressions are the phrases of JavaScript, statements are its sentences.
+        A program is nothing more than a sequence of statements, executed one after
+        another, each one terminated by a semicolon. Most of them — conditionals,
+        loops, jumps — exist to bend that default top-to-bottom order into branches
+        and repetitions. This page works through every statement form in the
+        language, including the ones tutorials tend to skip: the empty statement,
+        the full label/break/continue system, exactly how <code>finally</code>
+        interacts with <code>return</code> and thrown exceptions, and the banned
+        <code>with</code> statement.
+      </p>
+
+      <h2 id="expression-statements">5.1 Expression statements</h2>
+      <p>
+        The simplest statement in JavaScript is an expression evaluated purely for
+        its side effect, with a semicolon tacked on the end. Assignments are the
+        classic case — <code>total = total + tax;</code> is an expression
+        (an assignment expression, which itself evaluates to the assigned value)
+        used as a statement because we care about the mutation, not the value it
+        produces. The increment/decrement operators fall in the same bucket, since
+        <code>counter++;</code> is really shorthand for an assignment. Function and
+        method calls are the other major category: <code>console.log(x);</code> and
+        <code>form.submit();</code> are expressions whose return value is thrown
+        away because the reason for writing them is what they <em>do</em>, not what
+        they evaluate to.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">greeting = "Hello " + name;   // assignment statement
+i *= 3;                       // compound assignment statement
+counter++;                    // increment, used for its side effect
+delete o.x;                   // delete's usefulness IS the side effect
+console.log(debugMessage);    // function call statement
+
+// A pure expression with no side effect, standing alone, is pointless:
+Math.cos(x);                  // computes something and discards it — useless
+
+// The same expression only earns its keep when its value is captured:
+cx = Math.cos(x);</code></pre>
+      </div>
+      <p>
+        The rule of thumb: if an expression has no side effect (no assignment, no
+        mutation, no I/O), writing it as a bare statement is almost always a bug —
+        either you forgot to assign the result, or the statement does nothing at
+        all and a linter will (rightly) flag it.
+      </p>
+
+      <h2 id="compound-and-empty-statements">5.2 Compound and empty statements</h2>
+      <p>
+        Just as the comma operator glues several expressions into one, a
+        <strong>statement block</strong> — a sequence of statements wrapped in
+        curly braces — glues several statements into one compound statement that
+        can be used anywhere JavaScript's grammar expects a single statement (the
+        body of an <code>if</code>, a <code>while</code>, and so on).
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">{
+  x = Math.PI;
+  cx = Math.cos(x);
+  console.log(`cos(pi) = ${cx}`);
+}</code></pre>
+      </div>
+      <p>
+        Two details are easy to miss. First, the block itself takes no trailing
+        semicolon — only the primitive statements inside it do. Second, the
+        indentation you see is purely a readability convention; the interpreter
+        doesn't care about whitespace at all.
+      </p>
+      <p>
+        At the opposite extreme is the <strong>empty statement</strong>: a single,
+        bare semicolon that tells the interpreter to do nothing at all. It exists
+        because JavaScript's grammar always requires a statement in certain slots
+        (a loop body, for instance) even when you have nothing left for that slot
+        to do — typically because you crammed all of the loop's work into its
+        header expressions:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Initialize every element of array a to zero.
+// The assignment a[i++] = 0 does all the work; there's nothing left for a body.
+for (let i = 0; i < a.length; a[i++] = 0) ;</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">A stray semicolon silently swallows your loop or if body</div>
+        <p>
+          Because <code>;</code> alone is a perfectly legal statement, an
+          accidental semicolon right after the closing parenthesis of an
+          <code>if</code>, <code>while</code>, or <code>for</code> compiles fine and
+          fails silently at runtime — the next line just always runs, unconditionally:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">if ((a === 0) || (b === 0));   // Oops — this semicolon IS the entire if-body
+  o = null;                    // This line always runs, condition or not!</code></pre>
+        </div>
+        <p>
+          When you really do mean to write an empty loop body, make the intent
+          obvious with a comment so the next reader (including future you) doesn't
+          "fix" it: <code>for (let i = 0; i &lt; a.length; a[i++] = 0) /* empty */ ;</code>
+        </p>
+      </div>
+
+      <h2 id="conditionals">5.3 Conditionals</h2>
+      <p>
+        Conditional statements are the branch points of your program: they
+        evaluate an expression and, depending on whether it's truthy or falsy,
+        choose which of several paths of code to run next.
+      </p>
+
+      <h3 id="if-else">if and if/else</h3>
+      <p>
+        <code>if</code> is JavaScript's fundamental conditional. In its single-branch
+        form, the body executes only when the condition is truthy:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">if (username == null)          // catches both null and undefined
+  username = "John Doe";
+
+// Any falsy value (null, undefined, false, 0, "", NaN) triggers this branch too:
+if (!username) username = "John Doe";</code></pre>
+      </div>
+      <p>
+        The parentheses around the condition are mandatory syntax, not stylistic
+        choice. Adding an <code>else</code> clause gives you the two-branch form,
+        executing one statement or the other depending on truthiness:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">if (n === 1)
+  console.log("You have 1 new message.");
+else
+  console.log(`You have ${n} new messages.`);</code></pre>
+      </div>
+
+      <h3 id="dangling-else">The dangling-else trap <span class="badge hard">Classic gotcha</span></h3>
+      <p>
+        JavaScript's grammar allows exactly one statement after an <code>if</code>'s
+        condition, and exactly one after an <code>else</code> — but that single
+        statement can itself be another <code>if</code>. When you nest conditionals
+        without braces, an <code>else</code> always binds to the
+        <strong>nearest unmatched <code>if</code></strong>, no matter what your
+        indentation implies.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let i = 1, j = 1, k = 2;
+
+// The indentation below LIES about what actually happens:
+if (i === j)
+  if (j === k)
+    console.log("i equals k");
+else
+  console.log("i doesn't equal j");   // Looks attached to the outer if...
+
+// ...but the interpreter actually reads it as this:
+if (i === j) {
+  if (j === k)
+    console.log("i equals k");
+  else
+    console.log("i doesn't equal j");   // Attached to the INNER if — wrong!
+}
+// Since i === j and j !== k, nothing is printed at all, even though
+// the misleading indentation suggests "i doesn't equal j" should log.</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Always brace nested conditionals</div>
+        <p>
+          Wrapping every <code>if</code>/<code>else</code> body in
+          <code>{ }</code>, even single-statement ones, makes the binding explicit
+          and eliminates this whole class of bug:
+        </p>
+        <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">if (i === j) {
+  if (j === k) {
+    console.log("i equals k");
+  }
+} else {                              // Unambiguous: this else pairs with the OUTER if
+  console.log("i doesn't equal j");
+}</code></pre>
+        </div>
+      </div>
+
+      <h3 id="else-if">else if chains</h3>
+      <p>
+        <code>else if</code> isn't a distinct statement — it's simply what you get
+        when the <code>statement</code> following an <code>else</code> happens to be
+        another <code>if</code>. Written flat, a chain of <code>else if</code>s reads
+        as a multiway branch, even though it's syntactically just nested
+        <code>if</code>/<code>else</code> underneath:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">if (n === 1) {
+  // block #1
+} else if (n === 2) {
+  // block #2
+} else if (n === 3) {
+  // block #3
+} else {
+  // fallback
+}
+
+// This is exactly equivalent to the fully nested form below —
+// the else-if idiom just avoids the staircase indentation:
+if (n === 1) {
+  // block #1
+} else {
+  if (n === 2) {
+    // block #2
+  } else {
+    if (n === 3) {
+      // block #3
+    } else {
+      // fallback
+    }
+  }
+}</code></pre>
+      </div>
+
+      <h3 id="switch">switch <span class="badge hard">Fallthrough gotcha</span></h3>
+      <p>
+        When every branch tests the same expression against a set of constant
+        values, repeating that expression in an <code>else if</code> chain is
+        wasteful. <code>switch</code> evaluates the controlling expression exactly
+        once, then searches its <code>case</code> labels, in source order, for one
+        whose expression matches. Crucially, matching uses <strong><code>===</code></strong>
+        — strict equality, no type coercion — so <code>case 1:</code> never matches
+        the string <code>"1"</code>. If nothing matches, execution jumps to a
+        <code>default:</code> label if one exists (it can appear anywhere in the
+        block, not necessarily last); if there's no <code>default</code>, the whole
+        block is skipped.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function convert(x) {
+  switch (typeof x) {
+    case "number":              // matches only if typeof x === "number"
+      return x.toString(16);
+    case "string":
+      return `"${x}"`;
+    default:
+      return String(x);
+  }
+}</code></pre>
+      </div>
+      <p>
+        Here's the part that trips people up: <code>case</code> labels mark
+        <em>entry points</em> into the block, not self-contained branches. Once
+        execution starts at a matching label, it keeps running statements
+        line-by-line — through every subsequent <code>case</code> label, ignoring
+        them as if they weren't there — until it hits a <code>break</code>, a
+        <code>return</code> (if inside a function), or the closing brace of the
+        <code>switch</code>. This is called <strong>fallthrough</strong>, and it is
+        the single most common source of <code>switch</code>-related bugs.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// BUGGY: someone forgot the break after case 1
+function describe(n) {
+  let result = [];
+  switch (n) {
+    case 1:
+      result.push("one");
+      // <- missing break! Execution falls through into case 2's body too.
+    case 2:
+      result.push("two");
+      break;
+    case 3:
+      result.push("three");
+      break;
+    default:
+      result.push("many");
+  }
+  return result;
+}
+
+describe(1);   // => ["one", "two"]   -- WRONG, caller almost certainly wanted just ["one"]
+describe(2);   // => ["two"]          -- this one is fine
+describe(3);   // => ["three"]</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// INTENTIONAL fallthrough: multiple case labels sharing one body.
+// This is the one pattern where omitting break is idiomatic and safe,
+// because there is no code between the grouped labels that could
+// accidentally "leak" into the next case.
+function isWeekend(day) {
+  switch (day) {
+    case "Saturday":
+    case "Sunday":
+      return true;
+    case "Monday":
+    case "Tuesday":
+    case "Wednesday":
+    case "Thursday":
+    case "Friday":
+      return false;
+    default:
+      throw new Error(`Not a day: ${day}`);
+  }
+}</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Default rule: end every case with break or return</div>
+        <p>
+          Unless you're deliberately stacking labels with no statements between
+          them (as in the weekend example), always terminate a
+          <code>case</code> body with <code>break</code> or, inside a function,
+          <code>return</code>. Both stop execution from leaking into the next
+          case. Because JavaScript evaluates <code>case</code> expressions at
+          runtime (unlike C/C++/Java, where they must be compile-time constants
+          eligible for a jump-table optimization), you should also avoid putting
+          side effects — function calls, assignments — inside a
+          <code>case</code> expression; only some of them run each pass, which
+          makes such code very hard to reason about.
+        </p>
+      </div>
+
+      <h2 id="loops">5.4 Loops</h2>
+      <p>
+        JavaScript has five looping constructs — <code>while</code>,
+        <code>do/while</code>, <code>for</code>, <code>for/of</code> (with its
+        asynchronous <code>for/await/of</code> variant), and <code>for/in</code> —
+        each bending the interpreter's straight-line path back on itself to repeat
+        a block of code.
+      </p>
+
+      <h3 id="while">while</h3>
+      <p>
+        <code>while</code> is the most basic loop: test the condition, and if it's
+        truthy, run the body and test again. If the condition starts out falsy, the
+        body never runs at all.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let count = 0;
+while (count < 10) {
+  console.log(count);
+  count++;
+}
+// count must change inside the body (or be otherwise affected) — otherwise
+// a truthy condition never becomes falsy and the loop runs forever.</code></pre>
+      </div>
+
+      <h3 id="do-while">do/while</h3>
+      <p>
+        <code>do/while</code> moves the test to the <em>bottom</em> of the loop, so
+        the body always executes at least once before the condition is checked.
+        It's used far less often than plain <code>while</code> in practice, simply
+        because "run it once no matter what" is a less common requirement than
+        "run it zero or more times."
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function printArray(a) {
+  let len = a.length, i = 0;
+  if (len === 0) {
+    console.log("Empty array");
+  } else {
+    do {
+      console.log(a[i]);
+    } while (++i < len);
+  }
+}</code></pre>
+      </div>
+      <p>
+        Syntactically, <code>do</code> needs both keywords — <code>do</code> to open
+        the loop and <code>while(...)</code> to close it — and the whole statement
+        must end with a semicolon (a plain <code>while</code> loop needs no trailing
+        semicolon when its body is a brace block).
+      </p>
+
+      <h3 id="for">for</h3>
+      <p>
+        <code>for</code> packages the three moving parts of a typical counting
+        loop — initialize, test, increment — into one header, which is easier to
+        scan than scattering them across the loop body:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">for (let count = 0; count < 10; count++) {
+  console.log(count);
+}
+
+// Roughly equivalent to (see the try/finally section below for why
+// this equivalence with while breaks down once continue is involved):
+{
+  let count = 0;
+  while (count < 10) {
+    console.log(count);
+    count++;
+  }
+}</code></pre>
+      </div>
+      <p>
+        Any of the three header expressions may be omitted (the two separating
+        semicolons are still mandatory), and the comma operator lets you pack
+        multiple variables into the initializer and incrementer:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// All three clauses omitted individually or combined:
+for (;;) { /* infinite loop, same as while (true) */ }
+
+// Traverse a linked list — no initializer needed, "increment" does the walking:
+function tail(node) {
+  for (; node.next; node = node.next) /* empty */ ;
+  return node;
+}
+
+// Comma operator drives two loop variables at once:
+let sum = 0;
+for (let i = 0, j = 10; i < 10; i++, j--) {
+  sum += i * j;
+}</code></pre>
+      </div>
+
+      <h3 id="for-of">for/of <span class="badge new">ES6</span></h3>
+      <p>
+        <code>for/of</code> loops over the <strong>values</strong> produced by any
+        <em>iterable</em> object — arrays, strings, <code>Set</code>,
+        <code>Map</code>, and any custom object that implements the iterator
+        protocol (see <a href="13-iterators-generators.html">Iterators &amp; Generators</a>).
+        Plain objects are not iterable by default.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let data = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+let sum = 0;
+for (let element of data) {
+  sum += element;
+}
+sum;   // => 45</code></pre>
+      </div>
+      <p>
+        Array iteration is <strong>live</strong>: the loop re-checks the array's
+        current length on every pass, so mutating the array from inside the body
+        can change how many times the loop runs — even create an infinite loop if
+        you keep pushing elements onto the end. Strings iterate one Unicode
+        <em>codepoint</em> at a time, not one UTF-16 code unit at a time — the
+        string <code>"I ❤😀"</code> has a <code>.length</code>
+        greater than the number of visible characters because of surrogate pairs,
+        but <code>for/of</code> correctly yields one iteration per actual
+        character. <code>Map</code> yields <code>[key, value]</code> pairs
+        (perfect for destructuring in the loop head), and <code>Set</code> yields
+        its elements. See <a href="10-collections-typed-arrays.html">Collections</a>
+        for both.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Destructuring right in the loop head:
+let m = new Map([[1, "one"], [2, "two"]]);
+for (let [key, value] of m) {
+  console.log(key, value);   // 1 "one", then 2 "two"
+}
+
+// Frequency count over a string, one codepoint per iteration:
+let frequency = {};
+for (let letter of "mississippi") {
+  frequency[letter] = (frequency[letter] ?? 0) + 1;
+}
+frequency;   // => { m: 1, i: 4, s: 4, p: 2 }</code></pre>
+      </div>
+      <p>
+        Plain objects aren't iterable, so plugging one straight into
+        <code>for/of</code> throws. The idiomatic fix is to iterate an array
+        <em>derived</em> from the object using <code>Object.keys()</code>,
+        <code>Object.values()</code>, or <code>Object.entries()</code> (which
+        pairs perfectly with array destructuring):
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: 2, z: 3 };
+
+for (let v of o) { }
+// TypeError: o is not iterable
+
+for (let k of Object.keys(o)) console.log(k);        // "x", "y", "z"
+for (let v of Object.values(o)) console.log(v);      // 1, 2, 3
+for (let [k, v] of Object.entries(o)) console.log(k, v);  // "x" 1, "y" 2, "z" 3
+// Unlike direct array iteration, this snapshot is NOT live — later edits
+// to o don't affect a loop already in progress over Object.entries(o).</code></pre>
+      </div>
+      <p>
+        <strong>for/await/of</strong>, added in ES2018, is the asynchronous sibling:
+        it consumes an <em>async iterable</em> (such as a network stream), pausing
+        at each iteration until the next value's promise resolves. It's only legal
+        inside an <code>async function</code>. The full mechanics — and what makes
+        an object async-iterable — are covered in
+        <a href="14-async-javascript.html">Asynchronous JavaScript</a> and
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>; here's
+        the shape to recognize:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">async function printStream(stream) {
+  for await (let chunk of stream) {
+    console.log(chunk);
+  }
+}</code></pre>
+      </div>
+
+      <h3 id="for-in">for/in</h3>
+      <p>
+        <code>for/in</code> looks almost identical to <code>for/of</code> but does
+        something entirely different: it loops over the
+        <strong>enumerable property names</strong> (as strings) of
+        <em>any</em> object — no iterator protocol required. It predates
+        <code>for/of</code> by roughly two decades, which is why it gets the more
+        "natural" <code>in</code> keyword.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">let o = { x: 1, y: 2, z: 3 };
+for (let p in o) {
+  console.log(p, o[p]);   // "x" 1, "y" 2, "z" 3
+}</code></pre>
+      </div>
+      <p>
+        If the object expression evaluates to <code>null</code> or
+        <code>undefined</code>, <code>for/in</code> simply skips the loop instead
+        of throwing — a small but useful bit of leniency <code>for/of</code> does
+        not share. Two enumeration rules matter in practice: symbol-keyed
+        properties are never visited, and only properties whose internal
+        <code>[[Enumerable]]</code> flag is <code>true</code> are visited — which
+        is why built-in methods like <code>toString()</code> never show up in a
+        <code>for/in</code> loop, even though every object inherits one. Own
+        enumerable properties <em>and</em> inherited enumerable properties both get
+        visited, which is a common source of surprise when a library adds
+        properties to a shared prototype.
+      </p>
+      <div class="admonition note">
+        <div class="admonition-title">Undefined enumeration order under mutation</div>
+        <p>
+          If the loop body deletes a property that hasn't been visited yet, it
+          will be skipped. If the body adds new properties, whether they get
+          visited during the same pass is unspecified. Avoid mutating an object's
+          own property set from inside a <code>for/in</code> loop over it.
+        </p>
+      </div>
+
+      <h3 id="for-of-vs-for-in">for/of vs. for/in <span class="badge hard">Frequently confused</span></h3>
+      <p>
+        These two loops share almost identical syntax — swap <code>of</code> for
+        <code>in</code> and the meaning completely changes — which makes mixing
+        them up one of the most common JavaScript bugs, especially with arrays.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th></th><th><code>for...of</code></th><th><code>for...in</code></th></tr>
+          <tr><td>Iterates</td><td><strong>Values</strong> of an iterable</td><td><strong>Enumerable property-name strings</strong> of any object</td></tr>
+          <tr><td>Requires iterability?</td><td>Yes — throws <code>TypeError</code> if the object has no iterator</td><td>No — works on every object, including plain <code>{}</code></td></tr>
+          <tr><td>On arrays</td><td>Yields elements, in order, live</td><td>Yields index strings <code>"0"</code>, <code>"1"</code>, ... plus any enumerable non-index properties</td></tr>
+          <tr><td>On <code>null</code>/<code>undefined</code></td><td>Throws <code>TypeError</code></td><td>Silently does nothing</td></tr>
+          <tr><td>Introduced</td><td>ES6</td><td>Original JavaScript (pre-ES1)</td></tr>
+        </table>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 1: the classic accidental swap on an array
+let scores = [88, 92, 76];
+
+for (let v of scores) console.log(v);   // 88, 92, 76 -- the VALUES, correct
+for (let k in scores) console.log(k);   // "0", "1", "2" -- STRING indices, probably not intended
+
+// If you then try arithmetic assuming for/in gave you numbers, it silently
+// breaks because these are strings:
+for (let k in scores) {
+  console.log(k + 1);   // "01", "11", "21" -- string concatenation, not addition!
+}</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 2: for/of on a plain object throws; for/in on an array picks
+// up more than you bargained for once someone augments Array.prototype
+// or the array itself.
+let dict = { en: "hello", fr: "bonjour" };
+for (let v of dict) { }
+// TypeError: dict is not iterable
+
+let list = ["a", "b", "c"];
+list.label = "letters";           // an ordinary enumerable property on the array
+
+for (let v of list) console.log(v);   // "a", "b", "c" -- .label correctly ignored
+for (let k in list) console.log(k);   // "0", "1", "2", "label" -- .label leaks in!</code></pre>
+      </div>
+      <div class="admonition tip">
+        <div class="admonition-title">Rule of thumb</div>
+        <p>
+          Arrays, strings, <code>Map</code>, <code>Set</code> → always
+          <code>for...of</code>. Plain objects whose keys you need → either
+          <code>for...in</code> with an <code>Object.prototype.hasOwnProperty</code>
+          guard, or — preferred in modern code — <code>for...of</code> over
+          <code>Object.keys(o)</code>, <code>Object.values(o)</code>, or
+          <code>Object.entries(o)</code>, which sidesteps inherited properties
+          entirely.
+        </p>
+      </div>
+
+      <h2 id="jumps">5.5 Jumps</h2>
+      <p>
+        Jump statements transfer control to a different point in the source code
+        instead of letting execution fall through to the next line. JavaScript's
+        jumps are <code>break</code>, <code>continue</code>, <code>return</code>,
+        <code>yield</code>, and <code>throw</code> — the first two can target a
+        labeled statement, and the last two carry a value across the jump.
+      </p>
+
+      <h3 id="labeled-statements">Labeled statements</h3>
+      <p>
+        Any statement may be prefixed with <code>identifier:</code>, giving it a
+        name that a <code>break</code> or <code>continue</code> elsewhere in the
+        program can refer to. Labels live in their own namespace, separate from
+        variable and function names, so reusing an identifier as both is legal (if
+        confusing). A statement cannot repeat a label already used by one of its
+        own enclosing statements, but two unrelated, non-nested statements may
+        share a label, and a single statement can carry more than one label.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">mainloop: while (token !== null) {
+  // ...
+  continue mainloop;   // jump straight to mainloop's next test
+  // ...
+}</code></pre>
+      </div>
+
+      <h3 id="break-continue">break and continue, including labeled jumps out of nested loops <span class="badge hard">Nested-loop control flow</span></h3>
+      <p>
+        Bare <code>break;</code> immediately exits the innermost enclosing loop or
+        <code>switch</code>; it's a syntax error to use it anywhere else. Bare
+        <code>continue;</code> skips the rest of the current iteration's body and
+        jumps to the loop's next iteration — legal only inside a loop, never inside
+        a bare <code>switch</code>. Both come in a labeled form
+        (<code>break label;</code> / <code>continue label;</code>) that targets a
+        specific enclosing labeled statement rather than always the nearest one —
+        essential once loops are nested, because unlabeled <code>break</code>/
+        <code>continue</code> only ever see the <em>innermost</em> loop.
+      </p>
+      <p>
+        What <code>continue</code> actually restarts differs by loop type: in a
+        <code>while</code> loop it jumps straight back to the condition test; in a
+        <code>do/while</code> it jumps to the bottom condition test; in a
+        <code>for</code> loop it runs the increment expression <em>first</em>, then
+        retests; and in <code>for/of</code>/<code>for/in</code> it simply advances
+        to the next iterated value or property name. That extra increment step is
+        exactly why a <code>for</code> loop cannot be perfectly simulated by a
+        plain <code>while</code> loop — see the <code>try/finally</code> section
+        below for the one construct that <em>can</em> reproduce it.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 1: labeled continue skips to the next ROW, not the next cell
+let matrix = [[1, 2, NaN], [4, 5, 6], [7, -1, 9]];
+
+outer: for (let x = 0; x < matrix.length; x++) {
+  for (let y = 0; y < matrix[x].length; y++) {
+    if (Number.isNaN(matrix[x][y])) continue outer;   // abandon this row entirely
+    console.log(matrix[x][y]);
+  }
+}
+// Logs 1, 2 (row 0 stops at the NaN), then 4, 5, 6 (all of row 1), then
+// the loop reaches row 2...</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Example 2: labeled break abandons BOTH loops at once, and a label
+// can even sit on a plain block, purely so break has something to
+// jump to that isn't a loop or a switch:
+let sum = 0, success = false;
+
+computeSum: if (matrix) {
+  for (let x = 0; x < matrix.length; x++) {
+    let row = matrix[x];
+    if (!row) break computeSum;             // bail out of the whole block
+    for (let y = 0; y < row.length; y++) {
+      if (row[y] < 0) break computeSum;      // abandon BOTH for-loops at once
+      sum += row[y];
+    }
+  }
+  success = true;
+}
+// Execution resumes right here whether we finished normally or broke out early.</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">No line break before the label</div>
+        <p>
+          Because of automatic semicolon insertion, <code>break</code> and
+          <code>continue</code> must be immediately followed by their label on the
+          <em>same line</em>. A newline in between is treated as an implicit
+          semicolon, silently turning your labeled jump into the plain unlabeled
+          form. Neither jump can cross a function boundary either — you can't
+          label a function body and then <code>break</code> to it from inside a
+          nested function.
+        </p>
+      </div>
+
+      <h3 id="return">return</h3>
+      <p>
+        <code>return expression;</code> is legal only inside a function body; it
+        immediately hands control back to the caller, and the invocation
+        expression evaluates to whatever <code>expression</code> produced. A
+        function with no <code>return</code> statement — or a bare
+        <code>return;</code> with no expression — implicitly returns
+        <code>undefined</code> once it falls off the end of its body.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function square(x) { return x * x; }
+square(2);   // => 4
+
+function displayObject(o) {
+  if (!o) return;              // early return, no value -- caller gets undefined
+  // ... rest of the function ...
+}</code></pre>
+      </div>
+      <p>
+        Like <code>break</code>/<code>continue</code> and their labels, automatic
+        semicolon insertion means the expression after <code>return</code> must
+        start on the same line as the keyword — a line break there silently
+        inserts a semicolon and turns your intended <code>return value;</code>
+        into <code>return;</code> followed by dead code.
+      </p>
+
+      <h3 id="yield">yield <span class="badge new">ES6</span></h3>
+      <p>
+        <code>yield</code> is <code>return</code>'s cousin for
+        <a href="13-iterators-generators.html">generator functions</a>
+        (<code>function*</code>): it produces the next value in a generated
+        sequence <em>without</em> ending the function, suspending execution until
+        the caller asks for another value. It's really an operator, not a
+        statement, but it only ever appears in statement position inside
+        generator bodies:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function* range(from, to) {
+  for (let i = from; i <= to; i++) {
+    yield i;   // pause here, hand i to the consumer, resume on next .next()
+  }
+}
+[...range(1, 3)];   // => [1, 2, 3]</code></pre>
+      </div>
+      <p>
+        The full mechanics of generators, iterators, and what <code>yield</code>
+        can receive back from the caller belong to
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>.
+      </p>
+
+      <h3 id="throw">throw</h3>
+      <p>
+        <code>throw expression;</code> raises an exception — any value can be
+        thrown, not just an <code>Error</code>, though throwing an
+        <code>Error</code> (or a subclass) is the convention because it carries a
+        <code>name</code> and a <code>message</code>. Throwing immediately halts
+        normal execution and unwinds the call stack looking for a handler.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function factorial(x) {
+  if (x < 0) throw new Error("x must not be negative");
+  let f;
+  for (f = 1; x > 1; f *= x, x--) /* empty */ ;
+  return f;
+}
+factorial(4);    // => 24
+factorial(-1);   // throws Error: x must not be negative</code></pre>
+      </div>
+      <p>
+        If the code that throws isn't inside a <code>try</code> block with a
+        matching <code>catch</code>, the interpreter checks the next-enclosing
+        block, then the function that called the current one, and so on up the
+        call stack — propagating through both lexical scope and the runtime call
+        stack — until a handler is found or the exception reaches the top and is
+        reported as an uncaught error.
+      </p>
+
+      <h2 id="try-catch-finally">try/catch/finally <span class="badge hard">Control-flow interactions</span></h2>
+      <p>
+        <code>try/catch/finally</code> is JavaScript's exception-handling
+        statement. The <code>try</code> block contains code that might throw; the
+        optional <code>catch</code> clause runs if — and only if — the
+        <code>try</code> block throws, receiving the thrown value bound to its
+        parameter; the optional <code>finally</code> block runs
+        <strong>unconditionally</strong>, whether the <code>try</code> completed
+        normally, exited via <code>return</code>/<code>break</code>/<code>continue</code>,
+        was handled by <code>catch</code>, or is still propagating an unhandled
+        exception. A bare <code>try</code> must have at least one of
+        <code>catch</code> or <code>finally</code>; all three clauses require
+        braces even for a single statement.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">try {
+  let n = Number(prompt("Enter a positive integer", ""));
+  let f = factorial(n);
+  alert(`${n}! = ${f}`);
+} catch (ex) {
+  alert(ex);           // ex is whatever was thrown, e.g. an Error object
+}
+
+// ES2019+: a bare catch when you don't need the error value at all
+function parseJSON(s) {
+  try {
+    return JSON.parse(s);
+  } catch {             // no (e) required
+    return undefined;
+  }
+}</code></pre>
+      </div>
+      <p>
+        The subtle part is exactly <em>when</em> <code>finally</code> runs relative
+        to <code>catch</code>, and — more importantly — what happens when
+        <code>finally</code> itself tries to jump somewhere.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Deep dive 1: finally silently OVERRIDES a pending return value.
+function f() {
+  try {
+    return "from try";
+  } finally {
+    console.log("cleanup always runs");
+    // No return here, so the try's return value of "from try" survives.
+  }
+}
+f();   // logs "cleanup always runs", returns "from try"
+
+function g() {
+  try {
+    return "from try";
+  } finally {
+    return "from finally";   // <- this REPLACES the pending return entirely
+  }
+}
+g();   // => "from finally" -- the string "from try" is discarded, unseen</code></pre>
+      </div>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Deep dive 2: finally can SWALLOW an in-flight exception completely.
+function h() {
+  try {
+    throw new Error("boom");
+  } finally {
+    return "swallowed";   // the Error is discarded -- h() returns NORMALLY
+  }
+}
+h();   // => "swallowed" -- no exception ever reaches the caller!
+
+// Same danger with break/continue instead of return:
+function scanRows(rows) {
+  let seen = [];
+  for (let row of rows) {
+    try {
+      if (row == null) throw new Error("null row");
+      seen.push(row);
+    } finally {
+      continue;   // swallows the "null row" exception on every iteration,
+                   // since continue in finally overrides the pending throw
+    }
+  }
+  return seen;
+}</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Never put return, break, continue, or throw inside finally</div>
+        <p>
+          Any jump statement executed inside <code>finally</code> — including one
+          reached indirectly by calling a function that itself throws — abandons
+          whatever the <code>try</code>/<code>catch</code> was in the middle of
+          doing, whether that was returning a value, propagating an exception, or
+          breaking out of a loop, and substitutes the new jump instead. This is
+          essentially never what you want. Reserve <code>finally</code> strictly
+          for cleanup — closing a connection, releasing a lock, resetting a flag —
+          and never let it decide control flow.
+        </p>
+      </div>
+      <p>
+        Used properly (cleanup-only), <code>try/finally</code> without a
+        <code>catch</code> at all is genuinely useful — for example, it's the only
+        way to make a hand-written <code>while</code> loop replicate a
+        <code>for</code> loop's <code>continue</code> semantics, since
+        (as noted above) a <code>continue</code> inside a <code>for</code> loop
+        runs the increment before retesting, while a bare <code>while</code> loop's
+        <code>continue</code> skips the increment entirely:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Simulating for(initialize; test; increment) body; with while + try/finally,
+// so that a `continue` inside body still runs the increment correctly:
+initialize;
+while (test) {
+  try { body; }
+  finally { increment; }
+}
+// Note this is still not a PERFECT equivalence: a `break` inside body behaves
+// slightly differently (it runs one extra increment on the way out here,
+// since finally always runs) than break does in a real for loop.</code></pre>
+      </div>
+
+      <h2 id="miscellaneous-statements">5.6 Miscellaneous statements</h2>
+
+      <h3 id="with">with</h3>
+      <p>
+        <code>with (object) statement</code> temporarily adds an object's
+        properties to the front of the scope chain, letting you reference them as
+        if they were bare local variables inside <code>statement</code>. It was
+        meant to reduce repetition when working with deeply nested objects:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">with (document.forms[0]) {
+  name.value = "";
+  address.value = "";
+  email.value = "";
+}
+// versus, without with:
+let f = document.forms[0];
+f.name.value = "";
+f.address.value = "";
+f.email.value = "";</code></pre>
+      </div>
+      <div class="admonition warning">
+        <div class="admonition-title">Banned in strict mode, deprecated everywhere else</div>
+        <p>
+          <code>with</code> is a syntax error under <code>"use strict"</code> (and
+          therefore inside every <code>class</code> body and ES module, since both
+          are automatically strict), and should be treated as forbidden even in
+          legacy non-strict code. The reason is twofold: it makes it impossible
+          for an engine to statically determine whether an identifier refers to a
+          scope variable or a property of <code>object</code> — which disables
+          major optimizations and makes such code noticeably slower — and it makes
+          code much harder to read, since a bare name's meaning now depends on
+          runtime object shape. Prefer assigning the object to a short local
+          variable and accessing properties through it explicitly, as shown above.
+          One more wrinkle: declaring a variable with <code>const</code>,
+          <code>let</code>, or <code>var</code> inside a <code>with</code> body
+          creates an ordinary variable — it does <em>not</em> define a new
+          property on <code>object</code>.
+        </p>
+      </div>
+
+      <h3 id="debugger">debugger</h3>
+      <p>
+        The <code>debugger</code> statement is a no-op unless a debugger is
+        actively attached, in which case it behaves like a breakpoint — execution
+        pauses right there and you can inspect variables and the call stack in
+        your browser's or runtime's dev tools. It's handy as a temporary,
+        conditional breakpoint you can commit and remove later:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function f(o) {
+  if (o === undefined) debugger;   // pause only for the buggy call site
+  // ... rest of the function ...
+}</code></pre>
+      </div>
+      <p>
+        Merely having dev tools installed isn't enough — the debugger console (or
+        an attached inspector) actually has to be open for the breakpoint to fire;
+        otherwise the statement is silently ignored.
+      </p>
+
+      <h3 id="use-strict">"use strict"</h3>
+      <p>
+        <code>"use strict"</code> is a <em>directive</em>, not a true statement —
+        it's just a string-literal expression statement that must appear before
+        any real code, at the very top of a script or the very top of a function
+        body, and it opts the code that follows into strict mode. Strict mode is
+        automatic (no directive needed) inside any <code>class</code> body or ES
+        module — see <a href="09-modules.html">Modules</a> — which means fully
+        modular, class-based modern code rarely needs to write the directive by
+        hand at all. The concrete rule changes it brings:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Non-strict behavior</th><th>Strict-mode behavior</th></tr>
+          <tr><td>Assigning to an undeclared identifier silently creates a global</td><td>Throws <code>ReferenceError</code></td></tr>
+          <tr><td>Plain function calls get <code>this === globalThis</code></td><td><code>this</code> is <code>undefined</code></td></tr>
+          <tr><td><code>call()</code>/<code>apply()</code> coerce a <code>null</code>/primitive <code>this</code> to an object</td><td><code>this</code> is exactly the value passed, unconverted</td></tr>
+          <tr><td><code>with</code> statement allowed</td><td>Syntax error — banned entirely</td></tr>
+          <tr><td>Assigning to a non-writable property fails silently</td><td>Throws <code>TypeError</code></td></tr>
+          <tr><td>Creating a property on a non-extensible object fails silently</td><td>Throws <code>TypeError</code></td></tr>
+          <tr><td>Duplicate parameter names / duplicate object-literal property names allowed</td><td>Syntax error</td></tr>
+          <tr><td><code>eval()</code> can declare vars/functions into the caller's scope</td><td><code>eval()</code> gets its own private scope</td></tr>
+          <tr><td><code>arguments</code> stays "magically" linked to named parameters</td><td><code>arguments</code> is a static snapshot</td></tr>
+          <tr><td><code>delete</code> on a bare identifier is a silent no-op</td><td>Syntax error</td></tr>
+          <tr><td>Deleting a non-configurable property fails silently</td><td>Throws <code>TypeError</code></td></tr>
+          <tr><td>Legacy octal literals like <code>0777</code> allowed in some engines</td><td>Syntax error</td></tr>
+          <tr><td><code>eval</code>/<code>arguments</code> can be reassigned or shadowed</td><td>Treated like reserved keywords — reassignment is a syntax error</td></tr>
+          <tr><td><code>arguments.caller</code>/<code>callee</code>, function <code>.caller</code>/<code>.arguments</code> accessible</td><td>All throw <code>TypeError</code> when read</td></tr>
+        </table>
+      </div>
+      <p>
+        See <a href="01-introduction.html#strict-mode">Introduction &amp; Setup</a>
+        for where you'd still need to write the directive explicitly (plain
+        top-level scripts and non-class functions outside a module).
+      </p>
+
+      <h2 id="declarations">5.7 Declarations</h2>
+      <p>
+        <code>const</code>, <code>let</code>, <code>var</code>,
+        <code>function</code>, <code>class</code>, <code>import</code>, and
+        <code>export</code> are, strictly speaking, <em>declarations</em> rather
+        than statements — they don't "make something happen" at runtime so much as
+        define names and bind them to values, classes, or modules before the code
+        around them actually executes. Because they look and read like statements,
+        this book (and this site) treats them informally as part of the same
+        family.
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">const TAU = 2 * Math.PI;   // block-scoped constant
+let radius = 3;             // block-scoped variable
+var circumference = TAU * radius;   // function-scoped, legacy -- prefer let/const
+
+function area(r) {          // hoisted: name + implementation both move to the
+  return Math.PI * r * r;   // top of the enclosing scope
+}
+area(2);                    // fine to call before this point in source order
+
+class Circle {               // NOT hoisted like function -- lives in a
+  constructor(r) { this.r = r; }   // temporal dead zone until this line runs
+  area() { return Math.PI * this.r ** 2; }
+}
+
+import { PI, TAU as Tau } from "./constants.js";
+export const goldenRatio = 1.618;
+export default class Vector { /* ... */ }</code></pre>
+      </div>
+      <p>
+        <code>var</code>-declared variables are scoped to the nearest enclosing
+        <em>function</em>, not the nearest block, which is a persistent source of
+        bugs in older code; <code>let</code> and <code>const</code> are properly
+        block-scoped and there's essentially no reason to reach for <code>var</code>
+        in new code. <code>function</code> declarations are fully hoisted — both the
+        name binding and the implementation move to the top of the scope, so
+        calling a function textually before its declaration works fine.
+        <code>class</code> declarations look similar but behave like
+        <code>let</code>: the binding exists but is uninitialized until the
+        <code>class</code> statement actually executes, so referencing it earlier
+        throws a <code>ReferenceError</code> rather than silently returning
+        <code>undefined</code>. <code>import</code> and <code>export</code> connect
+        module-private names to and from other files — see
+        <a href="09-modules.html">Modules</a> for the several forms each can take,
+        including named imports/exports, aliasing with <code>as</code>, and
+        <code>export default</code>.
+      </p>
+
+      <h2 id="summary-of-statements">5.8 Summary of JavaScript statements</h2>
+      <p>
+        Every statement (and declaration) form covered on this page, in one
+        reference table:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Statement</th><th>Purpose</th></tr>
+          <tr><td><code>break</code></td><td>Exit the innermost loop or <code>switch</code>, or jump out of a named enclosing statement</td></tr>
+          <tr><td><code>case</code></td><td>Label a branch within a <code>switch</code></td></tr>
+          <tr><td><code>class</code></td><td>Declare a class</td></tr>
+          <tr><td><code>const</code></td><td>Declare and initialize one or more block-scoped constants</td></tr>
+          <tr><td><code>continue</code></td><td>Skip to the next iteration of the innermost loop, or a named loop</td></tr>
+          <tr><td><code>debugger</code></td><td>Debugger breakpoint</td></tr>
+          <tr><td><code>default</code></td><td>Label the fallback branch within a <code>switch</code></td></tr>
+          <tr><td><code>do/while</code></td><td>A loop that tests its condition after the body, so it always runs at least once</td></tr>
+          <tr><td><code>export</code></td><td>Make values available for import by other modules</td></tr>
+          <tr><td><code>for</code></td><td>A counting loop with initializer, test, and increment in one header</td></tr>
+          <tr><td><code>for/await</code></td><td>Asynchronously iterate the values of an async iterable</td></tr>
+          <tr><td><code>for/in</code></td><td>Enumerate the property names of any object</td></tr>
+          <tr><td><code>for/of</code></td><td>Iterate the values of an iterable object such as an array, string, Map, or Set</td></tr>
+          <tr><td><code>function</code></td><td>Declare a function (fully hoisted)</td></tr>
+          <tr><td><code>if/else</code></td><td>Execute one branch or another depending on a condition</td></tr>
+          <tr><td><code>import</code></td><td>Bind local names to values exported from another module</td></tr>
+          <tr><td><em>label</em></td><td>Name a statement so <code>break</code>/<code>continue</code> can target it</td></tr>
+          <tr><td><code>let</code></td><td>Declare and initialize one or more block-scoped variables</td></tr>
+          <tr><td><code>return</code></td><td>Return a value from a function to its caller</td></tr>
+          <tr><td><code>switch</code></td><td>Multiway branch to a matching <code>case</code> or <code>default</code> label</td></tr>
+          <tr><td><code>throw</code></td><td>Raise an exception</td></tr>
+          <tr><td><code>try/catch/finally</code></td><td>Handle exceptions and guarantee cleanup code runs</td></tr>
+          <tr><td><code>"use strict"</code></td><td>Directive applying strict-mode restrictions to a script or function</td></tr>
+          <tr><td><code>var</code></td><td>Declare and initialize one or more function-scoped variables (legacy)</td></tr>
+          <tr><td><code>while</code></td><td>A basic conditional loop, tested before each iteration</td></tr>
+          <tr><td><code>with</code></td><td>Extend the scope chain with an object's properties — deprecated, forbidden in strict mode</td></tr>
+          <tr><td><code>yield</code></td><td>Produce the next value from a generator function without returning</td></tr>
+        </table>
+      </div>
+      <p>
+        With every statement form catalogued here, the next stop is how these
+        statements combine into reusable units of behavior — see
+        <a href="07-functions.html">Functions</a> for how <code>function</code>
+        declarations, parameters, and <code>return</code> fit together in depth.
+      </p>
+
+
+      <div class="page-nav" id="page-nav"></div>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <div class="toc-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search chapters..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<script src="../assets/js/nav-data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>
