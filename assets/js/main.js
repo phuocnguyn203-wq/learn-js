@@ -56,6 +56,11 @@
       frag.appendChild(wrap);
     });
     nav.appendChild(frag);
+
+    const active = nav.querySelector("a.active");
+    if (active) {
+      active.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
   }
 
   /* --------------------------- Prev / next links --------------------------- */

@@ -36,50 +36,52 @@
       <span class="eyebrow">Book Chapter 13</span>
       <h1>Asynchronous JavaScript</h1>
       <p class="lede">
-        Almost no real-world JavaScript program runs start-to-finish without
-        stopping to wait for something: a timer, a user click, a file read, a
-        network response. JavaScript itself contributes no asynchronous
-        primitives to the "core" language — waiting is always mediated by a
-        host environment (the browser or Node) that hands control back to your
-        code later, through a callback. Everything in this chapter — Promises,
-        <code>async</code>/<code>await</code>, and asynchronous iteration — is
-        sugar layered on top of that one underlying mechanism. This page works
-        through all three layers in depth: why callbacks alone don't scale,
-        how Promises fix that, how <code>async</code>/<code>await</code> hides
-        Promises almost entirely, and how asynchronous iterators let you loop
-        over a stream of values that arrive over time.
+        Pretty much no real-world JavaScript program just runs start to finish
+        without stopping to wait on something — a timer, a click, a file
+        read, a network response. And here's a fun fact: JavaScript itself
+        doesn't actually have any async primitives baked into the "core"
+        language. All that waiting is handled by whatever host you're running
+        in (the browser or Node), which hands control back to your code later
+        through a callback. Everything in this chapter — Promises,
+        <code>async</code>/<code>await</code>, and async iteration — is really
+        just sugar sprinkled on top of that one mechanism. We'll go through
+        all three layers: why plain callbacks fall apart at scale, how
+        Promises fix that, how <code>async</code>/<code>await</code> hides
+        Promises almost entirely, and how async iterators let you loop over a
+        stream of values that show up over time.
       </p>
 
       <h2 id="callbacks">13.1 Asynchronous programming with callbacks</h2>
       <p>
-        A callback is a function you write and hand to some other piece of
-        code, which invokes — "calls back" — your function later, when a
-        condition is met or an event occurs. That's the entire idea. There is
-        no special syntax for a callback; it's an ordinary function reference
-        passed as an argument. What differs across APIs is <em>when</em> and
-        <em>how many times</em> the callback fires, and what arguments it's
-        called with. The subsections below walk through the four shapes of
-        callback-based async you'll meet in real code: timers, DOM events,
-        network requests, and Node's error-first convention.
+        A callback is just a function you write and hand off to some other
+        piece of code, which then invokes — "calls back" — your function
+        later, once a condition is met or an event happens. That's really
+        the whole idea. There's no special syntax for it; it's just an
+        ordinary function reference passed in as an argument. What changes
+        from API to API is <em>when</em> the callback fires, <em>how many
+        times</em>, and what arguments it gets called with. Below we'll walk
+        through the four flavors of callback-based async you'll actually run
+        into: timers, DOM events, network requests, and Node's error-first
+        convention.
       </p>
 
       <h3 id="timers">Timers</h3>
       <p>
-        The simplest form of asynchrony is "run this after some time has
-        passed." <code>setTimeout()</code> registers a callback to run once,
+        The simplest kind of async is basically "run this after some time has
+        passed." <code>setTimeout()</code> sets up a callback to run once,
         after a minimum delay in milliseconds (the browser or Node event loop
-        makes no promise about exact timing — only that it won't fire
-        <em>earlier</em> than requested):
+        doesn't promise exact timing — just that it won't fire
+        <em>earlier</em> than you asked for):
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// Call checkForUpdates() once, no sooner than 60,000ms from now
 setTimeout(checkForUpdates, 60000);</code></pre>
       </div>
       <p>
-        <code>setInterval()</code> is the repeating counterpart: it invokes
-        the callback over and over, at the given interval, until you cancel
-        it. Both functions return an opaque handle you use to cancel the
-        pending or ongoing timer:
+        <code>setInterval()</code> is the repeating version: it keeps
+        invoking the callback over and over, at the given interval, until you
+        cancel it. Both functions hand back an opaque handle you can use to
+        cancel the pending or ongoing timer:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// Check for updates once a minute, forever, until stopped
@@ -92,24 +94,24 @@ function stopCheckingForUpdates() {
       <div class="admonition note">
         <div class="admonition-title">Promises can't replace setInterval()</div>
         <p>
-          Keep this in mind for later: a Promise settles exactly once. It's a
-          perfectly good fit for a one-shot <code>setTimeout()</code>-style
-          delay (see the <code>wait()</code> helper further down this page),
-          but it fundamentally cannot represent a repeating event source like
-          <code>setInterval()</code> or a button that can be clicked many
-          times. Those stay callback- or event-based, or move to
-          <a href="#async-iteration">asynchronous iteration</a> if you need a
-          loop-friendly form.
+          Worth filing away for later: a Promise settles exactly once. That
+          makes it a great fit for a one-shot <code>setTimeout()</code>-style
+          delay (check out the <code>wait()</code> helper further down this
+          page), but it just can't represent something repeating like
+          <code>setInterval()</code>, or a button you can click over and
+          over. Those stay callback- or event-based — or you reach for
+          <a href="#async-iteration">asynchronous iteration</a> if you want a
+          loop-friendly version.
         </p>
       </div>
 
       <h3 id="events">Events</h3>
       <p>
-        Client-side JavaScript is overwhelmingly event-driven: rather than
-        computing something on a schedule, code sits idle until the user
-        clicks, types, or touches the screen, and the browser invokes
-        whatever callbacks — called event handlers or event listeners — were
-        registered for that kind of event on that element:
+        Client-side JavaScript is overwhelmingly event-driven: instead of
+        computing something on a schedule, your code just sits there until
+        the user clicks, types, or taps the screen, and the browser fires
+        off whatever callbacks — called event handlers or event listeners —
+        got registered for that kind of event on that element:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">let okay = document.querySelector("#confirmUpdateDialog button.okay");
@@ -117,19 +119,20 @@ okay.addEventListener("click", applyUpdate);</code></pre>
       </div>
       <p>
         <code>addEventListener()</code>'s first argument names the event type
-        ("click"), and the second is the callback the browser invokes when
-        that event fires on that element, passing an event object with
-        details like timestamp and pointer coordinates. Multiple listeners can
-        be attached to the same element and event type; all of them run.
+        ("click"), and the second is the callback the browser fires when that
+        event happens on that element — it gets passed an event object with
+        details like timestamp and pointer coordinates. You can attach
+        multiple listeners to the same element and event type, and they'll
+        all run.
       </p>
 
       <h3 id="network-events">Network requests</h3>
       <p>
-        Fetching data over the network is asynchronous for an obvious reason:
-        you cannot block waiting on the other end of a socket. The historical
-        browser API for this, <code>XMLHttpRequest</code> (its name is a
-        holdover — it works with any response format, not just XML), exposes
-        the result purely through callback properties:
+        Fetching data over the network is async for a pretty obvious reason:
+        you can't just block and wait on the other end of a socket. The
+        old-school browser API for this, <code>XMLHttpRequest</code> (the
+        name is a leftover — it works with any response format, not just
+        XML), exposes the result purely through callback properties:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function getCurrentVersionNumber(versionCallback) {  // note callback argument
@@ -151,31 +154,31 @@ okay.addEventListener("click", applyUpdate);</code></pre>
 }</code></pre>
       </div>
       <p>
-        Two things are worth noticing here, because they generalize to every
-        callback-based API you'll write yourself. First,
-        <code>getCurrentVersionNumber()</code> cannot <code>return</code> the
-        version number the way a synchronous function would — by the time the
-        function's own body finishes running, the network hasn't replied yet.
-        Instead the caller supplies a callback and receives the result (or
-        error) through it, whenever it's ready. Second, notice the two-headed
-        callback signature: it's called with either an error and a null
-        result, or a null error and a real result, never both. This is the
-        precursor to the Node convention covered next. Also note that
-        <code>onload</code>/<code>onerror</code> assign a single handler
-        directly to a property, rather than calling
-        <code>addEventListener()</code> — both styles exist; property
-        assignment is simpler when you know only one listener is ever needed
-        for that object and event.
+        Two things here are worth calling out, because you'll see them again
+        in basically every callback-based API you ever write. First,
+        <code>getCurrentVersionNumber()</code> can't just <code>return</code>
+        the version number the way a normal synchronous function would — by
+        the time its own body finishes running, the network hasn't replied
+        yet. So instead, the caller hands over a callback and gets the result
+        (or error) through that, whenever it's ready. Second, check out the
+        two-headed callback signature: it's called with either an error and a
+        null result, or a null error and a real result — never both. That's
+        basically a preview of the Node convention we'll get to next. Also
+        worth noting: <code>onload</code>/<code>onerror</code> assign a
+        single handler straight to a property instead of calling
+        <code>addEventListener()</code> — both styles are valid; property
+        assignment is just simpler when you know you'll only ever need one
+        listener for that object and event.
       </p>
 
       <h3 id="callbacks-in-node">Callbacks and events in Node</h3>
       <p>
-        Node's built-in APIs are pervasively asynchronous and settle into one
-        of two idioms. The first, used by most one-shot operations like
-        reading a file, is the <strong>error-first callback</strong>
+        Node's built-in APIs are async pretty much everywhere, and they fall
+        into one of two idioms. The first, used for most one-shot operations
+        like reading a file, is the <strong>error-first callback</strong>
         convention: the callback's first parameter is reserved for an error
-        (or <code>null</code> if none occurred), and the actual result comes
-        second:
+        (or <code>null</code> if nothing went wrong), and the actual result
+        comes second:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">const fs = require("fs");
@@ -191,11 +194,11 @@ fs.readFile("config.json", "utf-8", (err, text) => {
 });</code></pre>
       </div>
       <p>
-        Every Node error-first callback follows this shape, so much so that
-        the arguments are conventionally just named <code>err</code> and
-        whatever the result is — muscle memory that pays off across the whole
-        Node ecosystem. The second idiom is fully event-based, layering
-        multiple named events on top of one operation because a single
+        Every Node error-first callback follows this shape — so much so that
+        people just name the arguments <code>err</code> and whatever the
+        result is, by habit. It's muscle memory that pays off across the
+        whole Node ecosystem. The second idiom is fully event-based, stacking
+        multiple named events on top of one operation, because a single
         callback can't represent "headers arrived," "a chunk of body
         arrived," and "the whole response finished" as three separate
         moments:
@@ -220,17 +223,18 @@ function getText(url, callback) {
       </div>
       <p>
         Node's <code>EventEmitter</code>-style objects register listeners
-        with <code>.on()</code> rather than <code>addEventListener()</code>,
-        but the mental model is identical to DOM events: name the event,
-        supply the callback, get invoked whenever it fires — possibly more
-        than once.
+        with <code>.on()</code> instead of <code>addEventListener()</code>,
+        but the mental model's identical to DOM events: name the event, hand
+        over a callback, get invoked whenever it fires — possibly more than
+        once.
       </p>
 
       <h3 id="callback-hell">The scaling problem: "callback hell"</h3>
       <p>
-        None of the individual examples above look bad. The trouble starts
-        when asynchronous steps depend on each other's results, so each new
-        step has to be nested inside the callback of the previous one:
+        None of the examples above look particularly bad on their own. The
+        trouble kicks in once async steps depend on each other's results, so
+        each new step has to get nested inside the callback of the one
+        before it:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">getCurrentVersionNumber((err, version) => {
@@ -248,69 +252,69 @@ function getText(url, callback) {
         <div class="admonition-title">Why callbacks alone don't scale</div>
         <p>
           This "pyramid of doom" is a readability problem — deep indentation,
-          duplicated error-checking at every level — but there's a deeper
-          structural problem underneath it: <strong>asynchronous code breaks
-          exception handling.</strong> If <code>fetchChangelog</code>'s
-          internal, asynchronously-invoked callback throws, there is no
-          <code>try</code> block anywhere on the call stack to catch it,
-          because the code that originally called
+          the same error-checking copy-pasted at every level — but there's a
+          deeper, structural problem hiding underneath it:
+          <strong>asynchronous code breaks exception handling.</strong> If
+          <code>fetchChangelog</code>'s internal, asynchronously-invoked
+          callback throws, there's no <code>try</code> block anywhere on the
+          call stack to catch it, because the code that originally called
           <code>fetchChangelog()</code> already returned and popped off the
-          stack long before the callback runs. The only way to communicate
-          failure is to pass it explicitly as a callback argument — the
-          error-first convention exists purely to compensate for this. Every
-          one of those nested <code>if (err) return handleError(err)</code>
-          lines above is hand-rolled exception propagation, and it is easy to
-          forget one and let an error vanish silently. Promises exist
+          stack long before the callback ever runs. The only way to
+          communicate failure is to pass it explicitly as a callback
+          argument — that's the entire reason the error-first convention
+          exists. Every one of those nested
+          <code>if (err) return handleError(err)</code> lines above is
+          hand-rolled exception propagation, and it's really easy to forget
+          one and let an error just vanish silently. Promises exist
           specifically to fix both problems: flatten the nesting into a
-          linear chain, and give errors a real, standardized propagation
-          path.
+          straight-line chain, and give errors a real, standardized way to
+          propagate.
         </p>
       </div>
 
       <h2 id="promises">13.2 Promises</h2>
       <p>
-        A <code>Promise</code> is an object representing the result of a
-        single asynchronous computation — a result that may not be ready
-        yet. Crucially, a Promise's design is deliberately opaque about
-        timing: there is no way to synchronously ask a Promise "are you done,
-        and what's your value?" You can only register a callback to be
-        invoked once the value is ready. Framed that way, Promises are "just"
-        a different way of packaging callbacks — but two concrete benefits
-        justify the extra abstraction:
+        A <code>Promise</code> is an object that represents the result of a
+        single async computation — a result that might not be ready yet.
+        Importantly, a Promise is deliberately opaque about timing: there's
+        no way to synchronously ask it "are you done yet, and what's your
+        value?" All you can do is register a callback to be invoked once the
+        value shows up. Framed that way, Promises are "just" a different way
+        of packaging callbacks — but two real benefits make the extra
+        abstraction worth it:
       </p>
       <ul>
         <li>
-          A sequence of dependent asynchronous steps can be written as a
-          flat chain of <code>.then()</code> calls instead of nested callback
-          pyramids.
+          A sequence of dependent async steps can be written as a flat chain
+          of <code>.then()</code> calls instead of a nested callback pyramid.
         </li>
         <li>
-          Errors — including ones thrown as ordinary <code>throw</code>
-          statements — get a standardized propagation path down the chain to
-          a single <code>.catch()</code>, instead of requiring you to
-          manually forward an error argument through every layer.
+          Errors — including ones thrown as plain <code>throw</code>
+          statements — get a standardized path down the chain to a single
+          <code>.catch()</code>, instead of you having to manually forward an
+          error argument through every layer yourself.
         </li>
       </ul>
       <div class="admonition note">
         <div class="admonition-title">Promises represent single events, not repeating ones</div>
         <p>
           Just like the callback APIs they wrap, a Promise settles once and
-          never changes. You can build a Promise-based replacement for
+          that's it, forever. You can build a Promise-based replacement for
           <code>setTimeout()</code> (shown later), but not for
-          <code>setInterval()</code>, and a Promise is a fine substitute for
-          a one-shot "load" event but a poor one for a recurring "click"
-          handler.
+          <code>setInterval()</code> — a Promise works great as a substitute
+          for a one-shot "load" event, but it's a poor fit for a recurring
+          "click" handler.
         </p>
       </div>
       <div class="admonition warning">
         <div class="admonition-title">This is the deep end of the chapter</div>
         <p>
-          The basic use of Promises is genuinely simple. But the fine details
-          — what "resolved" actually means, how a thrown exception threads
-          through a multi-stage chain, what happens when a
-          <code>.then()</code> callback itself returns a Promise — are
-          consistently the most misunderstood part of modern JavaScript. It
-          is worth reading the next several sections slowly.
+          Basic Promise usage is genuinely simple. But the fine print — what
+          "resolved" actually means, how a thrown exception threads through a
+          multi-stage chain, what happens when a <code>.then()</code>
+          callback itself returns a Promise — is consistently the most
+          misunderstood part of modern JavaScript. Worth reading the next
+          few sections slowly rather than skimming.
         </p>
       </div>
 
@@ -326,14 +330,14 @@ function getText(url, callback) {
 });</code></pre>
       </div>
       <p>
-        Think of <code>.then()</code> as a callback-registration method, much
-        like <code>addEventListener()</code> — except that, unlike an event
-        target, a Promise represents exactly one computation, so each
+        Think of <code>.then()</code> as a callback-registration method, kind
+        of like <code>addEventListener()</code> — except unlike an event
+        target, a Promise represents exactly one computation, so whatever
         function you register with <code>.then()</code> fires at most once.
-        It's idiomatic to chain <code>.then()</code> straight onto the call
-        that produced the Promise, without an intermediate variable, and to
-        name Promise-returning functions and their consumers with verbs so
-        the call site reads like a sentence:
+        The idiomatic move is to chain <code>.then()</code> straight onto the
+        call that produced the Promise, skipping the intermediate variable,
+        and to name your Promise-returning functions (and whatever consumes
+        them) with verbs, so the call site reads almost like a sentence:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function displayUserProfile(profile) { /* ... */ }
@@ -349,45 +353,46 @@ getJSON("/api/user/profile").then(displayUserProfile);</code></pre>
         </table>
       </div>
       <p>
-        Once a Promise fulfills or rejects it is <strong>settled</strong>, and
-        settled Promises never change state or value again — a Promise can
-        never flip from fulfilled to rejected or vice versa, and its
-        eventual value or reason is permanently fixed the moment it settles.
+        Once a Promise fulfills or rejects, it's <strong>settled</strong>,
+        and settled Promises never change state or value again — a Promise
+        can never flip from fulfilled to rejected or back, and whatever
+        value or reason it ends up with is locked in permanently the moment
+        it settles.
       </p>
       <div class="admonition note">
         <div class="admonition-title">A registered callback always runs asynchronously</div>
         <p>
-          Even if the Promise you call <code>.then()</code> on has already
-          settled, the callback you pass is <em>never</em> invoked
-          synchronously, in the same turn of the event loop, as the
-          <code>.then()</code> call itself. It's always deferred to a later
-          microtask. This guarantee — covered in depth in the
+          Even if the Promise you're calling <code>.then()</code> on has
+          already settled, the callback you hand it is <em>never</em>
+          invoked synchronously, in the same turn of the event loop as the
+          <code>.then()</code> call itself. It always gets pushed to a later
+          microtask. This guarantee — we'll dig into it properly in the
           <a href="#event-loop">event loop deep dive</a> below — is exactly
-          what keeps Promise-based code predictable regardless of whether the
-          underlying operation happened to finish "instantly" or not.
+          what keeps Promise-based code predictable, whether the underlying
+          operation happened to finish "instantly" or not.
         </p>
       </div>
 
       <h4 id="promise-error-handling">Handling errors with .then() and .catch()</h4>
       <p>
-        <code>.then()</code> actually accepts two callbacks: a fulfillment
+        <code>.then()</code> actually takes two callbacks: a fulfillment
         handler and a rejection handler.
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">getJSON("/api/user/profile").then(displayUserProfile, handleProfileError);</code></pre>
       </div>
       <p>
-        This mirrors why the two-callback form exists at all: an
-        asynchronous computation's caller is no longer on the call stack by
-        the time it completes or fails, so there's no way to synchronously
+        This is basically why the two-callback form exists at all: whoever
+        called an async computation is long gone from the call stack by the
+        time it finishes or fails, so there's no way to synchronously
         <code>return</code> a result or <code>throw</code> an exception back
-        to it. The two <code>.then()</code> arguments are the substitute
-        channel for each outcome. In practice this two-argument form is
-        rarely used, because it has a blind spot: if
+        to them. The two <code>.then()</code> arguments stand in as the
+        channel for each outcome. In practice, though, this two-argument form
+        doesn't get used much, because it has a blind spot: if
         <code>displayUserProfile</code> itself throws, that error has
-        nowhere to go — it isn't the first stage that failed, so
-        <code>handleProfileError</code> never sees it. The idiomatic fix is
-        to append a separate <code>.catch()</code> instead:
+        nowhere to go — it's not the first stage that failed, so
+        <code>handleProfileError</code> never even sees it. The idiomatic
+        fix is to tack on a separate <code>.catch()</code> instead:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">getJSON("/api/user/profile")
@@ -396,24 +401,24 @@ getJSON("/api/user/profile").then(displayUserProfile);</code></pre>
       </div>
       <p>
         Now <em>either</em> a rejection from <code>getJSON()</code> or an
-        exception thrown inside <code>displayUserProfile</code> lands in
-        <code>handleProfileError</code>. <code>.catch(fn)</code> is exactly
-        shorthand for <code>.then(null, fn)</code> — the name is chosen to
-        echo the <code>catch</code> clause of a <code>try/catch</code>
+        exception thrown inside <code>displayUserProfile</code> ends up in
+        <code>handleProfileError</code>. <code>.catch(fn)</code> is literally
+        just shorthand for <code>.then(null, fn)</code> — the name is chosen
+        to echo the <code>catch</code> clause of a <code>try/catch</code>
         statement, since a Promise chain's error handling really is the
-        asynchronous analogue of exception propagation. Where a synchronous
-        exception "bubbles up the call stack" looking for a
-        <code>catch</code>, a rejected Promise "trickles down the chain"
-        looking for a <code>.catch()</code>.
+        async analogue of exception propagation. Where a synchronous
+        exception "bubbles up the call stack" hunting for a <code>catch</code>,
+        a rejected Promise "trickles down the chain" hunting for a
+        <code>.catch()</code>.
       </p>
 
       <h3 id="chaining">13.2.2 Chaining Promises</h3>
       <p>
-        The single most important fact about <code>.then()</code> is this:
-        it does not attach another listener to the Promise you call it on —
-        it returns a brand-new Promise, whose own eventual state depends
-        entirely on what the callback does. That's what makes chaining work
-        at all:
+        The single most important thing to know about <code>.then()</code>:
+        it doesn't just attach another listener to the Promise you called it
+        on — it returns a brand-new Promise, and that new one's eventual
+        state depends entirely on what the callback does. That's the whole
+        trick that makes chaining possible:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">fetch(theURL)          // task 1; returns promise 1
@@ -421,20 +426,21 @@ getJSON("/api/user/profile").then(displayUserProfile);</code></pre>
   .then(callback2);     // task 3; returns promise 3</code></pre>
       </div>
       <p>
-        Walking through it step by step: <code>fetch()</code> starts the HTTP
-        request ("task 1") and immediately returns promise 1. Calling
-        <code>.then(callback1)</code> registers <code>callback1</code> to run
-        once promise 1 fulfills, and immediately (synchronously) returns a
-        second, initially-pending Promise — promise 2. Calling
-        <code>.then(callback2)</code> on <em>that</em> registers
-        <code>callback2</code> for when promise 2 fulfills, and returns
-        promise 3. All of this setup happens synchronously the moment the
-        expression executes; only afterward does the asynchronous wait for
-        the network begin. When promise 1 eventually fulfills with a
-        <code>Response</code> object, <code>callback1</code> runs ("task 2"
-        begins); whatever it returns becomes the fulfillment value of promise
-        2, which in turn triggers <code>callback2</code> ("task 3"). A naive
-        but common mistake is to nest instead of chain:
+        Let's walk through it step by step. <code>fetch()</code> kicks off
+        the HTTP request ("task 1") and immediately hands back promise 1.
+        Calling <code>.then(callback1)</code> registers
+        <code>callback1</code> to run once promise 1 fulfills, and right
+        away (synchronously) returns a second, initially-pending Promise —
+        promise 2. Calling <code>.then(callback2)</code> on <em>that</em>
+        registers <code>callback2</code> for when promise 2 fulfills, and
+        returns promise 3. All of this setup happens synchronously the
+        instant the expression runs; only afterward does the actual async
+        wait for the network kick in. When promise 1 eventually fulfills
+        with a <code>Response</code> object, <code>callback1</code> runs
+        ("task 2" begins); whatever it returns becomes promise 2's
+        fulfillment value, which in turn kicks off <code>callback2</code>
+        ("task 3"). A common rookie mistake here is nesting instead of
+        chaining:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// Naive: nested, exactly like callback hell, and defeats the purpose
@@ -452,45 +458,45 @@ fetch("/api/user/profile")
 
       <h3 id="resolved-vs-fulfilled">13.2.3 Resolving Promises — "resolved" vs. "fulfilled" <span class="badge hard">Deep dive</span></h3>
       <p>
-        This is the single trickiest piece of terminology in the whole
-        Promise model, and understanding it precisely is what separates
-        "I can use <code>.then()</code>" from "I understand what's actually
-        happening." The key claim: <strong>a Promise can be resolved without
-        yet being fulfilled.</strong> "Resolved" and "fulfilled" are not
-        synonyms.
+        This is the single trickiest bit of terminology in the whole Promise
+        model, and getting it straight is what separates "I can use
+        <code>.then()</code>" from "I actually understand what's going on."
+        Here's the key claim: <strong>a Promise can be resolved without yet
+        being fulfilled.</strong> "Resolved" and "fulfilled" are not the same
+        thing, even though people use them interchangeably all the time.
       </p>
       <p>
         Here's the mechanism. When you pass a callback <code>c</code> to
         <code>.then()</code>, it returns a new Promise <code>p</code> and
-        arranges to invoke <code>c</code> later. Whatever <code>c</code>
-        returns, call it <code>v</code>, becomes the thing that
+        sets things up to invoke <code>c</code> later. Whatever <code>c</code>
+        returns — call it <code>v</code> — becomes the thing that
         <em>resolves</em> <code>p</code>:
       </p>
       <ul>
         <li>
           If <code>v</code> is an ordinary, non-Promise value, <code>p</code>
-          is resolved <em>and</em> immediately fulfilled with
-          <code>v</code>. In the overwhelmingly common case these two things
-          happen in the same instant, which is exactly why the distinction
-          usually doesn't matter and why the two words get used loosely as
-          synonyms.
+          gets resolved <em>and</em> immediately fulfilled with
+          <code>v</code>. Almost always, these two things happen in the
+          exact same instant — which is exactly why the distinction usually
+          doesn't matter, and why people get away with using the two words
+          loosely as synonyms.
         </li>
         <li>
           But if <code>v</code> is itself a Promise (or any thenable), then
-          <code>p</code> becomes resolved — meaning it is now permanently
+          <code>p</code> becomes resolved — meaning it's now permanently
           "locked onto" <code>v</code> — but it is <strong>not yet
-          fulfilled</strong>. <code>p</code> cannot settle until
-          <code>v</code> settles. Once <code>v</code> fulfills, <code>p</code>
-          fulfills to the same value; if <code>v</code> rejects, <code>p</code>
-          rejects for the same reason. <code>p</code> sits in this
-          resolved-but-pending limbo for as long as <code>v</code> takes to
+          fulfilled</strong>. <code>p</code> can't settle until <code>v</code>
+          does. Once <code>v</code> fulfills, <code>p</code> fulfills to the
+          same value; if <code>v</code> rejects, <code>p</code> rejects for
+          the same reason. <code>p</code> just sits in this
+          resolved-but-pending limbo for however long <code>v</code> takes to
           settle.
         </li>
       </ul>
       <p>
-        Trace it through the classic <code>fetch()</code> chain, naming every
-        Promise involved — including the one produced by
-        <code>response.json()</code>, which is easy to overlook:
+        Let's trace it through the classic <code>fetch()</code> chain,
+        naming every Promise involved — including the one produced by
+        <code>response.json()</code>, which is easy to miss:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function c1(response) {         // callback 1
@@ -511,11 +517,11 @@ let p3 = p2.then(c2);                 // promise 3, task 3</code></pre>
         fulfilled, so <code>c2</code> (task 3) does <em>not</em> run yet.
         Only once the HTTP response body has fully arrived and
         <code>.json()</code> finishes parsing it does <code>p4</code>
-        fulfill; at that instant, promise 2 automatically fulfills to the
-        same parsed value, and only then does <code>c2</code> finally run.
-        This is the entire mechanism that lets a chain "wait" for an inner
-        asynchronous step without you writing any explicit waiting logic —
-        returning a Promise from a <code>.then()</code> callback is itself
+        fulfill; at that exact instant, promise 2 automatically fulfills to
+        the same parsed value, and only then does <code>c2</code> finally
+        run. This is the whole mechanism that lets a chain "wait" for an
+        inner async step without you writing any explicit waiting logic —
+        returning a Promise from a <code>.then()</code> callback <em>is</em>
         the wait.
       </p>
       <div class="admonition warning">
@@ -542,11 +548,11 @@ outer.then(v => console.log("outer fulfilled with:", v));
         <p>
           <code>outer</code> became resolved the instant its callback
           returned <code>inner</code>, well before <code>inner</code> itself
-          had fulfilled. For that entire one-second gap, <code>outer</code> is
-          resolved but still pending — a state <code>outer.then()</code>
-          alone can't distinguish from "not yet resolved at all," which is
-          exactly why the distinction is subtle: from the outside, both look
-          like "still waiting."
+          had fulfilled. For that whole one-second gap, <code>outer</code> is
+          resolved but still pending — a state <code>outer.then()</code> on
+          its own can't tell apart from "not resolved at all yet," which is
+          exactly why this distinction is subtle: from the outside, both
+          just look like "still waiting."
         </p>
       </div>
       <div class="admonition note">
@@ -557,16 +563,18 @@ outer.then(v => console.log("outer fulfilled with:", v));
           <code>fulfill</code> and <code>reject</code>, and why the static
           helper is <code>Promise.resolve()</code> rather than
           "<code>Promise.fulfill()</code>." Calling <code>resolve(v)</code>
-          with a plain value fulfills immediately; calling
-          <code>resolve(otherPromise)</code> only resolves — the real outcome
-          is deferred to whatever <code>otherPromise</code> eventually does.
+          with a plain value fulfills right away; calling
+          <code>resolve(otherPromise)</code> only resolves — the real
+          outcome gets deferred to whatever <code>otherPromise</code>
+          eventually does.
         </p>
       </div>
 
       <h3 id="promise-errors">13.2.4 More on Promises and errors</h3>
       <p>
         A callback passed to <code>.then()</code> (or <code>.catch()</code>)
-        can end in exactly three ways, and each maps to one Promise outcome:
+        can end in exactly three ways, and each one maps to a Promise
+        outcome:
       </p>
       <div class="table-wrap">
         <table>
@@ -577,7 +585,7 @@ outer.then(v => console.log("outer fulfilled with:", v));
         </table>
       </div>
       <p>
-        A realistic chain exercises all three paths:
+        A realistic chain hits all three paths:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">fetch("/api/user/profile")
@@ -604,30 +612,30 @@ outer.then(v => console.log("outer fulfilled with:", v));
   });</code></pre>
       </div>
       <p>
-        If the network is down, <code>fetch()</code>'s own Promise rejects
-        with a <code>NetworkError</code>, which — since no rejection handler
-        is attached at that stage — skips straight through to
+        If the network's down, <code>fetch()</code>'s own Promise rejects
+        with a <code>NetworkError</code>, which — since there's no rejection
+        handler attached at that stage — skips straight through to
         <code>.catch()</code>. If the server returns a 404,
-        <code>response.ok</code> is false but this is still a
-        <em>successful</em> HTTP exchange as far as <code>fetch()</code> is
-        concerned, so the first <code>.then()</code> runs, returns
-        <code>null</code>, and the second <code>.then()</code> handles that
-        gracefully — no error handling required. If the content type is
-        wrong, the explicit <code>throw</code> rejects the Promise that stage
-        produced, which skips the second <code>.then()</code> entirely and
-        lands in <code>.catch()</code>. Notice that a synchronous
+        <code>response.ok</code> is false, but as far as <code>fetch()</code>
+        is concerned this is still a <em>successful</em> HTTP exchange, so
+        the first <code>.then()</code> runs, returns <code>null</code>, and
+        the second <code>.then()</code> handles that gracefully — no error
+        handling needed. If the content type is wrong, the explicit
+        <code>throw</code> rejects the Promise that stage produced, which
+        skips the second <code>.then()</code> entirely and lands in
+        <code>.catch()</code>. Notice that a plain synchronous
         <code>throw</code> statement written directly in your code ends up
-        being caught by an <em>asynchronous</em> <code>.catch()</code> — this
-        is the payoff of the whole design.
+        getting caught by an <em>asynchronous</em> <code>.catch()</code> —
+        that's the whole payoff of this design.
       </p>
       <div class="admonition tip">
         <div class="admonition-title">.catch() mid-chain: recover and keep going</div>
         <p>
           A <code>.catch()</code> doesn't have to be the last link in a
-          chain. Insert one wherever a failure is recoverable, and — provided
-          it returns normally rather than rethrowing — later
-          <code>.then()</code> stages resume running with its return value as
-          input, exactly as if the earlier stage had never failed:
+          chain. Drop one in wherever a failure is recoverable, and — as
+          long as it returns normally instead of rethrowing — the later
+          <code>.then()</code> stages just pick back up using its return
+          value as input, exactly as if the earlier stage had never failed:
         </p>
         <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">queryDatabase()
@@ -637,8 +645,8 @@ outer.then(v => console.log("outer fulfilled with:", v));
         </div>
         <p>
           If <code>recoverFromError</code> (here, the retry) itself throws,
-          the error continues past the next <code>.then()</code> to the
-          following <code>.catch()</code>. Only an uncaught rejection
+          the error just keeps going past the next <code>.then()</code> to
+          the following <code>.catch()</code>. Only an uncaught rejection
           propagates further down the chain — once a <code>.catch()</code>
           callback returns normally, the error stops there.
         </p>
@@ -646,12 +654,12 @@ outer.then(v => console.log("outer fulfilled with:", v));
       <div class="admonition warning">
         <div class="admonition-title">The most common Promise bug: forgetting to return</div>
         <p>
-          Arrow function shorthand is a frequent trap here. Omitting the
-          curly braces makes the expression's value an implicit return; adding
-          braces switches back to needing an explicit <code>return</code>
-          statement, and it's easy to add braces (say, to add a
-          <code>console.log</code>) without remembering to add the
-          <code>return</code> too:
+          Arrow function shorthand trips people up a lot here. Skip the curly
+          braces and the expression's value becomes an implicit return; add
+          braces and you're back to needing an explicit <code>return</code>
+          statement — and it's really easy to add braces (say, to sneak in a
+          <code>console.log</code>) and forget to add the
+          <code>return</code> back:
         </p>
         <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">.catch(e => wait(500).then(queryDatabase))       // correct: implicit return
@@ -664,9 +672,9 @@ outer.then(v => console.log("outer fulfilled with:", v));
 
       <h3 id="parallel">13.2.5 Promises in parallel</h3>
       <p>
-        Chains express a fixed sequence of steps. To run an arbitrary number
-        of independent asynchronous operations concurrently and wait for the
-        group, use one of the four combinator functions:
+        Chains express a fixed sequence of steps. But if you want to run any
+        number of independent async operations at the same time and wait for
+        the whole group, reach for one of the four combinator functions:
       </p>
       <div class="table-wrap">
         <table>
@@ -692,28 +700,28 @@ Promise.allSettled([Promise.resolve(1), Promise.reject(2), 3]).then(results => {
 });</code></pre>
       </div>
       <p>
-        <code>Promise.all()</code>'s array argument may freely mix real
-        Promises with plain values; a plain value is treated as already
-        fulfilled and copied through unchanged. Use
+        <code>Promise.all()</code>'s array argument can freely mix real
+        Promises with plain values; a plain value just gets treated as
+        already fulfilled and passed through unchanged. Reach for
         <code>Promise.allSettled()</code> instead of <code>Promise.all()</code>
-        whenever partial failure is acceptable and you want every outcome
-        rather than having one failure short-circuit the rest.
-        <code>Promise.race()</code> is for "whichever finishes first wins" —
-        for example, racing a real request against a timeout Promise.
-        <code>Promise.any()</code> is the fulfillment-only version of race:
-        useful for "try several redundant servers, use whichever answers
-        first, and only fail if literally all of them fail."
+        whenever partial failure is fine and you want every outcome instead
+        of one failure short-circuiting the rest. <code>Promise.race()</code>
+        is for "whichever finishes first wins" — say, racing a real request
+        against a timeout Promise. <code>Promise.any()</code> is basically
+        the fulfillment-only version of race: handy for "try several
+        redundant servers, use whichever answers first, and only fail if
+        literally all of them fail."
       </p>
 
       <h3 id="making-promises">13.2.6 Making (creating) Promises</h3>
       <p>
-        There are three distinct techniques for producing a Promise,
+        There are three different techniques for producing a Promise,
         depending on what you're starting from.
       </p>
       <h4 id="promises-from-promises">Promises based on other Promises</h4>
       <p>
         If you already have a Promise-returning function, wrapping more
-        logic around it is just <code>.then()</code>:
+        logic around it is just <code>.then()</code>, nothing fancier:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function getJSON(url) {
@@ -725,18 +733,18 @@ function getHighScore() {
 }</code></pre>
       </div>
       <p>
-        <code>getJSON()</code> has no error handling of its own here — it
-        simply lets a bad HTTP status or malformed JSON body reject the
-        Promise <code>.json()</code> already produces, and that rejection
-        propagates through automatically.
+        <code>getJSON()</code> doesn't do any error handling of its own here
+        — it just lets a bad HTTP status or malformed JSON body reject the
+        Promise that <code>.json()</code> already produces, and that
+        rejection just propagates through on its own.
       </p>
       <h4 id="promises-from-values">Promises based on synchronous values</h4>
       <p>
         <code>Promise.resolve(v)</code> and <code>Promise.reject(v)</code>
-        wrap an already-known value as an already-decided Promise — useful
-        when a function must always return a Promise (to satisfy a
-        Promise-based interface) but sometimes has a synchronous fast path or
-        needs to report a synchronously-detectable error:
+        wrap an already-known value as an already-decided Promise — handy
+        when a function has to always return a Promise (to satisfy some
+        Promise-based interface) but sometimes has a synchronous fast path,
+        or needs to report an error it can detect synchronously:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function cachedFetch(url) {
@@ -752,32 +760,31 @@ function getHighScore() {
       <div class="admonition tip">
         <div class="admonition-title">Prefer Promise.reject() over throwing synchronously</div>
         <p>
-          If you detect a bad argument before starting any async work, it's
+          If you spot a bad argument before starting any async work, it's
           tempting to just <code>throw</code> right away. But then callers of
-          your "Promise-based" function must handle errors two different
+          your "Promise-based" function have to handle errors two different
           ways — a synchronous <code>try/catch</code> for the up-front case,
-          and an asynchronous <code>.catch()</code> for everything else.
-          Returning <code>Promise.reject(new Error(...))</code> keeps the
+          and an async <code>.catch()</code> for everything else. Returning
+          <code>Promise.reject(new Error(...))</code> instead keeps the
           error-handling path uniform.
         </p>
       </div>
       <p>
-        Note that even <code>Promise.resolve()</code> and
+        Worth noting: even <code>Promise.resolve()</code> and
         <code>Promise.reject()</code> settle asynchronously — the callbacks
-        you attach still don't run in the same synchronous turn, only "soon"
-        (typically within microseconds, as a microtask; see the event loop
-        section below).
+        you attach still won't run in the same synchronous turn, just "soon"
+        (typically within microseconds, as a microtask; more on that in the
+        event loop section below).
       </p>
       <h4 id="promises-from-scratch">Promises from scratch: the Promise() constructor</h4>
       <p>
-        To build a Promise around an API that offers neither a
+        To build a Promise around an API that gives you neither a
         Promise-returning function nor a synchronous value to start from —
-        typically an old-style callback or event API — use the
-        <code>Promise</code> constructor directly. It synchronously invokes
-        the function you pass it, supplying two functions,
-        <code>resolve</code> and <code>reject</code>, that you call whenever
-        (and from wherever, even deeply nested inside other callbacks) the
-        outcome becomes known:
+        typically an old-style callback or event API — reach for the
+        <code>Promise</code> constructor directly. It synchronously runs the
+        function you pass it, handing you two functions, <code>resolve</code>
+        and <code>reject</code>, that you call whenever (and from wherever,
+        even buried deep inside other callbacks) the outcome becomes known:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function wait(duration) {
@@ -791,9 +798,9 @@ function getHighScore() {
 }</code></pre>
       </div>
       <p>
-        A fuller example wraps Node's callback- and event-based
+        Here's a fuller example that wraps Node's callback- and event-based
         <code>http</code> module into a Promise-returning
-        <code>getJSON()</code>, demonstrating the constructor pattern end to
+        <code>getJSON()</code>, showing off the constructor pattern end to
         end — including making sure every failure path calls
         <code>reject()</code> exactly once:
       </p>
@@ -831,10 +838,10 @@ function getJSON(url) {
         <p>
           The parameter names are always <code>resolve</code> and
           <code>reject</code> by convention, never <code>fulfill</code> —
-          consistent with the resolved-vs-fulfilled distinction above. If you
-          call <code>resolve(anotherPromise)</code>, the Promise you're
-          building only resolves, locking onto that inner Promise, rather
-          than fulfilling outright.
+          consistent with the resolved-vs-fulfilled distinction we covered
+          above. If you call <code>resolve(anotherPromise)</code>, the
+          Promise you're building only resolves, locking onto that inner
+          Promise, instead of fulfilling outright.
         </p>
       </div>
 
@@ -842,10 +849,10 @@ function getJSON(url) {
       <p>
         <code>Promise.all()</code> covers a known, fixed-size batch of
         parallel work, and a hand-written chain covers a known, fixed number
-        of sequential steps. Running an <em>arbitrary-length</em> array of
-        operations strictly one-at-a-time — say, fetching URLs sequentially
-        to avoid overloading a connection — needs a chain built dynamically
-        at runtime:
+        of sequential steps. But running an <em>arbitrary-length</em> array
+        of operations strictly one at a time — say, fetching URLs
+        sequentially so you don't overload a connection — needs a chain
+        built dynamically at runtime:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function fetchSequentially(urls) {
@@ -865,13 +872,14 @@ function getJSON(url) {
 }</code></pre>
       </div>
       <p>
-        This builds a chain of Promises up front, like a row of dominoes, and
-        then lets it fall. A more general version, <code>promiseSequence()</code>,
-        takes any array of inputs and a Promise-returning
-        <code>promiseMaker</code> function, and instead of building the chain
-        up front, has each stage's callback create and return the
-        <em>next</em> stage's Promise — resolving Promises to further
-        Promises like nested dolls rather than a flat chain:
+        This builds a chain of Promises up front, like lining up dominoes,
+        and then lets it fall. A more general version,
+        <code>promiseSequence()</code>, takes any array of inputs plus a
+        Promise-returning <code>promiseMaker</code> function, and instead of
+        building the whole chain up front, has each stage's callback create
+        and return the <em>next</em> stage's Promise — resolving Promises to
+        further Promises like a set of nested dolls rather than a flat
+        chain:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function promiseSequence(inputs, promiseMaker) {
@@ -900,15 +908,15 @@ promiseSequence(urls, fetchBody)
 
       <h2 id="event-loop">The event loop: microtasks vs. macrotasks <span class="badge hard">Deep dive</span></h2>
       <p>
-        Every one of the guarantees above — "a <code>.then()</code> callback
-        never runs synchronously," "errors trickle down the chain" — is
-        implemented on top of a single-threaded runtime's <strong>event
-        loop</strong>. JavaScript has exactly one thread of execution. When
-        there's no code currently running, the event loop pulls the next
-        pending job off a queue and runs it to completion before pulling the
-        next one. The trick — and the source of a lot of confusion — is that
-        there are effectively <em>two</em> queues, checked with different
-        priority:
+        Every guarantee we've mentioned so far — "a <code>.then()</code>
+        callback never runs synchronously," "errors trickle down the chain"
+        — is actually built on top of a single-threaded runtime's
+        <strong>event loop</strong>. JavaScript has exactly one thread of
+        execution. Whenever there's no code currently running, the event
+        loop grabs the next pending job off a queue and runs it to
+        completion before grabbing the next one. The trick — and the source
+        of a ton of confusion — is that there are effectively <em>two</em>
+        queues, checked with different priority:
       </p>
       <ul>
         <li>
@@ -924,13 +932,13 @@ promiseSequence(urls, fetchBody)
         </li>
       </ul>
       <p>
-        The rule that explains almost every "why did this run in that order?"
-        surprise: after each single macrotask finishes running, the event
-        loop drains the <em>entire</em> microtask queue — including any new
-        microtasks that were themselves queued while draining it — before it
-        is allowed to move on and run even one more macrotask. Microtasks
-        always win the race against macrotasks, no matter how small the
-        macrotask's delay was set to.
+        Here's the rule that explains almost every "wait, why did this run
+        in that order?" surprise: after each single macrotask finishes
+        running, the event loop drains the <em>entire</em> microtask queue —
+        including any new microtasks that got queued while it was draining —
+        before it's allowed to move on and run even one more macrotask.
+        Microtasks always win the race against macrotasks, no matter how
+        tiny the macrotask's delay was set to.
       </p>
       <div class="admonition warning">
         <div class="admonition-title">Worked example 1: a resolved Promise beats setTimeout(fn, 0)</div>
@@ -950,15 +958,16 @@ console.log("4: script end");
 // 2: setTimeout callback</code></pre>
         </div>
         <p>
-          The synchronous script body ("1" and "4") always runs first and
-          completely, uninterrupted — that's just ordinary single-threaded
-          execution. Once that top-level script finishes, the engine drains
-          the microtask queue before touching the macrotask queue, so the
-          Promise callback ("3") runs before the timer callback ("2") even
-          though the timer was <em>scheduled</em> first and asked for zero
-          delay. A <code>setTimeout</code> delay of <code>0</code> does not
-          mean "immediately" — it means "as soon as possible, but only after
-          the current macrotask and the entire microtask queue are done."
+          The synchronous script body ("1" and "4") always runs first, all
+          the way through, uninterrupted — that's just ordinary
+          single-threaded execution. Once that top-level script finishes,
+          the engine drains the microtask queue before it even looks at the
+          macrotask queue, so the Promise callback ("3") runs before the
+          timer callback ("2"), even though the timer was
+          <em>scheduled</em> first and asked for zero delay. A
+          <code>setTimeout</code> delay of <code>0</code> doesn't mean
+          "immediately" — it means "as soon as possible, but only after the
+          current macrotask and the entire microtask queue are done."
         </p>
       </div>
       <div class="admonition warning">
@@ -981,54 +990,55 @@ console.log("G");
 // Console output, in order: A, G, C, F, D, B, E</code></pre>
         </div>
         <p>
-          Both synchronous logs ("A", "G") run first. Then <em>all</em>
+          Both synchronous logs ("A", "G") run first. Then <em>all</em> the
           currently-queued microtasks run before either timer fires: "C" and
-          "F" were both queued during the synchronous pass, so they run
-          first, in the order they were queued. "D" was only queued once
+          "F" were both queued during the synchronous pass, so they go
+          first, in the order they were queued. "D" only got queued once
           "C"'s callback actually ran — but since it's still a microtask, it
-          still finishes before the engine is allowed to touch the macrotask
-          queue. Only once the microtask queue is completely empty do the two
-          <code>setTimeout</code> callbacks run, in the order they were
+          still finishes before the engine's allowed to touch the macrotask
+          queue. Only once the microtask queue is completely empty do the
+          two <code>setTimeout</code> callbacks run, in the order they were
           scheduled: "B" then "E".
         </p>
       </div>
       <div class="admonition tip">
         <div class="admonition-title">Why this matters in practice</div>
         <p>
-          You rarely need to reason about this explicitly when writing
+          You'll rarely need to reason about this explicitly when writing
           straight-line <code>async</code>/<code>await</code> code. But it
-          explains real bugs: code that assumes a <code>setTimeout(fn, 0)</code>
-          runs "before any Promise callback that was already pending" will be
-          surprised, and libraries sometimes deliberately wrap a synchronous
-          callback in <code>Promise.resolve().then(...)</code> specifically
-          to force it to run asynchronously but still ahead of any pending
-          timers.
+          explains real bugs: code that assumes a
+          <code>setTimeout(fn, 0)</code> runs "before any Promise callback
+          that was already pending" is in for a surprise, and libraries
+          sometimes deliberately wrap a synchronous callback in
+          <code>Promise.resolve().then(...)</code> specifically to force it
+          to run asynchronously but still ahead of any pending timers.
         </p>
       </div>
 
       <h2 id="async-await">13.3 async and await</h2>
       <p>
         ES2017 added two keywords, <code>async</code> and <code>await</code>,
-        that don't add any new asynchronous capability — everything they do
-        was already expressible with Promises — but they let you write
+        that don't actually add any new async capability — everything they
+        do was already possible with Promises — but they let you write
         Promise-based code that reads top-to-bottom like ordinary blocking
-        code, including using real <code>try</code>/<code>catch</code> for
-        errors. Under the hood it's still Promises and the same event loop
-        described above; <code>async</code>/<code>await</code> is
-        purely syntax.
+        code, including real <code>try</code>/<code>catch</code> for errors.
+        Under the hood it's still Promises and the same event loop we just
+        went over; <code>async</code>/<code>await</code> is purely syntax
+        sugar.
       </p>
 
       <h3 id="await-expressions">13.3.1 await expressions</h3>
       <p>
-        <code>await</code> takes a Promise (or Promise-returning expression)
-        and converts it back into an ordinary value or a thrown exception:
-        given a Promise <code>p</code>, <code>await p</code> pauses until
-        <code>p</code> settles. If <code>p</code> fulfills, the whole
-        expression evaluates to its fulfillment value. If <code>p</code>
-        rejects, the expression <em>throws</em> the rejection value, right
-        there, as if it were a synchronous <code>throw</code>. You'll almost
-        always see <code>await</code> placed directly before a function call
-        that returns a Promise, rather than a variable already holding one:
+        <code>await</code> takes a Promise (or a Promise-returning
+        expression) and turns it back into an ordinary value or a thrown
+        exception: given a Promise <code>p</code>, <code>await p</code>
+        pauses until <code>p</code> settles. If <code>p</code> fulfills, the
+        whole expression evaluates to its fulfillment value. If <code>p</code>
+        rejects, the expression <em>throws</em> the rejection value right
+        there, as if it were a plain synchronous <code>throw</code>. You'll
+        almost always see <code>await</code> placed directly in front of a
+        function call that returns a Promise, rather than a variable already
+        holding one:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">let response = await fetch("/api/user/profile");
@@ -1037,16 +1047,16 @@ let profile = await response.json();</code></pre>
       <div class="admonition warning">
         <div class="admonition-title">await does NOT block the thread</div>
         <p>
-          This is the most important thing to internalize about
-          <code>await</code>: it does not freeze the program waiting for the
-          Promise. The enclosing function's execution genuinely pauses and
-          hands control back to the caller / event loop immediately; other
-          code keeps running while the awaited Promise is pending. "Async
-          code that reads like sync code" is a readability illusion the
-          language is giving you — underneath, it's exactly as non-blocking
-          as the equivalent <code>.then()</code> chain. Any function
-          containing an <code>await</code> is, by definition, itself
-          asynchronous.
+          This is the single most important thing to get about
+          <code>await</code>: it does not freeze the program while it waits
+          on the Promise. The enclosing function genuinely pauses its own
+          execution and hands control straight back to the caller / event
+          loop; other code keeps running while the awaited Promise is
+          pending. "Async code that reads like sync code" is a readability
+          illusion the language is giving you — underneath, it's exactly as
+          non-blocking as the equivalent <code>.then()</code> chain. Any
+          function containing an <code>await</code> is, by definition,
+          itself asynchronous.
         </p>
       </div>
 
@@ -1054,10 +1064,10 @@ let profile = await response.json();</code></pre>
       <p>
         <code>await</code> is only legal inside a function declared
         <code>async</code> (with one exception — top-level await, covered
-        below). Declaring a function <code>async</code> guarantees it returns
-        a Promise, even if nothing inside its body looks Promise-related: a
-        normal <code>return value</code> fulfills that Promise with
-        <code>value</code>, and a thrown exception rejects it.
+        below). Declaring a function <code>async</code> guarantees it
+        returns a Promise, even if nothing inside its body looks
+        Promise-related: a normal <code>return value</code> fulfills that
+        Promise with <code>value</code>, and a thrown exception rejects it.
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">async function getHighScore() {
@@ -1078,8 +1088,8 @@ async function getHighScoreSafely() {
       </div>
       <p>
         Because <code>getHighScore()</code> returns a Promise, code that
-        isn't itself <code>async</code> still consumes it the old way, with
-        <code>.then()</code>/<code>.catch()</code>:
+        isn't itself <code>async</code> can still consume it the old way,
+        with <code>.then()</code>/<code>.catch()</code>:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">getHighScore().then(displayHighScore).catch(console.error);</code></pre>
@@ -1093,8 +1103,8 @@ async function getHighScoreSafely() {
       </p>
       <h4 id="async-await-desugaring">How it desugars</h4>
       <p>
-        Conceptually, an <code>async function f(x) { body }</code> behaves as
-        if it had been written as a plain function that wraps its body in a
+        Conceptually, an <code>async function f(x) { body }</code> behaves
+        as if it were written as a plain function that wraps its body in a
         <code>Promise</code> constructor and a <code>try/catch</code>:
       </p>
       <div class="code-block" data-lang="JavaScript">
@@ -1110,9 +1120,9 @@ async function getHighScoreSafely() {
       </div>
       <p>
         <code>await</code> itself is harder to express as a literal source
-        transform, but it helps to think of each <code>await</code> as a
+        transform, but it helps to picture each <code>await</code> as a
         marker that slices the function body into separate synchronous
-        chunks — the engine effectively turns each chunk into its own
+        chunks — the engine basically turns each chunk into its own
         callback, handed to <code>.then()</code> on the Promise that the
         preceding <code>await</code> was waiting on. In other words,
         <code>async</code>/<code>await</code> really is "just" a Promise
@@ -1125,7 +1135,8 @@ async function getHighScoreSafely() {
       <p>
         Because each <code>await</code> pauses the function until that one
         Promise settles, writing two independent awaits back-to-back
-        accidentally serializes work that had no reason to be sequential:
+        accidentally serializes work that never needed to be sequential in
+        the first place:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">async function getJSON(url) {
@@ -1140,8 +1151,8 @@ let value2 = await getJSON(url2);</code></pre>
       <p>
         If <code>url2</code>'s fetch doesn't depend on <code>value1</code>,
         both requests should be in flight at the same time. The fix is the
-        same <code>Promise.all()</code> combinator from earlier, used with
-        <code>await</code>:
+        same <code>Promise.all()</code> combinator from earlier, just used
+        alongside <code>await</code>:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// FAST: both requests start immediately; we only wait once, for both together
@@ -1150,12 +1161,12 @@ let [value1, value2] = await Promise.all([getJSON(url1), getJSON(url2)]);</code>
       <div class="admonition warning">
         <div class="admonition-title">A second trap: await inside .map() silently does nothing</div>
         <p>
-          <code>Array.prototype.map()</code> has no idea its callback is
+          <code>Array.prototype.map()</code> has zero idea its callback is
           <code>async</code>; it just collects whatever the callback
           returns. An <code>async</code> callback always returns a Promise,
-          so <code>.map()</code> with an <code>async</code> callback produces
-          an array <em>of Promises</em>, not an array of resolved values —
-          and if you forget that, code downstream silently receives
+          so <code>.map()</code> with an <code>async</code> callback gives
+          you back an array <em>of Promises</em>, not an array of resolved
+          values — and if you forget that, code downstream silently gets
           <code>[Promise, Promise, Promise]</code> instead of real data:
         </p>
         <div class="code-block" data-lang="JavaScript">
@@ -1182,16 +1193,16 @@ for (const url of urls) {
       <div class="admonition warning">
         <div class="admonition-title">Unhandled rejections</div>
         <p>
-          If a Promise rejects and nothing is attached to observe that
+          If a Promise rejects and nothing's attached to observe that
           rejection — no <code>.catch()</code>, no <code>await</code> inside
           a <code>try</code> — the runtime reports it as an <em>unhandled
           promise rejection</em>. In a browser this fires a
-          <code>window.onunhandledrejection</code> event and typically logs a
+          <code>window.onunhandledrejection</code> event and usually logs a
           console warning; in Node, unhandled rejections can (depending on
-          version and configuration) crash the process. A common way this
-          happens by accident: calling an <code>async</code> function
-          without <code>await</code>-ing or otherwise attaching a handler to
-          its returned Promise ("fire and forget"), when that function can
+          version and config) actually crash the process. A common way this
+          sneaks up on you: calling an <code>async</code> function without
+          <code>await</code>-ing it or otherwise attaching a handler to its
+          returned Promise ("fire and forget"), when that function can
           actually fail:
         </p>
         <div class="code-block" data-lang="JavaScript">
@@ -1209,11 +1220,11 @@ function onKeyupFixed() {
 
       <h3 id="top-level-await">Top-level await <span class="badge new">ES2022</span></h3>
       <p>
-        Ordinarily <code>await</code> requires an enclosing <code>async</code>
-        function. As of ES2022, JavaScript modules are an exception: you may
-        use <code>await</code> directly at the top level of a module file (not
-        inside any function), which is useful for one-time setup that itself
-        depends on an asynchronous resource:
+        Normally <code>await</code> needs an enclosing <code>async</code>
+        function. As of ES2022, JavaScript modules get an exception: you can
+        use <code>await</code> directly at the top level of a module file
+        (not inside any function), which comes in handy for one-time setup
+        that itself depends on an async resource:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// config.js -- an ES module
@@ -1221,31 +1232,32 @@ const response = await fetch("/api/config");
 export const config = await response.json();</code></pre>
       </div>
       <p>
-        A module that uses top-level <code>await</code> delays anything that
-        imports it until the awaited Promise settles — the importing module's
-        own evaluation effectively waits its turn. See
-        <a href="09-modules.html">Modules</a> for how module evaluation order
-        and this delay interact when several modules in a dependency graph
-        each use top-level await.
+        A module that uses top-level <code>await</code> holds up anything
+        that imports it until the awaited Promise settles — the importing
+        module's own evaluation basically waits its turn. See
+        <a href="09-modules.html">Modules</a> for how module evaluation
+        order and this delay interact when several modules in a dependency
+        graph each use top-level await.
       </p>
 
       <h2 id="async-iteration">13.4 Asynchronous iteration</h2>
       <p>
-        Promises and <code>await</code> handle a single asynchronous result.
-        Neither is a good fit for a <em>stream</em> of asynchronous values
-        arriving one after another — a Node readable stream's "data" events,
-        or a live sequence of user input events. ES2018 fills that gap with
-        asynchronous iterators and a new loop form, <code>for await...of</code>,
-        that pairs with them the way the ordinary <code>for...of</code> loop
-        pairs with the synchronous iteration protocol from
+        Promises and <code>await</code> handle a single async result.
+        Neither one is a great fit for a <em>stream</em> of async values
+        arriving one after another — think a Node readable stream's "data"
+        events, or a live sequence of user input events. ES2018 fills that
+        gap with async iterators and a new loop form,
+        <code>for await...of</code>, that pairs with them the same way the
+        ordinary <code>for...of</code> loop pairs with the synchronous
+        iteration protocol from
         <a href="13-iterators-generators.html">Iterators &amp; Generators</a>.
       </p>
 
       <h3 id="for-await">13.4.1 The for/await loop</h3>
       <p>
-        Node's readable streams are asynchronously iterable out of the box,
-        so you can pull successive chunks with a loop instead of a "data"
-        event listener:
+        Node's readable streams are asynchronously iterable right out of the
+        box, so you can pull successive chunks with a loop instead of a
+        "data" event listener:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">const fs = require("fs");
@@ -1259,10 +1271,10 @@ async function parseFile(filename) {
       </div>
       <p>
         Like a plain <code>await</code>, <code>for await...of</code> is only
-        legal inside an <code>async</code> function. It's also worth knowing
-        that <code>for await...of</code> tolerates an <em>ordinary</em>
+        legal inside an <code>async</code> function. Also worth knowing:
+        <code>for await...of</code> is fine with an <em>ordinary</em>
         synchronously-iterable array whose elements happen to be Promises —
-        it will just <code>await</code> each one for you as it goes:
+        it'll just <code>await</code> each one for you as it goes:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">const urls = [url1, url2, url3];
@@ -1275,56 +1287,56 @@ for await (const response of promises) {
       </div>
       <p>
         That's convenient shorthand, but it's a different thing from a
-        <em>truly</em> asynchronous iterable, covered next — here the
-        <code>done</code>/finished-ness of the loop is decided
-        synchronously (the array's length is already known); only each
-        individual <code>value</code> happens to be a Promise.
+        <em>truly</em> async iterable, which we'll get to next — here the
+        <code>done</code>/finished-ness of the loop gets decided
+        synchronously (the array's length is already known); it's only each
+        individual <code>value</code> that happens to be a Promise.
       </p>
 
       <h3 id="async-iterators">13.4.2 Asynchronous iterators</h3>
       <p>
-        Recall the synchronous iteration protocol: an iterable object
-        implements <code>[Symbol.iterator]()</code>, which returns an
+        Quick recap of the synchronous iteration protocol: an iterable
+        object implements <code>[Symbol.iterator]()</code>, which returns an
         iterator object whose <code>next()</code> method returns
-        <code>{ value, done }</code> result objects directly. Asynchronous
+        <code>{ value, done }</code> result objects directly. Async
         iteration mirrors this with two changes:
       </p>
       <ul>
         <li>
           An asynchronously-iterable object implements
-          <code>[Symbol.asyncIterator]()</code> instead of (or in addition
-          to) <code>[Symbol.iterator]()</code>. <code>for await...of</code>
+          <code>[Symbol.asyncIterator]()</code> instead of (or alongside)
+          <code>[Symbol.iterator]()</code>. <code>for await...of</code>
           prefers <code>Symbol.asyncIterator</code> when both are present,
           falling back to <code>Symbol.iterator</code> otherwise (which is
-          exactly the array-of-Promises case above).
+          exactly the array-of-Promises case from above).
         </li>
         <li>
-          The iterator's <code>next()</code> method returns a <em>Promise</em>
-          that resolves to a <code>{ value, done }</code> result object,
-          rather than returning that result object directly.
+          The iterator's <code>next()</code> method returns a
+          <em>Promise</em> that resolves to a <code>{ value, done }</code>
+          result object, instead of returning that result object directly.
         </li>
       </ul>
       <div class="admonition note">
         <div class="admonition-title">A subtle but real distinction</div>
         <p>
           With a synchronously-iterable array of Promises, only
-          <code>value</code> is asynchronous — <code>done</code> is decided
-          immediately. With a genuine async iterator, both are wrapped
-          together in one Promise, so even the decision of "are we
-          finished?" can itself depend on something asynchronous — useful
-          when you don't know in advance how many values there will be.
+          <code>value</code> is async — <code>done</code> gets decided right
+          away. With a genuine async iterator, both are wrapped together in
+          one Promise, so even the decision of "are we finished?" can itself
+          depend on something async — handy for when you don't know in
+          advance how many values there'll be.
         </p>
       </div>
 
       <h3 id="async-generators">13.4.3 Asynchronous generators</h3>
       <p>
-        Just as a regular generator (<code>function*</code>) is usually the
-        easiest way to implement a synchronous iterator, an async generator —
-        the combined syntax <code>async function*</code> — is usually the
-        easiest way to implement an async iterator. Inside its body you can
-        use both <code>await</code> (because it's <code>async</code>) and
-        <code>yield</code> (because it's a generator); every yielded value is
-        automatically wrapped in a Promise for you:
+        Just like a regular generator (<code>function*</code>) is usually
+        the easiest way to implement a synchronous iterator, an async
+        generator — the combined syntax <code>async function*</code> — is
+        usually the easiest way to implement an async iterator. Inside its
+        body you get to use both <code>await</code> (since it's
+        <code>async</code>) and <code>yield</code> (since it's a generator);
+        every yielded value gets automatically wrapped in a Promise for you:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function elapsedTime(ms) {
@@ -1348,16 +1360,16 @@ test();</code></pre>
 
       <h3 id="implementing-async-iterators">13.4.4 Implementing asynchronous iterators directly</h3>
       <p>
-        You don't have to use a generator; you can implement
+        You don't actually have to use a generator — you can implement
         <code>[Symbol.asyncIterator]()</code> and an <code>async next()</code>
-        method by hand. Doing so lets you fix a subtle flaw the generator
-        version above has: nothing stops eager code from calling
+        method by hand. Doing so lets you fix a subtle flaw in the generator
+        version above: nothing stops eager code from calling
         <code>next()</code> several times back-to-back before the first call
-        has resolved, which — with the interval-based generator — produces
-        several Promises that all fulfill at nearly the same moment instead
-        of at evenly-spaced times. A hand-written iterator can track an
-        absolute target time instead of a relative interval, and account for
-        however long each loop body actually took:
+        has resolved, which — with the interval-based generator — ends up
+        producing several Promises that all fulfill at nearly the same
+        moment instead of at evenly-spaced times. A hand-written iterator
+        can track an absolute target time instead of a relative interval,
+        accounting for however long each loop body actually took:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function clock(interval, max = Infinity) {
@@ -1381,17 +1393,17 @@ test();</code></pre>
 }</code></pre>
       </div>
       <p>
-        A <code>for await...of</code> loop always awaits the Promise from one
-        call to <code>next()</code> before requesting the next one, so this
-        particular timing bug only bites code that manually calls
-        <code>next()</code> outside of a <code>for await</code> loop. Harder
-        still is building an async iterator around a source that's driven by
-        an ordinary event callback (rather than something you can
+        A <code>for await...of</code> loop always awaits the Promise from
+        one call to <code>next()</code> before asking for the next one, so
+        this particular timing bug only bites code that manually calls
+        <code>next()</code> outside of a <code>for await</code> loop. Even
+        trickier is building an async iterator around a source driven by an
+        ordinary event callback (rather than something you can
         <code>setTimeout</code> yourself), because each call to
-        <code>next()</code> must hand back a distinct Promise, and several
-        calls to <code>next()</code> may arrive before the first has
-        anything to resolve with. The clean solution is to encapsulate a
-        queue of pending values and pending resolvers into a reusable
+        <code>next()</code> has to hand back a distinct Promise, and several
+        calls to <code>next()</code> might show up before the first one has
+        anything to resolve with. The clean solution is to wrap a queue of
+        pending values and pending resolvers into a reusable
         <code>AsyncQueue</code> class:
       </p>
       <div class="code-block" data-lang="JavaScript">
@@ -1450,16 +1462,16 @@ async function handleKeys() {
       <p>
         This is the general recipe for bridging any push-style, callback- or
         event-driven source into <code>for await...of</code>: enqueue values
-        as they arrive, and let <code>dequeue()</code> return an
-        already-resolved Promise if a value is already waiting, or a
-        not-yet-resolved one (whose <code>resolve</code> you stash for later)
-        if the consumer is asking faster than values are arriving.
+        as they show up, and let <code>dequeue()</code> return an
+        already-resolved Promise if a value's already waiting, or a
+        not-yet-resolved one (whose <code>resolve</code> you stash for
+        later) if the consumer's asking faster than values are arriving.
       </p>
       <div class="admonition tip">
         <div class="admonition-title">Async iteration is for one-at-a-time streams, not concurrency</div>
         <p>
           <code>for await...of</code> processes one value, fully, before
-          requesting the next — it's the async counterpart to
+          asking for the next — it's the async counterpart to
           <a href="13-iterators-generators.html">generators</a>, not a
           replacement for <code>Promise.all()</code> when what you actually
           want is several operations running at once.
@@ -1469,27 +1481,27 @@ async function handleKeys() {
       <h2 id="summary">13.5 Summary</h2>
       <ul>
         <li>
-          Nearly all real-world JavaScript is asynchronous, and the language
-          itself contributes no async primitives — waiting is always
-          mediated by the host (browser or Node) through callbacks.
+          Pretty much all real-world JavaScript is async, and the language
+          itself doesn't have any built-in async primitives — waiting is
+          always handled by the host (browser or Node) through callbacks.
         </li>
         <li>
-          Callbacks are the foundation everything else is built on, but
-          nested, dependent callbacks produce "callback hell," and — more
-          fundamentally — asynchronous code breaks ordinary exception
-          handling, since the caller is off the call stack by the time the
+          Callbacks are the foundation everything else sits on, but nested,
+          dependent callbacks produce "callback hell," and — more
+          fundamentally — async code breaks ordinary exception handling,
+          since the caller's already off the call stack by the time the
           callback runs.
         </li>
         <li>
-          A Promise represents the eventual result of one asynchronous
-          operation, moving through pending to either fulfilled or rejected.
-          "Resolved" is a related but distinct state: a Promise resolved with
-          another Promise is locked onto it but not yet fulfilled, and won't
-          settle until that inner Promise does.
+          A Promise represents the eventual result of one async operation,
+          moving from pending to either fulfilled or rejected. "Resolved" is
+          a related but different state: a Promise resolved with another
+          Promise is locked onto it but not yet fulfilled, and won't settle
+          until that inner Promise does.
         </li>
         <li>
           <code>.then()</code> always returns a new Promise, which is what
-          makes chaining — rather than nesting — possible. Errors trickle
+          makes chaining — instead of nesting — possible. Errors trickle
           down a chain to the nearest <code>.catch()</code>, mirroring how
           exceptions bubble up a call stack to the nearest
           <code>try/catch</code>.
@@ -1497,32 +1509,32 @@ async function handleKeys() {
         <li>
           <code>Promise.all()</code>, <code>allSettled()</code>,
           <code>race()</code>, and <code>any()</code> combine multiple
-          Promises running concurrently, each with different settling and
+          Promises running at once, each with its own settling and
           rejection rules.
         </li>
         <li>
           The event loop drains the entire microtask queue (Promise
-          reactions) between every macrotask (timers, I/O, UI events) — which
-          is why a resolved Promise's <code>.then()</code> always runs before
-          a <code>setTimeout(fn, 0)</code> callback, no matter the requested
-          delay.
+          reactions) between every macrotask (timers, I/O, UI events) —
+          that's why a resolved Promise's <code>.then()</code> always runs
+          before a <code>setTimeout(fn, 0)</code> callback, no matter what
+          delay you asked for.
         </li>
         <li>
           <code>async</code> functions always return a Promise;
           <code>await</code> unwraps a Promise into a value or throws its
-          rejection, letting ordinary <code>try/catch</code> work again — but
-          it never blocks the thread. Independent <code>await</code>s should
-          usually be launched together via <code>Promise.all()</code> rather
-          than serialized one after another, and an <code>async</code>
+          rejection, letting ordinary <code>try/catch</code> work again —
+          but it never blocks the thread. Independent <code>await</code>s
+          should usually get launched together via <code>Promise.all()</code>
+          rather than serialized one after another, and an <code>async</code>
           callback inside <code>.map()</code> produces an array of Promises,
           not resolved values, unless you explicitly await the whole batch.
         </li>
         <li>
           <code>for await...of</code>, async iterators
           (<code>Symbol.asyncIterator</code>), and async generators
-          (<code>async function*</code>) extend this model to streams of
-          asynchronous values arriving one at a time, as an alternative to
-          repeated "data" events or similar callback-driven sources.
+          (<code>async function*</code>) stretch this model to streams of
+          async values arriving one at a time, as an alternative to repeated
+          "data" events or similar callback-driven sources.
         </li>
       </ul>
 
