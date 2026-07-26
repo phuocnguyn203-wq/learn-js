@@ -57,21 +57,37 @@
         piece of code, which then invokes — "calls back" — your function
         later, once a condition is met or an event happens. That's really
         the whole idea. There's no special syntax for it; it's just an
-        ordinary function reference passed in as an argument. What changes
-        from API to API is <em>when</em> the callback fires, <em>how many
-        times</em>, and what arguments it gets called with. Below we'll walk
-        through the four flavors of callback-based async you'll actually run
-        into: timers, DOM events, network requests, and Node's error-first
-        convention.
+        ordinary function reference passed in as an argument, the same as
+        passing in a number or a string.
+      </p>
+      <p>
+        So why does async code specifically need this? Think about a normal,
+        synchronous function: it runs, computes an answer, and
+        <code>return</code>s it, right then and there, and the code that
+        called it picks the answer up on the very next line. That only
+        works because the answer is already known by the time the function
+        finishes. But some operations — waiting for a timer, waiting for the
+        user to click something, waiting for a server on the other side of
+        the internet to respond — simply don't <em>have</em> an answer yet
+        when the function that started them finishes running. There's
+        nothing to <code>return</code>. A callback is the workaround: instead
+        of handing back a result immediately, the function accepts an extra
+        argument — a function you provide — and promises to call it
+        <em>later</em>, whenever the real answer finally shows up. What
+        changes from API to API is <em>when</em> the callback fires,
+        <em>how many times</em>, and what arguments it gets called with.
+        Below we'll walk through the four flavors of callback-based async
+        you'll actually run into: timers, DOM events, network requests, and
+        Node's error-first convention.
       </p>
 
       <h3 id="timers">Timers</h3>
       <p>
         The simplest kind of async is basically "run this after some time has
         passed." <code>setTimeout()</code> sets up a callback to run once,
-        after a minimum delay in milliseconds (the browser or Node event loop
-        doesn't promise exact timing — just that it won't fire
-        <em>earlier</em> than you asked for):
+        after a minimum delay in milliseconds (the browser or Node doesn't
+        promise exact timing — just that it won't fire <em>earlier</em> than
+        you asked for; we'll get into why later in this chapter):
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// Call checkForUpdates() once, no sooner than 60,000ms from now
@@ -136,10 +152,20 @@ okay.addEventListener("click", applyUpdate);</code></pre>
         until the response showed up. That's the entire reason this has to
         be asynchronous — the browser lets your code carry on immediately,
         and lets you know later, through a callback, once the response
-        actually arrives. The old-school browser API for this,
-        <code>XMLHttpRequest</code> (the name is a leftover — it works with
-        any response format, not just XML), hands you the result purely
-        through callback properties:
+        actually arrives.
+      </p>
+      <p>
+        The old-school browser API for this is <code>XMLHttpRequest</code>
+        (the name is a leftover — it works with any response format, not
+        just XML). In the example below, notice that
+        <code>getCurrentVersionNumber()</code> takes a parameter called
+        <code>versionCallback</code> — a function the <em>caller</em>
+        supplies. That's the same workaround from the previous section:
+        since this function has no way to know the version number by the
+        time it finishes running, it can't <code>return</code> it. Instead
+        it kicks off the request, returns immediately with nothing useful,
+        and stashes <code>versionCallback</code> away to be called later,
+        once the network actually responds:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function getCurrentVersionNumber(versionCallback) {  // note callback argument
@@ -161,18 +187,24 @@ okay.addEventListener("click", applyUpdate);</code></pre>
 }</code></pre>
       </div>
       <p>
-        Two things here are worth calling out, because you'll see them again
-        in basically every callback-based API you ever write. First,
-        <code>getCurrentVersionNumber()</code> can't just <code>return</code>
-        the version number the way a normal synchronous function would — by
-        the time its own body finishes running, the network hasn't replied
-        yet. So instead, the caller hands over a callback and gets the result
-        (or error) through that, whenever it's ready. Second, check out the
-        two-headed callback signature: it's called with either an error and a
-        null result, or a null error and a real result — never both. That's
-        basically a preview of the Node convention we'll get to next. Also
-        worth noting: <code>onload</code>/<code>onerror</code> assign a
-        single handler straight to a property instead of calling
+        Two more things are worth calling out here, because you'll see both
+        again in basically every callback-based API you ever write. First,
+        look at how <code>versionCallback</code> actually gets called: with
+        <em>either</em> an error and a null result
+        (<code>versionCallback(request.statusText, null)</code>), <em>or</em>
+        a null error and a real result
+        (<code>versionCallback(null, currentVersion)</code>) — never both at
+        once. Whoever calls <code>getCurrentVersionNumber()</code> can look
+        at the first argument to know instantly whether things went well:
+        if it's not null, something broke. This two-headed shape is exactly
+        how the function reports success <em>or</em> failure, given that it
+        can't <code>throw</code> an exception the normal way — by the time
+        the network responds, the original caller's code has already moved
+        on, so there's no <code>try</code> block left around to catch
+        anything. Keep this in mind, because it's a direct preview of the
+        Node convention we'll get to next. Second, notice that
+        <code>onload</code>/<code>onerror</code> assign a single handler
+        straight to a property instead of calling
         <code>addEventListener()</code> — both styles are valid; property
         assignment is just simpler when you know you'll only ever need one
         listener for that object and event.
@@ -261,15 +293,19 @@ function getText(url, callback) {
           This "pyramid of doom" is a readability problem — deep indentation,
           the same error-checking copy-pasted at every level — but there's a
           deeper, structural problem hiding underneath it:
-          <strong>asynchronous code breaks exception handling.</strong> If
-          <code>fetchChangelog</code>'s internal, asynchronously-invoked
-          callback throws, there's no <code>try</code> block anywhere on the
-          call stack to catch it, because the code that originally called
-          <code>fetchChangelog()</code> already returned and popped off the
-          stack long before the callback ever runs. The only way to
-          communicate failure is to pass it explicitly as a callback
-          argument — that's the entire reason the error-first convention
-          exists. Every one of those nested
+          <strong>asynchronous code breaks exception handling.</strong>
+          Normally, a <code>try</code>/<code>catch</code> works because
+          JavaScript keeps track of which functions called which — the
+          "call stack" — and can walk back up through it looking for a
+          <code>catch</code>. But if <code>fetchChangelog</code>'s internal,
+          asynchronously-invoked callback throws, there's no
+          <code>try</code> block left anywhere to catch it, because the
+          code that originally called <code>fetchChangelog()</code> already
+          finished running and vanished from that call stack long before the
+          callback ever runs — there's simply nothing left to walk back up
+          to. The only way to communicate failure is to pass it explicitly
+          as a callback argument — that's the entire reason the error-first
+          convention exists. Every one of those nested
           <code>if (err) return handleError(err)</code> lines above is
           hand-rolled exception propagation, and it's really easy to forget
           one and let an error just vanish silently. Promises exist
