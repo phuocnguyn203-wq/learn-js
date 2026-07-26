@@ -140,6 +140,7 @@
           if (entry.isIntersecting) {
             links.forEach((l) => l.a.classList.remove("active"));
             link.a.classList.add("active");
+            link.a.scrollIntoView({ block: "nearest", behavior: "smooth" });
           }
         });
       },

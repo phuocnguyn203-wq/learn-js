@@ -17,8 +17,16 @@
   --accent-strong: #5eead4;
   --accent-bg: rgba(45, 212, 191, 0.12);
   --link: #4fd1c5;
-  --code-bg: #0a0d12;
+  --code-bg: #12151b;
   --code-border: #232a35;
+  --code-fg: #c6ccd6;
+  --hl-comment: #6b7688;
+  --hl-keyword: #b294bb;
+  --hl-section: #d38b93;
+  --hl-literal: #7fb6bd;
+  --hl-string: #93b789;
+  --hl-attr: #cca877;
+  --hl-symbol: #7aa8d4;
   --danger: #f87171;
   --warning: #fbbf24;
   --info: #60a5fa;
@@ -246,7 +254,14 @@ main.content {
   flex-shrink: 0;
   padding: 2.6rem 1.5rem 3rem 0;
 }
-.toc-inner { position: sticky; top: calc(var(--header-h) + 1.5rem); }
+.toc-inner {
+  position: sticky;
+  top: calc(var(--header-h) + 1.5rem);
+  max-height: calc(100vh - var(--header-h) - 3rem);
+  overflow-y: auto;
+}
+.toc-inner::-webkit-scrollbar { width: 6px; }
+.toc-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 .toc-title {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -401,6 +416,24 @@ td code, th code { font-family: var(--font-mono); color: var(--accent-strong); f
 .code-block:hover .copy-btn { opacity: 1; }
 .copy-btn:hover { color: var(--accent-strong); border-color: var(--accent); }
 .code-block:not(:has(.code-label)) .copy-btn { top: 0.6rem; }
+
+/* Softer syntax-highlighting palette — the stock atom-one-dark theme's
+   saturated colors against a near-black background were straining to read. */
+.hljs {
+  color: var(--code-fg);
+  background: transparent;
+}
+.hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.hljs-doctag, .hljs-keyword, .hljs-formula { color: var(--hl-keyword); }
+.hljs-section, .hljs-name, .hljs-selector-tag, .hljs-deletion, .hljs-subst { color: var(--hl-section); }
+.hljs-literal { color: var(--hl-literal); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { color: var(--hl-string); }
+.hljs-attr, .hljs-variable, .hljs-template-variable, .hljs-type,
+.hljs-selector-class, .hljs-selector-attr, .hljs-selector-pseudo, .hljs-number { color: var(--hl-attr); }
+.hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta, .hljs-selector-id, .hljs-title { color: var(--hl-symbol); }
+.hljs-built_in, .hljs-title.class_, .hljs-class .hljs-title { color: var(--hl-attr); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
 
 /* pre without a label wrapper (fallback) */
 pre:not(.code-block pre) {

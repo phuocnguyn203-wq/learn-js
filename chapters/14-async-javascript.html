@@ -128,11 +128,18 @@ okay.addEventListener("click", applyUpdate);</code></pre>
 
       <h3 id="network-events">Network requests</h3>
       <p>
-        Fetching data over the network is async for a pretty obvious reason:
-        you can't just block and wait on the other end of a socket. The
-        old-school browser API for this, <code>XMLHttpRequest</code> (the
-        name is a leftover — it works with any response format, not just
-        XML), exposes the result purely through callback properties:
+        Fetching data over the network takes time — sometimes a few
+        milliseconds, sometimes a few seconds if the connection is slow —
+        and JavaScript only has one thread to run your code on. If it just
+        froze and waited for a server somewhere on the internet to answer,
+        your whole page would lock up: no clicks, no scrolling, nothing,
+        until the response showed up. That's the entire reason this has to
+        be asynchronous — the browser lets your code carry on immediately,
+        and lets you know later, through a callback, once the response
+        actually arrives. The old-school browser API for this,
+        <code>XMLHttpRequest</code> (the name is a leftover — it works with
+        any response format, not just XML), hands you the result purely
+        through callback properties:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function getCurrentVersionNumber(versionCallback) {  // note callback argument
@@ -482,7 +489,9 @@ fetch("/api/user/profile")
           loosely as synonyms.
         </li>
         <li>
-          But if <code>v</code> is itself a Promise (or any thenable), then
+          But if <code>v</code> is itself a Promise (or any "thenable" — a
+          fancy term for any object with its own <code>.then()</code>
+          method), then
           <code>p</code> becomes resolved — meaning it's now permanently
           "locked onto" <code>v</code> — but it is <strong>not yet
           fulfilled</strong>. <code>p</code> can't settle until <code>v</code>
