@@ -36,68 +36,130 @@
       <span class="eyebrow">Book Chapter 13</span>
       <h1>Asynchronous JavaScript</h1>
       <p class="lede">
-        Pretty much no real-world JavaScript program just runs start to finish
-        without stopping to wait on something — a timer, a click, a file
-        read, a network response. And here's a fun fact: JavaScript itself
-        doesn't actually have any async primitives baked into the "core"
-        language. All that waiting is handled by whatever host you're running
-        in (the browser or Node), which hands control back to your code later
-        through a callback. Everything in this chapter — Promises,
-        <code>async</code>/<code>await</code>, and async iteration — is really
-        just sugar sprinkled on top of that one mechanism. We'll go through
-        all three layers: why plain callbacks fall apart at scale, how
-        Promises fix that, how <code>async</code>/<code>await</code> hides
-        Promises almost entirely, and how async iterators let you loop over a
-        stream of values that show up over time.
+        Before any code or jargon, here's the entire idea in one everyday
+        example. Say you text a friend, "what time does the movie start?"
+        You don't lock your phone away and stand frozen until they reply —
+        you keep doing whatever you were doing, and whenever their answer
+        buzzes in, you glance at it and react. Start something, carry on
+        immediately, deal with the result whenever it happens to show up:
+        that's the entire idea behind the word <strong>asynchronous</strong>.
+        Nothing more mysterious than that.
+      </p>
+      <p class="lede">
+        Compare that to reading a letter someone mailed you: you can't do
+        anything with what it says until it physically arrives, and once it
+        does, you stop and read it before you can act on it — one thing has
+        to finish before the next one starts. That's <strong>synchronous</strong>,
+        and it's how ordinary JavaScript code behaves by default: one line
+        fully finishes before the next line even begins. That's fine for
+        quick operations. But some things — a timer counting down, waiting
+        for the user to click something, waiting for a reply from a server
+        that might be on the other side of the planet — take an amount of
+        time nobody can predict in advance. If JavaScript handled those the
+        synchronous way, frozen in place until each one finished, your
+        entire page would lock up — no scrolling, no typing, nothing — for
+        however long the wait happened to take. So instead, JavaScript hands
+        off anything with an unpredictable wait, lets the rest of your code
+        keep running immediately, and deals with the result whenever it
+        finally arrives — exactly like texting a friend and going about your
+        day. This chapter is entirely about the tools JavaScript gives you to
+        do that: callbacks first (the oldest and most primitive), then
+        Promises (which fix callbacks' biggest problems), then
+        <code>async</code>/<code>await</code> (which lets Promise-based code
+        read like the ordinary top-to-bottom code you already know), and
+        finally asynchronous iteration (for handling a whole stream of
+        results that arrive over time, one at a time, instead of just one).
+        Each layer is built directly on top of the one before it, so we'll go
+        in that exact order.
       </p>
 
       <h2 id="callbacks">13.1 Asynchronous programming with callbacks</h2>
       <p>
-        A callback is just a function you write and hand off to some other
-        piece of code, which then invokes — "calls back" — your function
-        later, once a condition is met or an event happens. That's really
-        the whole idea. There's no special syntax for it; it's just an
-        ordinary function reference passed in as an argument, the same as
-        passing in a number or a string.
+        Let's ground the text-message idea from the intro in actual code. An
+        ordinary, synchronous JavaScript function computes its answer and
+        hands it back with <code>return</code>, and the code that called it
+        picks that answer up on the very next line:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">function add(a, b) {
+  return a + b;
+}
+
+let sum = add(2, 3);   // add() already knows the answer, so it hands it back right away
+console.log(sum);       // 5</code></pre>
+      </div>
+      <p>
+        That works because <code>add()</code> already knows the answer the
+        instant it finishes running. But think back to the timer from the
+        intro: a function that's supposed to tell you when some time has
+        passed <em>can't</em> return that answer right away — the time
+        hasn't passed yet! There's nothing to hand back on the line where
+        you called it. Every asynchronous operation is in exactly this
+        spot: whatever result a timer, a click, or a network reply is
+        eventually going to produce, that result simply doesn't exist yet
+        at the moment the function starts.
       </p>
       <p>
-        So why does async code specifically need this? Think about a normal,
-        synchronous function: it runs, computes an answer, and
-        <code>return</code>s it, right then and there, and the code that
-        called it picks the answer up on the very next line. That only
-        works because the answer is already known by the time the function
-        finishes. But some operations — waiting for a timer, waiting for the
-        user to click something, waiting for a server on the other side of
-        the internet to respond — simply don't <em>have</em> an answer yet
-        when the function that started them finishes running. There's
-        nothing to <code>return</code>. A callback is the workaround: instead
-        of handing back a result immediately, the function accepts an extra
-        argument — a function you provide — and promises to call it
-        <em>later</em>, whenever the real answer finally shows up. What
-        changes from API to API is <em>when</em> the callback fires,
-        <em>how many times</em>, and what arguments it gets called with.
-        Below we'll walk through the four flavors of callback-based async
-        you'll actually run into: timers, DOM events, network requests, and
-        Node's error-first convention.
+        A <strong>callback</strong> is how JavaScript works around that.
+        Instead of handing back a value immediately, an asynchronous
+        function accepts one extra argument: a plain, ordinary function
+        that <em>you</em> write and hand to it. It promises to call that
+        function later — whenever the real result is actually ready. There's
+        no special syntax involved anywhere in this; a callback is just a
+        function passed in as an argument, exactly like passing in a number
+        or a string. What changes from one async API to the next is
+        <em>when</em> the callback gets called, <em>how many times</em>, and
+        what arguments it receives. Below, we'll walk through the four
+        shapes you'll actually run into: timers, clicks and other DOM
+        events, network requests, and Node's own particular convention.
       </p>
 
       <h3 id="timers">Timers</h3>
       <p>
-        The simplest kind of async is basically "run this after some time has
-        passed." <code>setTimeout()</code> sets up a callback to run once,
-        after a minimum delay in milliseconds (the browser or Node doesn't
-        promise exact timing — just that it won't fire <em>earlier</em> than
-        you asked for; we'll get into why later in this chapter):
+        The simplest possible example of this pattern is a timer.
+        <code>setTimeout()</code> takes two arguments — a callback function,
+        and a delay in milliseconds (1000ms = 1 second) — and calls that
+        function once the delay has passed:
       </p>
       <div class="code-block" data-lang="JavaScript">
-<pre><code class="language-javascript">// Call checkForUpdates() once, no sooner than 60,000ms from now
+<pre><code class="language-javascript">function sayHello() {
+  console.log("Hello!");
+}
+
+setTimeout(sayHello, 3000);           // wait 3000ms (3 seconds), THEN call sayHello()
+console.log("This prints immediately, before 'Hello!' ever shows up.");</code></pre>
+      </div>
+      <p>
+        Read the output order carefully: the <code>console.log</code> on the
+        last line prints <em>first</em>, immediately, and "Hello!" only
+        shows up three seconds later. <code>setTimeout()</code> doesn't
+        freeze your program for three seconds waiting — it just makes a
+        note to call <code>sayHello()</code> once the time's up, and lets
+        everything else keep running in the meantime. That's the
+        text-message idea from the start of the chapter, now happening in
+        real code: start the timer, move on immediately, and let the
+        callback handle things whenever it actually fires. A more realistic
+        version of the same pattern, using a named function instead of an
+        inline one, might look like this:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// Call checkForUpdates() once, no sooner than 60,000ms (one minute) from now
 setTimeout(checkForUpdates, 60000);</code></pre>
       </div>
       <p>
-        <code>setInterval()</code> is the repeating version: it keeps
-        invoking the callback over and over, at the given interval, until you
-        cancel it. Both functions hand back an opaque handle you can use to
-        cancel the pending or ongoing timer:
+        (The browser or Node can't promise <code>checkForUpdates()</code>
+        will run at <em>exactly</em> the 60-second mark — only that it won't
+        fire any <em>earlier</em> than that. We'll get into exactly why later
+        in this chapter, once we've covered enough background to make sense
+        of the answer.)
+      </p>
+      <p>
+        <code>setInterval()</code> is the repeating version of the same
+        idea: instead of calling its callback once, it keeps calling it
+        over and over, at the given interval, until you tell it to stop.
+        Both functions hand back an opaque "handle" — just a number, really
+        — that you can hold onto and use later to cancel the pending or
+        ongoing timer:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">// Check for updates once a minute, forever, until stopped
@@ -108,38 +170,49 @@ function stopCheckingForUpdates() {
 }</code></pre>
       </div>
       <div class="admonition note">
-        <div class="admonition-title">Promises can't replace setInterval()</div>
+        <div class="admonition-title">A heads-up for later in this chapter</div>
         <p>
-          Worth filing away for later: a Promise settles exactly once. That
-          makes it a great fit for a one-shot <code>setTimeout()</code>-style
-          delay (check out the <code>wait()</code> helper further down this
-          page), but it just can't represent something repeating like
-          <code>setInterval()</code>, or a button you can click over and
-          over. Those stay callback- or event-based — or you reach for
-          <a href="#async-iteration">asynchronous iteration</a> if you want a
-          loop-friendly version.
+          You'll soon meet Promises, a newer tool for handling async code.
+          One quick thing worth filing away now, before we get there: a
+          Promise can only ever fire once, a single time, for a single
+          result. That makes it a great fit for a one-shot delay like
+          <code>setTimeout()</code> (we'll build a Promise-based version of
+          exactly that later in this chapter), but it can't represent
+          something that repeats, like <code>setInterval()</code>, or a
+          button that gets clicked over and over. Those stay callback- or
+          event-based — or you reach for
+          <a href="#async-iteration">asynchronous iteration</a>, covered near
+          the end of this chapter, if you want a loop-friendly version.
         </p>
       </div>
 
       <h3 id="events">Events</h3>
       <p>
-        Client-side JavaScript is overwhelmingly event-driven: instead of
-        computing something on a schedule, your code just sits there until
-        the user clicks, types, or taps the screen, and the browser fires
-        off whatever callbacks — called event handlers or event listeners —
-        got registered for that kind of event on that element:
+        The same callback pattern shows up again for anything that happens
+        in a web page because of the user, not a timer — a click, a key
+        press, a finger dragging across a touchscreen. Nobody can predict
+        exactly <em>when</em> the user will click a button, so this can't be
+        synchronous either: your code registers a callback in advance, and
+        the browser calls it back whenever that click actually happens.
+        Code written this way is called <strong>event-driven</strong>: it
+        mostly just sits there, doing nothing, until the browser tells it
+        something happened. Say the earlier <code>checkForUpdates()</code>
+        timer found an update and popped open a confirmation dialog asking
+        the user whether to install it — here's how you'd react to them
+        clicking its "OK" button:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">let okay = document.querySelector("#confirmUpdateDialog button.okay");
 okay.addEventListener("click", applyUpdate);</code></pre>
       </div>
       <p>
-        <code>addEventListener()</code>'s first argument names the event type
-        ("click"), and the second is the callback the browser fires when that
-        event happens on that element — it gets passed an event object with
-        details like timestamp and pointer coordinates. You can attach
-        multiple listeners to the same element and event type, and they'll
-        all run.
+        <code>addEventListener()</code> takes two arguments: a string naming
+        the event type ("click"), and — there it is again — a callback,
+        which the browser invokes whenever that event happens on that
+        specific element. The callback receives an event object with
+        details like the timestamp and the pointer's coordinates, in case
+        it needs them. You can attach more than one listener to the same
+        element and event type, and every one of them will run.
       </p>
 
       <h3 id="network-events">Network requests</h3>
@@ -317,14 +390,27 @@ function getText(url, callback) {
 
       <h2 id="promises">13.2 Promises</h2>
       <p>
-        A <code>Promise</code> is an object that represents the result of a
-        single async computation — a result that might not be ready yet.
-        Importantly, a Promise is deliberately opaque about timing: there's
-        no way to synchronously ask it "are you done yet, and what's your
-        value?" All you can do is register a callback to be invoked once the
-        value shows up. Framed that way, Promises are "just" a different way
-        of packaging callbacks — but two real benefits make the extra
-        abstraction worth it:
+        Before the technical definition, here's the everyday version. Think
+        about ordering food at a busy counter. You don't get your food
+        back immediately, but you don't just stand there blocking the line
+        either — you get handed a ticket with a number on it. That ticket
+        isn't the food. It's a stand-in: proof that an order exists and is
+        being worked on, which you can walk away with and check back on
+        later, whenever your number actually gets called.
+      </p>
+      <p>
+        A JavaScript <code>Promise</code> object is exactly that ticket,
+        translated into code: an object that stands in for the result of
+        one asynchronous operation — a result that doesn't exist yet, but
+        will, eventually. Like the ticket, a Promise is deliberately closed
+        off about timing: there's no way to look at it synchronously and
+        ask "are you done, and what's the answer?" (real life doesn't let
+        you shout at the kitchen to check either). All you can do is
+        register a callback — using a method called <code>.then()</code>,
+        covered in a moment — that runs once the result actually shows up.
+        Framed that way, a Promise is "just" a different way of packaging
+        the exact same callback idea from the last section. But two
+        concrete benefits make the extra layer worth it:
       </p>
       <ul>
         <li>
@@ -363,9 +449,12 @@ function getText(url, callback) {
 
       <h3 id="promise-basics">13.2.1 Using Promises</h3>
       <p>
-        A Promise-returning function looks like this at the call site — no
-        callback argument, just a returned object with a <code>.then()</code>
-        method:
+        Picture a helper function, <code>getJSON(url)</code>, that fires off
+        a network request and hands you back a Promise for the parsed
+        response (we'll build a real one ourselves later in this chapter).
+        Instead of taking a callback argument the way the old-school
+        callback APIs from section 13.1 did, it just returns that Promise —
+        the "ticket" — right away, before the response has arrived:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">getJSON(url).then(jsonData => {
@@ -373,34 +462,45 @@ function getText(url, callback) {
 });</code></pre>
       </div>
       <p>
-        Think of <code>.then()</code> as a callback-registration method, kind
-        of like <code>addEventListener()</code> — except unlike an event
-        target, a Promise represents exactly one computation, so whatever
-        function you register with <code>.then()</code> fires at most once.
-        The idiomatic move is to chain <code>.then()</code> straight onto the
-        call that produced the Promise, skipping the intermediate variable,
-        and to name your Promise-returning functions (and whatever consumes
-        them) with verbs, so the call site reads almost like a sentence:
+        <code>.then()</code> is how you attach the "let me know when it's
+        ready" instructions to that ticket. Think of it as a
+        callback-registration method, kind of like
+        <code>addEventListener()</code> from before — except unlike a
+        button, which can be clicked over and over, a Promise stands for
+        exactly one result, so whatever function you register with
+        <code>.then()</code> fires at most once. The idiomatic style is to
+        chain <code>.then()</code> straight onto the call that produced the
+        Promise, without an intermediate variable, and to name your
+        Promise-returning functions (and whatever consumes their result)
+        with verbs, so the call site reads almost like an English sentence:
       </p>
       <div class="code-block" data-lang="JavaScript">
 <pre><code class="language-javascript">function displayUserProfile(profile) { /* ... */ }
 
 getJSON("/api/user/profile").then(displayUserProfile);</code></pre>
       </div>
+      <p>
+        Back to the ticket: at any moment, that ticket is in exactly one of
+        three states — your order hasn't come up yet, it's ready and
+        waiting for you, or the kitchen ran out and it's not coming. Every
+        Promise is in exactly one of the same three states:
+      </p>
       <div class="table-wrap">
         <table>
           <tr><th>State</th><th>Meaning</th></tr>
-          <tr><td><strong>pending</strong></td><td>Not settled yet — no outcome decided</td></tr>
-          <tr><td><strong>fulfilled</strong></td><td>Completed successfully, with a value — like a normal function <code>return</code></td></tr>
+          <tr><td><strong>pending</strong></td><td>Still waiting — no outcome decided yet</td></tr>
+          <tr><td><strong>fulfilled</strong></td><td>Finished successfully, with a value — like a normal function <code>return</code></td></tr>
           <tr><td><strong>rejected</strong></td><td>Failed, with a reason (usually an <code>Error</code>) — like a thrown exception</td></tr>
         </table>
       </div>
       <p>
-        Once a Promise fulfills or rejects, it's <strong>settled</strong>,
-        and settled Promises never change state or value again — a Promise
-        can never flip from fulfilled to rejected or back, and whatever
-        value or reason it ends up with is locked in permanently the moment
-        it settles.
+        Once a Promise fulfills or rejects, it's <strong>settled</strong> —
+        that's just the umbrella term for "no longer pending, one way or
+        the other." And settled Promises never change state or value again:
+        a Promise can never flip from fulfilled to rejected or back, and
+        whatever value or reason it ends up with is locked in permanently
+        the moment it settles. Your ticket doesn't un-ring the bell once
+        your order's been called.
       </p>
       <div class="admonition note">
         <div class="admonition-title">A registered callback always runs asynchronously</div>
@@ -953,27 +1053,42 @@ promiseSequence(urls, fetchBody)
 
       <h2 id="event-loop">The event loop: microtasks vs. macrotasks <span class="badge hard">Deep dive</span></h2>
       <p>
-        Every guarantee we've mentioned so far — "a <code>.then()</code>
-        callback never runs synchronously," "errors trickle down the chain"
-        — is actually built on top of a single-threaded runtime's
-        <strong>event loop</strong>. JavaScript has exactly one thread of
-        execution. Whenever there's no code currently running, the event
-        loop grabs the next pending job off a queue and runs it to
-        completion before grabbing the next one. The trick — and the source
-        of a ton of confusion — is that there are effectively <em>two</em>
-        queues, checked with different priority:
+        Here's the intuition before the mechanics. Picture a single cashier
+        — just one, no backup — working through two lines. One is a
+        "quick follow-up" line: people already being helped who just need
+        one more small thing. The other is the regular line of brand-new
+        customers. The cashier's rule: after finishing whatever they're
+        doing, they completely clear out the quick follow-up line —
+        everyone currently in it, plus anyone who joins it while they're
+        being served — before helping even one person from the regular
+        line. That's the entire event loop, just translated into cashier
+        terms.
+      </p>
+      <p>
+        Now the real version. Every guarantee we've mentioned so far — "a
+        <code>.then()</code> callback never runs synchronously," "errors
+        trickle down the chain" — is actually built on top of a
+        single-threaded runtime's <strong>event loop</strong>. "Single-
+        threaded" just means our one cashier: JavaScript only ever runs one
+        piece of code at a time, never two at once. Whenever there's no
+        code currently running, the event loop grabs the next pending job
+        off a queue and runs it to completion before grabbing the next one.
+        The trick — and the source of a ton of confusion — is that there
+        are effectively <em>two</em> queues (our two lines), checked with
+        different priority:
       </p>
       <ul>
         <li>
-          <strong>The microtask queue</strong> — holds Promise reaction
-          callbacks (<code>.then()</code>/<code>.catch()</code>/<code>.finally()</code>
+          <strong>The microtask queue</strong> (the "quick follow-up" line)
+          — holds Promise reaction callbacks
+          (<code>.then()</code>/<code>.catch()</code>/<code>.finally()</code>
           handlers) and a few other things like <code>queueMicrotask()</code>
           callbacks and Mutation Observer callbacks.
         </li>
         <li>
-          <strong>The macrotask (a.k.a. "task") queue</strong> — holds
-          <code>setTimeout</code>/<code>setInterval</code> callbacks, I/O
-          completion callbacks, and UI event dispatches.
+          <strong>The macrotask (a.k.a. "task") queue</strong> (the
+          "regular" line) — holds <code>setTimeout</code>/<code>setInterval</code>
+          callbacks, I/O completion callbacks, and UI event dispatches.
         </li>
       </ul>
       <p>
@@ -1067,9 +1182,32 @@ console.log("G");
         do was already possible with Promises — but they let you write
         Promise-based code that reads top-to-bottom like ordinary blocking
         code, including real <code>try</code>/<code>catch</code> for errors.
+        Compare these two — they do exactly the same thing:
+      </p>
+      <div class="code-block" data-lang="JavaScript">
+<pre><code class="language-javascript">// The .then() chain from earlier in this chapter:
+fetch("/api/user/profile")
+  .then(response => response.json())
+  .then(profile => displayUserProfile(profile))
+  .catch(handleProfileError);
+
+// The exact same thing, written with async/await:
+async function showUserProfile() {
+  try {
+    let response = await fetch("/api/user/profile");
+    let profile = await response.json();
+    displayUserProfile(profile);
+  } catch (err) {
+    handleProfileError(err);
+  }
+}
+showUserProfile();</code></pre>
+      </div>
+      <p>
         Under the hood it's still Promises and the same event loop we just
         went over; <code>async</code>/<code>await</code> is purely syntax
-        sugar.
+        sugar sitting on top of everything you've already learned in this
+        chapter.
       </p>
 
       <h3 id="await-expressions">13.3.1 await expressions</h3>
@@ -1287,15 +1425,26 @@ export const config = await response.json();</code></pre>
 
       <h2 id="async-iteration">13.4 Asynchronous iteration</h2>
       <p>
-        Promises and <code>await</code> handle a single async result.
-        Neither one is a great fit for a <em>stream</em> of async values
-        arriving one after another — think a Node readable stream's "data"
-        events, or a live sequence of user input events. ES2018 fills that
-        gap with async iterators and a new loop form,
-        <code>for await...of</code>, that pairs with them the same way the
-        ordinary <code>for...of</code> loop pairs with the synchronous
-        iteration protocol from
-        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>.
+        Everything so far has been about waiting for <em>one</em> result:
+        one ticket, one <code>await</code>, one value that eventually shows
+        up. But some things aren't a single result — they're more like
+        streaming a video instead of downloading one file. A file download
+        is done when it's done: you wait once, then you have the whole
+        thing, which is exactly what a Promise represents. A video stream
+        is different — data keeps arriving in pieces, for as long as you
+        keep watching, and you want to react to each piece as it shows up
+        rather than wait for "the whole thing" to be over. A Node readable
+        stream's "data" events, or a live sequence of user clicks, work the
+        same way: a <em>stream</em> of async values arriving one after
+        another, not a single one.
+      </p>
+      <p>
+        ES2018 fills that gap with async iterators and a new loop form,
+        <code>for await...of</code>. If you've already read
+        <a href="13-iterators-generators.html">Iterators &amp; Generators</a>,
+        this pairs with async values exactly the way the ordinary
+        <code>for...of</code> loop pairs with synchronous ones — same idea,
+        adapted for values that each take their own time to arrive.
       </p>
 
       <h3 id="for-await">13.4.1 The for/await loop</h3>
